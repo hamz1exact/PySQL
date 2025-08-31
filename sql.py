@@ -63,7 +63,7 @@ class Condition:
         
 class Parser:
     database = DB
-
+    
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0 
@@ -94,7 +94,7 @@ class Parser:
         self.eat("FROM")
         table = self.parse_table()
         where = None
-        if self.current_token() == "WHERE":
+        if self.current_token()[0] == "WHERE":
             if self.uses_wildcard:
                 raise SyntaxError("WHERE clause with '*' is not supported yet. Please specify columns explicitly.")
             self.eat("WHERE")

@@ -49,7 +49,6 @@ def show_tables(database):
 from sql import Lexer, Parser  # import the formatter
 
 while True:
-    clear = False
     try:
         query = input("> ")
         if query.lower() == "clear":
@@ -58,16 +57,15 @@ while True:
                 os.system('cls')
             else:
                 os.system('clear')
-            clear = True
+            continue
         if query.lower() == "ls":
             parser = Parser([])
             show_tables(parser.database)
             continue
-        if not clear:
-            lexer = Lexer(query)
-            parser = Parser(lexer.tokens)
-            rows = parser.parse_select_statement()
-            print_table(rows)  # pretty print
+        lexer = Lexer(query)
+        parser = Parser(lexer.tokens)
+        rows = parser.parse_select_statement()
+        print_table(rows)  # pretty print
         
     except KeyboardInterrupt:
         exit()
