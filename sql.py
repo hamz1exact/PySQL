@@ -2,6 +2,7 @@ from adminDatabase import database as DB
 class Lexer:
     keywords = ("SELECT", "FROM", "WHERE")
     Comparison_Operators = ("=", "!=", "<", "<=", ">", ">=")
+    
     def __init__(self, query):
         self.query = query
         self.pos = 0
