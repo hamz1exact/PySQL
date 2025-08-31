@@ -1,0 +1,33 @@
+usage.md
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE / editor settings
+.vscode/
+.idea/
+
+# Logs
+*.log
+patch.py
+sql2.py
+
+# OS generated files
+.DS_Store
+Thumbs.db

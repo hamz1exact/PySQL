@@ -198,7 +198,3 @@ class Parser:
             left = self.where_eval(where.left, row)
             right = self.where_eval(where.right, row)
             return (left and right if MainOperator.upper() == "AND" else (left or right))
-
-            
-
-        
