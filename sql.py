@@ -1,7 +1,7 @@
 from adminDatabase import database as DB
 class Lexer:
     keywords = ("SELECT", "FROM", "WHERE")
-    Comparison_Operators = ("=", "!=", "<", "<=", ">", ">=")
+    Comparison_Operators = ("=", "!", "<", ">")
     
     def __init__(self, query):
         self.query = query
@@ -70,7 +70,7 @@ class Condition:
         elif value.lower() == 'false':
             self.value = False
         else:
-            self.value = value
+            self.value = value.lower()
         
 class Parser:
     database = DB
@@ -159,7 +159,10 @@ class Parser:
         return result
 
     def where_eval(self, where, row):
-        left = row[where.column]
+        if type(row[where.column]) == str:
+            left = row[where.column].lower()
+        else:
+            left = row[where.column]
         right = where.value
         op  = where.operator
         if op == "=": return left == right
@@ -169,9 +172,5 @@ class Parser:
         if op == ">": return left > right
         if op == ">=": return left >= right
         raise ValueError(f"Unknown operator {op}")
-            
-            
-        
-    
 
-       
+        
