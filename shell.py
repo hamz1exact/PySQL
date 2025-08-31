@@ -50,7 +50,8 @@ from sql import Lexer, Parser  # import the formatter
 
 while True:
     try:
-        query = input("> ")
+        query = input("\n> ")
+        print()
         if query.lower() == "clear":
             import os
             if os.name == 'nt':
@@ -69,5 +70,7 @@ while True:
         
     except KeyboardInterrupt:
         exit()
+    except KeyError as k:
+        print(f"Row / column {k} Not Found")
     except Exception as e:
         print("Error:", e)

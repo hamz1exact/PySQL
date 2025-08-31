@@ -28,9 +28,9 @@ class Lexer:
                 self.tokens.append(("SEMICOLON", char))
                 self.pos += 1
                 continue
-            if char in Lexer.Comparison_Operators:
-                self.tokens.append(("OPT", char))
-                self.pos+=1
+            if self.query[self.pos] in Lexer.Comparison_Operators:
+                OPT = self.get_operator()
+                self.tokens.append(("OPT", OPT))
                 continue
             if char == "*":
                 self.pos += 1
@@ -39,6 +39,12 @@ class Lexer:
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         return self.tokens
             
+    def get_operator(self):
+        OPT = ""
+        while self.pos < len(self.query) and self.query[self.pos] in Lexer.Comparison_Operators:
+            OPT += self.query[self.pos]
+            self.pos += 1
+        return OPT
     def getFullInput(self):
         key = ""
         while self.pos < len(self.query) and (self.query[self.pos].isalnum() or self.query[self.pos] == '_'):
@@ -58,12 +64,15 @@ class Condition:
         self.operator = operator
         if value.isdigit():
             self.value = int(value)
+        elif value.lower() == 'true':
+            self.value = True
+        elif value.lower() == 'false':
+            self.value = False
         else:
             self.value = value
         
 class Parser:
     database = DB
-    
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0 
@@ -95,8 +104,6 @@ class Parser:
         table = self.parse_table()
         where = None
         if self.current_token()[0] == "WHERE":
-            if self.uses_wildcard:
-                raise SyntaxError("WHERE clause with '*' is not supported yet. Please specify columns explicitly.")
             self.eat("WHERE")
             col = self.eat("IDENTIFIER")[1]
             opt = self.eat("OPT")[1]
@@ -111,7 +118,6 @@ class Parser:
     def parse_columns(self):
         token = self.current_token()
         if token[0] == "STAR":
-            self.uses_wildcard = True
             self.eat("STAR")
             return ["*"]
         columns = []
