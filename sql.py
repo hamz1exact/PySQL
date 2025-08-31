@@ -1,5 +1,7 @@
+from adminDatabase import database as DB
 class Lexer:
-    keywords = ("SELECT", "FROM")
+    keywords = ("SELECT", "FROM", "WHERE")
+    Comparison_Operators = ("=", "!=", "<", "<=", ">", ">=")
     def __init__(self, query):
         self.query = query
         self.pos = 0
@@ -8,7 +10,7 @@ class Lexer:
     def Tokenize(self):
         while self.pos < len(self.query):
             char = self.query[self.pos]
-            if char.isalpha():
+            if char.isalnum():
                 word = self.getFullInput()
                 if word.upper() in Lexer.keywords:
                     self.tokens.append((word.upper(), word.upper()))
@@ -26,13 +28,16 @@ class Lexer:
                 self.tokens.append(("SEMICOLON", char))
                 self.pos += 1
                 continue
+            if char in Lexer.Comparison_Operators:
+                self.tokens.append(("OPT", char))
+                self.pos+=1
+                continue
             if char == "*":
                 self.pos += 1
-                self.tokens.append("STAR", char)
+                self.tokens.append(("STAR", char))
                 continue
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        print(self.tokens)
-            
+        return self.tokens
             
     def getFullInput(self):
         key = ""
@@ -42,26 +47,33 @@ class Lexer:
         return key
     
 class SelectStatement:
-    def __init__(self, columns, table):
+    def __init__(self, columns, table, where = None):
         self.columns = columns
         self.table = table
-    
+        self.where = where
+        
+class Condition:
+    def __init__(self, column, operator, value):
+        self.column = column
+        self.operator = operator
+        if value.isdigit():
+            self.value = int(value)
+        else:
+            self.value = value
+        
 class Parser:
-    database = {
-        "users": [
-            {"id": 1, "name": "Hamza Deraoui", "age": 19, "isStudent": True},
-            {"id": 2, "name": "Ali", "age": 21, "isStudent": False},
-        ]
-    }
+    database = DB
 
     def __init__(self, tokens):
         self.tokens = tokens
-        self.pos = 0
+        self.pos = 0 
+        self.uses_wildcard = None
 
     def current_token(self):
         if self.pos < len(self.tokens):
             return self.tokens[self.pos]
         return None
+
 
     def eat(self, token_type):
         token = self.current_token()
@@ -74,18 +86,32 @@ class Parser:
         else:
             raise SyntaxError(f"Expected token type '{token_type}', got '{actual_type}' at position {self.pos}")
 
+
+
     def parse_select_statement(self):
         self.eat("SELECT")
         columns = self.parse_columns()
         self.eat("FROM")
         table = self.parse_table()
+        where = None
+        if self.current_token() == "WHERE":
+            if self.uses_wildcard:
+                raise SyntaxError("WHERE clause with '*' is not supported yet. Please specify columns explicitly.")
+            self.eat("WHERE")
+            col = self.eat("IDENTIFIER")[1]
+            opt = self.eat("OPT")[1]
+            val = self.eat("IDENTIFIER")[1]
+            where = Condition(col, opt, val)
         self.eat("SEMICOLON")
-        ast = SelectStatement(columns, table[1])
+        ast = SelectStatement(columns, table, where)
         return self.execute(ast)  # return result
+
+
 
     def parse_columns(self):
         token = self.current_token()
         if token[0] == "STAR":
+            self.uses_wildcard = True
             self.eat("STAR")
             return ["*"]
         columns = []
@@ -99,9 +125,12 @@ class Parser:
                 break
         return columns
 
-    def parse_table(self):
-        return self.eat("IDENTIFIER")
 
+
+    def parse_table(self):
+        return self.eat("IDENTIFIER")[1]
+    
+    
     def execute(self, ast):
         table_name = ast.table
         if table_name not in Parser.database:
@@ -115,11 +144,27 @@ class Parser:
                 if table and col not in table[0]:
                     raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
             columns_to_return = requested_columns
-
         result = []
         for row in table:
-            selected_row = {col: row[col] for col in columns_to_return}
-            result.append(selected_row)
+            if ast.where is None or self.where_eval(ast.where, row):
+                selected_row = {col: row[col] for col in columns_to_return}
+                result.append(selected_row)
         return result
-                
+
+    def where_eval(self, where, row):
+        left = row[where.column]
+        right = where.value
+        op  = where.operator
+        if op == "=": return left == right
+        if op == "!=": return left != right
+        if op == "<": return left < right
+        if op == "<=": return left <= right
+        if op == ">": return left > right
+        if op == ">=": return left >= right
+        raise ValueError(f"Unknown operator {op}")
             
+            
+        
+    
+
+       

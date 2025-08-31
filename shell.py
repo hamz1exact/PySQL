@@ -1,3 +1,4 @@
+import sys
 def print_table(rows):
     if not rows:
         print("Empty result")
@@ -22,17 +23,53 @@ def print_table(rows):
         line = " | ".join(str(row[col]).ljust(col_widths[col]) for col in columns)
         print(line)
         
-from sql2 import Lexer, Parser  # import the formatter
+        
+def show_tables(database):
+    # Collect data
+    rows = [(name, len(rows)) for name, rows in database.items()]
+
+    # Determine column widths
+    col1_width = max(len("Table Name"), max(len(name) for name, _ in rows))
+    col2_width = max(len("Total Rows"), max(len(str(count)) for _, count in rows))
+
+    # Print header
+    print(f"+{'-'*(col1_width+2)}+{'-'*(col2_width+2)}+")
+    print(f"| {'Table Name'.ljust(col1_width)} | {'Total Rows'.ljust(col2_width)} |")
+    print(f"+{'-'*(col1_width+2)}+{'-'*(col2_width+2)}+")
+
+    # Print each row
+    for name, count in rows:
+        print(f"| {name.ljust(col1_width)} | {str(count).rjust(col2_width)} |")
+
+    # Footer line
+    print(f"+{'-'*(col1_width+2)}+{'-'*(col2_width+2)}+")
+    
+    
+    
+from sql import Lexer, Parser  # import the formatter
 
 while True:
+    clear = False
     try:
         query = input("> ")
-        lexer = Lexer(query)
-        parser = Parser(lexer.tokens)
-        rows = parser.parse_select_statement()
-        print_table(rows)  # pretty print
+        if query.lower() == "clear":
+            import os
+            if os.name == 'nt':
+                os.system('cls')
+            else:
+                os.system('clear')
+            clear = True
+        if query.lower() == "ls":
+            parser = Parser([])
+            show_tables(parser.database)
+            continue
+        if not clear:
+            lexer = Lexer(query)
+            parser = Parser(lexer.tokens)
+            rows = parser.parse_select_statement()
+            print_table(rows)  # pretty print
+        
     except KeyboardInterrupt:
-        print("\nExiting...")
         exit()
     except Exception as e:
         print("Error:", e)

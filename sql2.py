@@ -1,5 +1,5 @@
 # sql.py
-
+from adminDatabase import database as DB
 class Lexer:
     keywords = ("SELECT", "FROM")
     def __init__(self, query):
@@ -46,12 +46,7 @@ class SelectStatement:
         self.table = table
 
 class Parser:
-    database = {
-        "users": [
-            {"id": 1, "name": "Hamza Deraoui", "age": 19, "isStudent": True},
-            {"id": 2, "name": "Ali", "age": 21, "isStudent": False},
-        ]
-    }
+    database = DB
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
@@ -69,6 +64,8 @@ class Parser:
             return token
         else:
             raise SyntaxError(f"Expected token type '{token_type}', got '{actual_type}' at position {self.pos}")
+        
+        
     def parse_select_statement(self):
         self.eat("SELECT")
         columns = self.parse_columns()
@@ -77,6 +74,8 @@ class Parser:
         self.eat("SEMICOLON")
         ast = SelectStatement(columns, table[1])
         return self.execute(ast)
+    
+    
     def parse_columns(self):
         token = self.current_token()
         if token[0] == "STAR":
@@ -92,8 +91,13 @@ class Parser:
             else:
                 break
         return columns
+    
+    
     def parse_table(self):
         return self.eat("IDENTIFIER")
+    
+    
+    
     def execute(self, ast):
         table_name = ast.table
         if table_name not in Parser.database:
