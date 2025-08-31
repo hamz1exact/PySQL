@@ -2,6 +2,7 @@ from adminDatabase import database as DB
 class Lexer:
     keywords = ("SELECT", "FROM", "WHERE")
     Comparison_Operators = ("=", "!", "<", ">")
+    MainOperators = ("AND", "OR")
     
     def __init__(self, query):
         self.query = query
@@ -15,6 +16,8 @@ class Lexer:
                 word = self.getFullInput()
                 if word.upper() in Lexer.keywords:
                     self.tokens.append((word.upper(), word.upper()))
+                elif word.upper() in Lexer.MainOperators:
+                    self.tokens.append(("MAINOPT", word.upper()))
                 else:
                     self.tokens.append(("IDENTIFIER", word))
                 continue
@@ -71,6 +74,12 @@ class Condition:
             self.value = False
         else:
             self.value = value.lower()
+            
+class LogicalCondition:
+    def __init__(self, left, MainOperator, right):
+        self.left = left
+        self.MainOperator = MainOperator
+        self.right = right
         
 class Parser:
     database = DB
@@ -103,15 +112,26 @@ class Parser:
         columns = self.parse_columns()
         self.eat("FROM")
         table = self.parse_table()
-        where = None
+        left = None
+        right = None
         if self.current_token()[0] == "WHERE":
             self.eat("WHERE")
             col = self.eat("IDENTIFIER")[1]
             opt = self.eat("OPT")[1]
             val = self.eat("IDENTIFIER")[1]
-            where = Condition(col, opt, val)
+            left = Condition(col, opt, val)
+            if self.current_token()[0] == "MAINOPT":
+                MainOperation = self.eat("MAINOPT")[1].upper()
+                col = self.eat("IDENTIFIER")[1]
+                opt = self.eat("OPT")[1]
+                val = self.eat("IDENTIFIER")[1]
+                right = Condition(col, opt, val)
+                self.eat("SEMICOLON")
+                Logical_condition  = LogicalCondition(left, MainOperation, right)
+                ast = SelectStatement(columns, table, Logical_condition)
+                return self.execute(ast)
         self.eat("SEMICOLON")
-        ast = SelectStatement(columns, table, where)
+        ast = SelectStatement(columns, table, left)
         return self.execute(ast)  # return result
 
 
@@ -159,18 +179,26 @@ class Parser:
         return result
 
     def where_eval(self, where, row):
-        if type(row[where.column]) == str:
-            left = row[where.column].lower()
-        else:
-            left = row[where.column]
-        right = where.value
-        op  = where.operator
-        if op == "=": return left == right
-        if op == "!=": return left != right
-        if op == "<": return left < right
-        if op == "<=": return left <= right
-        if op == ">": return left > right
-        if op == ">=": return left >= right
-        raise ValueError(f"Unknown operator {op}")
+        if isinstance(where, Condition):
+            if type(row[where.column]) == str:
+                left = row[where.column].lower()
+            else:
+                left = row[where.column]
+            right = where.value
+            op  = where.operator
+            if op == "=": return left == right
+            if op == "!=": return left != right
+            if op == "<": return left < right
+            if op == "<=": return left <= right
+            if op == ">": return left > right
+            if op == ">=": return left >= right
+            raise ValueError(f"Unknown operator {op}")
+        elif isinstance(where, LogicalCondition):
+            MainOperator = where.MainOperator
+            left = self.where_eval(where.left, row)
+            right = self.where_eval(where.right, row)
+            return (left and right if MainOperator.upper() == "AND" else (left or right))
+
+            
 
         

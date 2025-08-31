@@ -66,6 +66,7 @@ while True:
         lexer = Lexer(query)
         parser = Parser(lexer.tokens)
         rows = parser.parse_select_statement()
+        
         print_table(rows)  # pretty print
         
     except KeyboardInterrupt:
