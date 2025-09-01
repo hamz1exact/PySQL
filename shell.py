@@ -46,7 +46,7 @@ def show_tables(database):
     
     
     
-from sql import Lexer, Parser  # import the formatter
+from engine import Lexer, Parser  # import the formatter
 
 while True:
     try:

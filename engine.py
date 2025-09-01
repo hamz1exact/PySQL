@@ -1,4 +1,6 @@
-from adminDatabase import database as DB
+from components import database as DB
+from ast import LogicalCondition, Condition, SelectStatement
+from executor import execute
 class Lexer:
     keywords = ("SELECT", "FROM", "WHERE")
     Comparison_Operators = ("=", "!", "<", ">")
@@ -56,31 +58,7 @@ class Lexer:
             self.pos += 1
         return key
     
-class SelectStatement:
-    def __init__(self, columns, table, where = None):
-        self.columns = columns
-        self.table = table
-        self.where = where
-        
-class Condition:
-    def __init__(self, column, operator, value):
-        self.column = column
-        self.operator = operator
-        if value.isdigit():
-            self.value = int(value)
-        elif value.lower() == 'true':
-            self.value = True
-        elif value.lower() == 'false':
-            self.value = False
-        else:
-            self.value = value.lower()
-            
-class LogicalCondition:
-    def __init__(self, left, MainOperator, right):
-        self.left = left
-        self.MainOperator = MainOperator
-        self.right = right
-        
+ 
 class Parser:
     database = DB
     def __init__(self, tokens):
@@ -158,25 +136,25 @@ class Parser:
         return self.eat("IDENTIFIER")[1]
     
     
-    def execute(self, ast):
-        table_name = ast.table
-        if table_name not in Parser.database:
-            raise ValueError(f"Table '{table_name}' does not exist")
-        table = Parser.database[table_name]
-        requested_columns = ast.columns
-        if requested_columns == ['*']:
-            columns_to_return = table[0].keys() if table else []
-        else:
-            for col in requested_columns:
-                if table and col not in table[0]:
-                    raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
-            columns_to_return = requested_columns
-        result = []
-        for row in table:
-            if ast.where is None or self.where_eval(ast.where, row):
-                selected_row = {col: row[col] for col in columns_to_return}
-                result.append(selected_row)
-        return result
+    # def execute(self, ast):
+    #     table_name = ast.table
+    #     if table_name not in Parser.database:
+    #         raise ValueError(f"Table '{table_name}' does not exist")
+    #     table = Parser.database[table_name]
+    #     requested_columns = ast.columns
+    #     if requested_columns == ['*']:
+    #         columns_to_return = table[0].keys() if table else []
+    #     else:
+    #         for col in requested_columns:
+    #             if table and col not in table[0]:
+    #                 raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
+    #         columns_to_return = requested_columns
+    #     result = []
+    #     for row in table:
+    #         if ast.where is None or self.where_eval(ast.where, row):
+    #             selected_row = {col: row[col] for col in columns_to_return}
+    #             result.append(selected_row)
+    #     return result
 
     def where_eval(self, where, row):
         if isinstance(where, Condition):

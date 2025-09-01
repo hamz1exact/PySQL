@@ -13,6 +13,7 @@ build/
 dist/
 *.egg-info/
 .eggs/
+others/
 
 # Virtual environment
 venv/
