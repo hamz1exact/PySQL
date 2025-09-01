@@ -112,7 +112,3 @@ def execute_insert_query(ast, database):
                 new_row[col] = default_row[col]
 
     table.append(new_row)
-    print(f"Row successfully inserted into table '{table_name}': {new_row}")
-
-    
-    

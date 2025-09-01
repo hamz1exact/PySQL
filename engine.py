@@ -7,7 +7,6 @@ class Lexer:
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
 
-    
     def __init__(self, query):
         self.query = query
         self.pos = 0
@@ -24,6 +23,10 @@ class Lexer:
                     self.tokens.append(("MAINOPT", word.upper()))
                 else:
                     self.tokens.append(("IDENTIFIER", word))
+                continue
+            if char == "'" or char == '"':
+                word = self.getFullStr()
+                self.tokens.append(("IDENTIFIER", word))
                 continue
             if char == '(':
                 self.tokens.append(("OPDBK", char))
@@ -62,6 +65,17 @@ class Lexer:
             OPT += self.query[self.pos]
             self.pos += 1
         return OPT
+    
+    def getFullStr(self):
+        quote_char = self.query[self.pos]   # either ' or "
+        self.pos += 1  # skip opening quote
+        key = ""
+        while self.pos < len(self.query) and self.query[self.pos] != quote_char:
+            key += self.query[self.pos]
+            self.pos += 1
+        self.pos += 1  # skip closing quote
+        return key
+    
     def getFullInput(self):
         key = ""
         while self.pos < len(self.query) and (self.query[self.pos].isalnum() or self.query[self.pos] == '_'):

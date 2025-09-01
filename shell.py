@@ -67,6 +67,7 @@ while True:
         parser = Parser(lexer.tokens)
         if lexer.tokens[0][0] == "SELECT":
             rows = parser.parse_select_statement()
+            
             print_table(rows)
         elif lexer.tokens[0][0] == "INSERT":
             parser.parse_insert_statement()
