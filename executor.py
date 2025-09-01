@@ -1,7 +1,7 @@
 from ast import Condition, LogicalCondition, SelectStatement, InsertStatement
 
 def execute(ast, database):
-    if isinstance(ast, SelectStatement):
+    if isinstance(ast, SelectStatement) or isinstance(ast, LogicalCondition):
         return execute_select_query(ast, database)
     elif isinstance(ast, InsertStatement):
         execute_insert_query(ast, database)
@@ -43,10 +43,16 @@ def condition_evaluation(where, row):
         if op == ">=": return left >= right
         raise ValueError(f"Unknown operator {op}")
     elif isinstance(where, LogicalCondition):
-        MainOperator = where.MainOperator
-        left = condition_evaluation(where.left, row)
-        right = condition_evaluation(where.right, row)
-        return (left and right if MainOperator.upper() == "AND" else (left or right))
+        MainOperator = where.MainOperator.upper()
+        left_result = condition_evaluation(where.left, row)
+        right_result = condition_evaluation(where.right, row)
+        
+        if MainOperator == "AND":
+            return left_result and right_result
+        elif MainOperator == "OR":
+            return left_result or right_result
+        else:
+            raise ValueError(f"Unknown logical operator: {MainOperator}")
 
 def execute_insert_query(ast, database):
     table_name = ast.table

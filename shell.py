@@ -47,11 +47,13 @@ def show_tables(database):
     
     
 from engine import Lexer, Parser  # import the formatter
-
+from executor import execute
 while True:
     try:
         query = input("\n> ")
         print()
+        lexer = Lexer(query)
+        parser = Parser(lexer.tokens)
         if query.lower() == "clear":
             import os
             if os.name == 'nt':
@@ -59,21 +61,22 @@ while True:
             else:
                 os.system('clear')
             continue
+        
         if query.lower() == "ls":
             parser = Parser([])
             show_tables(parser.database)
             continue
-        lexer = Lexer(query)
-        parser = Parser(lexer.tokens)
-        if lexer.tokens[0][0] == "SELECT":
-            rows = parser.parse_select_statement()
-            
-            print_table(rows)
-        elif lexer.tokens[0][0] == "INSERT":
-            parser.parse_insert_statement()
-        else:
-            pass # for the moment, until we add the other functions!
         
+        if lexer.tokens[0][0] == "SELECT":
+            ast = parser.parse_select_statement()
+            rows = execute(ast, Parser.database)
+            print_table(rows)
+        
+        elif lexer.tokens[0][0] == "INSERT":
+            ast = parser.parse_insert_statement()
+            execute(ast, Parser.database)
+            
+             
     except KeyboardInterrupt:
         exit()
     except KeyError as k:

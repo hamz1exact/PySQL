@@ -128,11 +128,9 @@ class Parser:
                 right = Condition(col, opt, val)
                 self.eat("SEMICOLON")
                 Logical_condition  = LogicalCondition(left, MainOperation, right)
-                ast = SelectStatement(columns, table, Logical_condition)
-                return execute(ast, Parser.database)
+                return SelectStatement(columns, table, Logical_condition)
         self.eat("SEMICOLON")
-        ast = SelectStatement(columns, table, left)
-        return execute(ast, Parser.database)
+        return SelectStatement(columns, table, left)
               
     def parse_columns(self):
         token = self.current_token()
@@ -165,9 +163,7 @@ class Parser:
         self.eat("VALUES")
         values = self.parse_insert_values()
         self.eat("SEMICOLON")
-        ast = InsertStatement(table, columns, values)
-        return execute(ast, Parser.database)
-    
+        return InsertStatement(table, columns, values)
     
     def parse_insert_table(self):
         return self.eat("IDENTIFIER")[1]
