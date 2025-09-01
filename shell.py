@@ -1,4 +1,5 @@
 import sys
+from database import database
 def print_table(rows):
     if not rows:
         print("Empty result")
@@ -64,17 +65,17 @@ while True:
         
         if query.lower() == "ls":
             parser = Parser([])
-            show_tables(parser.database)
+            show_tables(database)
             continue
         
         if lexer.tokens[0][0] == "SELECT":
             ast = parser.parse_select_statement()
-            rows = execute(ast, Parser.database)
+            rows = execute(ast, database)
             print_table(rows)
         
         elif lexer.tokens[0][0] == "INSERT":
             ast = parser.parse_insert_statement()
-            execute(ast, Parser.database)
+            execute(ast, database)
             
              
     except KeyboardInterrupt:

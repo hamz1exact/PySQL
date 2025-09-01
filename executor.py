@@ -28,6 +28,7 @@ def execute_select_query(ast, database):
 
 
 def condition_evaluation(where, row):
+
     if isinstance(where, Condition):
         if type(row[where.column]) == str:
             left = row[where.column].lower()
@@ -42,7 +43,9 @@ def condition_evaluation(where, row):
         if op == ">": return left > right
         if op == ">=": return left >= right
         raise ValueError(f"Unknown operator {op}")
+
     elif isinstance(where, LogicalCondition):
+
         MainOperator = where.MainOperator.upper()
         left_result = condition_evaluation(where.left, row)
         right_result = condition_evaluation(where.right, row)

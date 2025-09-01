@@ -1,4 +1,3 @@
-from database import database as DB
 from ast import LogicalCondition, Condition, SelectStatement, InsertStatement
 from executor import execute 
 
@@ -86,7 +85,6 @@ class Lexer:
     
  
 class Parser:
-    database = DB
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0 
@@ -113,25 +111,14 @@ class Parser:
         columns = self.parse_columns()
         self.eat("FROM")
         table = self.parse_table()
-        left = None
-        right = None
+        where = None
         if self.current_token()[0] == "WHERE":
             self.eat("WHERE")
-            col = self.eat("IDENTIFIER")[1]
-            opt = self.eat("OPT")[1]
-            val = self.eat("IDENTIFIER")[1]
-            left = Condition(col, opt, val)
-            if self.current_token()[0] == "MAINOPT":
-                MainOperation = self.eat("MAINOPT")[1].upper()
-                col = self.eat("IDENTIFIER")[1]
-                opt = self.eat("OPT")[1]
-                val = self.eat("IDENTIFIER")[1]
-                right = Condition(col, opt, val)
-                self.eat("SEMICOLON")
-                Logical_condition  = LogicalCondition(left, MainOperation, right)
-                return SelectStatement(columns, table, Logical_condition)
+            where = self.parse_condition_tree()
         self.eat("SEMICOLON")
-        return SelectStatement(columns, table, left)
+        return SelectStatement(columns, table, where)
+
+
               
     def parse_columns(self):
         token = self.current_token()
@@ -193,10 +180,15 @@ class Parser:
                self.eat("COMMA")
         self.eat("CLDBK")
         return values
+    def parse_condition_tree(self):
+        col = self.eat("IDENTIFIER")[1]
+        op  = self.eat("OPT")[1]
+        val = self.eat("IDENTIFIER")[1]
+        left_node = Condition(col, op, val)
+        if self.current_token() and self.current_token()[0] == "MAINOPT":
+            operator = self.eat("MAINOPT")[1]
+            right_node = self.parse_condition_tree()
+            return LogicalCondition(right_node, operator, left_node)
+        else:
+            return left_node
 
-
-
-
-
-
-    
