@@ -52,9 +52,18 @@ ls
 
 
 ## Future Work
--	Support for * wildcard in SELECT with WHERE
--	Logical operators (AND, OR) in WHERE clauses
--	String comparisons in WHERE
--	INSERT, UPDATE, DELETE operations
--	Persistence to disk (custom .su-sql files)
--	Indexing and performance optimizations
+
+- Nested and multiple logical operators (`AND`, `OR`) in `WHERE` clauses
+- Advanced string handling in `WHERE` (pattern matching, LIKE, etc.)
+- Additional SQL operations:
+  - `UPDATE`
+  - `DELETE`
+- Database schema management:
+  - `CREATE TABLE`
+  - `DROP TABLE`
+- Persistence to disk (custom `.su-sql` files or JSON format)
+- Auto-increment improvements for primary keys
+- Basic indexing for faster lookups and filtering
+- More aggregate functions: `COUNT()`, `SUM()`, `AVG()`, `MIN()`, `MAX()`
+- Enhanced error handling with detailed messages
+- Optional integration with external storage (CSV import/export)

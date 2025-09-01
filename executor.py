@@ -100,7 +100,9 @@ def execute_insert_query(ast, database):
                 # Add more types here if needed
             except Exception as e:
                 raise ValueError(f"Error converting value for column '{col}': {e}")
-
+            if type(val) != int and type (val) != bool and val.isdigit():
+                raise ValueError(
+                                f"Invalid value for column '{col}': expected a string (non-numeric), got digits only -> '{val}'")
             new_row[col] = val
         else:
             # Missing value → use default
