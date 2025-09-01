@@ -36,3 +36,4 @@ class UpdateStatement:
         self.table = table
         self.columns = columns
         self.where = where
+        
