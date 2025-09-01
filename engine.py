@@ -6,6 +6,7 @@ class Lexer:
     keywords = ("SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES")
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
+    SpecialCharacters = ("@", "_", "+", "-", ".")
 
     def __init__(self, query):
         self.query = query
@@ -55,7 +56,7 @@ class Lexer:
                 self.pos += 1
                 self.tokens.append(("STAR", char))
                 continue
-            raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
+            raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}, Try Your Input inside -> "" ")
         return self.tokens
 
             
@@ -78,7 +79,7 @@ class Lexer:
     
     def getFullInput(self):
         key = ""
-        while self.pos < len(self.query) and (self.query[self.pos].isalnum() or self.query[self.pos] == '_'):
+        while self.pos < len(self.query) and (self.query[self.pos].isalnum() or self.query[self.pos] in Lexer.SpecialCharacters):
             key += self.query[self.pos]
             self.pos += 1
         return key
