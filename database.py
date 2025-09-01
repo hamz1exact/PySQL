@@ -1,7 +1,7 @@
 database = {
         "users": [
         {"id":int, "name": str, "age": int, "isStudent": bool, "email": str, "city": str, "country": str},
-        {"id": 0, "name": "Null", "age": 0, "isStudent": False, "email": "Null", "city": "Null", "country": "Null"},
+        {"id": 0, "name": "Guest", "age": 0, "isStudent": False, "email": "Unknown", "city": "Unknown", "country": "Unknown"},
         {"id": 1, "name": "Hamza Deraoui", "age": 19, "isStudent": True, "email": "hamza.deraoui@email.com", "city": "Oujda", "country": "Morocco"},
         {"id": 2, "name": "Ali Hassan", "age": 21, "isStudent": False, "email": "ali.hassan@email.com", "city": "Casablanca", "country": "Morocco"},
         {"id": 3, "name": "Sarah Johnson", "age": 23, "isStudent": True, "email": "sarah.johnson@email.com", "city": "New York", "country": "USA"},

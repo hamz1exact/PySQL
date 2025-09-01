@@ -30,3 +30,10 @@ class InsertStatement:
         self.table = table
         self.columns = columns
         self.values = values
+        
+class UpdateStatement:
+    def __init__(self, table, columns, where):
+        self.table = table
+        self.columns = columns
+        self.where = where
+        
