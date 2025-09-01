@@ -1,6 +1,6 @@
-from components import database as DB
+from database import database as DB
 from ast import LogicalCondition, Condition, SelectStatement
-from executor import execute
+from executor import execute 
 class Lexer:
     keywords = ("SELECT", "FROM", "WHERE")
     Comparison_Operators = ("=", "!", "<", ">")
@@ -107,10 +107,11 @@ class Parser:
                 self.eat("SEMICOLON")
                 Logical_condition  = LogicalCondition(left, MainOperation, right)
                 ast = SelectStatement(columns, table, Logical_condition)
-                return self.execute(ast)
+                return execute(ast, Parser.database)
         self.eat("SEMICOLON")
         ast = SelectStatement(columns, table, left)
-        return self.execute(ast)  # return result
+        return execute(ast, Parser.database)
+                      
 
 
 
