@@ -23,3 +23,13 @@ class LogicalCondition:
         self.left = left
         self.MainOperator = MainOperator
         self.right = right
+
+
+class InsertStatement:
+    def __init__(self, columns, values):
+        self.columns = columns
+        self.values = values
+        print(self.columns)
+        print(self.values)
+    
+        

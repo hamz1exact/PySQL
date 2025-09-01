@@ -1,10 +1,12 @@
 from database import database as DB
-from ast import LogicalCondition, Condition, SelectStatement
+from ast import LogicalCondition, Condition, SelectStatement, InsertStatement
 from executor import execute 
+
 class Lexer:
-    keywords = ("SELECT", "FROM", "WHERE")
+    keywords = ("SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES")
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
+
     
     def __init__(self, query):
         self.query = query
@@ -23,6 +25,12 @@ class Lexer:
                 else:
                     self.tokens.append(("IDENTIFIER", word))
                 continue
+            if char == '(':
+                self.token.append(("OPDBK", char))
+                self.pos =+ 1
+            if char == ')':
+                self.token.append(("CLDBK", char))
+                self.pos += 1
             if char in ' \t\n':
                 self.pos += 1
                 continue
@@ -44,6 +52,7 @@ class Lexer:
                 continue
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         return self.tokens
+
             
     def get_operator(self):
         OPT = ""
@@ -71,7 +80,6 @@ class Parser:
             return self.tokens[self.pos]
         return None
 
-
     def eat(self, token_type):
         token = self.current_token()
         if token is None:
@@ -82,8 +90,6 @@ class Parser:
             return token
         else:
             raise SyntaxError(f"Expected token type '{token_type}', got '{actual_type}' at position {self.pos}")
-
-
 
     def parse_select_statement(self):
         self.eat("SELECT")
@@ -112,9 +118,6 @@ class Parser:
         ast = SelectStatement(columns, table, left)
         return execute(ast, Parser.database)
                       
-
-
-
     def parse_columns(self):
         token = self.current_token()
         if token[0] == "STAR":
@@ -135,45 +138,37 @@ class Parser:
 
     def parse_table(self):
         return self.eat("IDENTIFIER")[1]
-    
-    
-    # def execute(self, ast):
-    #     table_name = ast.table
-    #     if table_name not in Parser.database:
-    #         raise ValueError(f"Table '{table_name}' does not exist")
-    #     table = Parser.database[table_name]
-    #     requested_columns = ast.columns
-    #     if requested_columns == ['*']:
-    #         columns_to_return = table[0].keys() if table else []
-    #     else:
-    #         for col in requested_columns:
-    #             if table and col not in table[0]:
-    #                 raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
-    #         columns_to_return = requested_columns
-    #     result = []
-    #     for row in table:
-    #         if ast.where is None or self.where_eval(ast.where, row):
-    #             selected_row = {col: row[col] for col in columns_to_return}
-    #             result.append(selected_row)
-    #     return result
 
-    def where_eval(self, where, row):
-        if isinstance(where, Condition):
-            if type(row[where.column]) == str:
-                left = row[where.column].lower()
-            else:
-                left = row[where.column]
-            right = where.value
-            op  = where.operator
-            if op == "=": return left == right
-            if op == "!=": return left != right
-            if op == "<": return left < right
-            if op == "<=": return left <= right
-            if op == ">": return left > right
-            if op == ">=": return left >= right
-            raise ValueError(f"Unknown operator {op}")
-        elif isinstance(where, LogicalCondition):
-            MainOperator = where.MainOperator
-            left = self.where_eval(where.left, row)
-            right = self.where_eval(where.right, row)
-            return (left and right if MainOperator.upper() == "AND" else (left or right))
+    def parse_insert_statement(self):
+        self.eat("INSERT")
+        self.eat("INTO")
+        insert_table = self.parse_insert_table()
+        columns = self.parse_insert_columns()
+        self.eat("VALUES")
+        values = self.parse_insert_values()
+        self.eat("SEMICOLON")
+        return InsertStatement(columns, values)
+    def parse_insert_table(self):
+        return self.eat("IDENTIFIER")[1]
+
+    def parse_insert_columns(self):
+        self.eat("OPNBK")
+        columns = []
+        while self.pos < len(self.query) and  self.current_token()[0] == "IDENTIFIER":
+            columns.append(self.eat("IDENTIFIER")[1])
+        self.eat("CLDBK")
+        return columns
+    def parse_insert_values(self):
+        self.eat("OPENBK")
+        values = []
+        while self.pos < len(self.query) and self.current_token()[0] == "IDENTIFIER":
+            values.append(self.eat("IDENTIFIER")[1])
+        self.eat("CLDBK")
+        return values
+
+
+
+
+
+
+    
