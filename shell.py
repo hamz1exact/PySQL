@@ -65,9 +65,12 @@ while True:
             continue
         lexer = Lexer(query)
         parser = Parser(lexer.tokens)
-        rows = parser.parse_select_statement() if lexer.tokens[0][0] == "SELECT" else parser.parse_insert_statement()
-        
-        print_table(rows)  # pretty print
+        if lexer.tokens[0][0] == "SELECT":
+            rows = parser.parse_select_statement()
+            print_table(rows)
+        else:
+            parser.parse_insert_statement()
+         # pretty print
         
     except KeyboardInterrupt:
         exit()

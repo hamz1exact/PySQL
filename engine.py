@@ -26,11 +26,13 @@ class Lexer:
                     self.tokens.append(("IDENTIFIER", word))
                 continue
             if char == '(':
-                self.token.append(("OPDBK", char))
-                self.pos =+ 1
-            if char == ')':
-                self.token.append(("CLDBK", char))
+                self.tokens.append(("OPDBK", char))
                 self.pos += 1
+                continue
+            if char == ')':
+                self.tokens.append(("CLDBK", char))
+                self.pos += 1
+                continue
             if char in ' \t\n':
                 self.pos += 1
                 continue
@@ -117,7 +119,7 @@ class Parser:
         self.eat("SEMICOLON")
         ast = SelectStatement(columns, table, left)
         return execute(ast, Parser.database)
-                      
+              
     def parse_columns(self):
         token = self.current_token()
         if token[0] == "STAR":
@@ -138,31 +140,46 @@ class Parser:
 
     def parse_table(self):
         return self.eat("IDENTIFIER")[1]
+    
+    
 
     def parse_insert_statement(self):
         self.eat("INSERT")
         self.eat("INTO")
-        insert_table = self.parse_insert_table()
+        table = self.parse_insert_table()
         columns = self.parse_insert_columns()
         self.eat("VALUES")
         values = self.parse_insert_values()
         self.eat("SEMICOLON")
-        return InsertStatement(columns, values)
+        ast = InsertStatement(table, columns, values)
+        return execute(ast, Parser.database)
+    
+    
     def parse_insert_table(self):
         return self.eat("IDENTIFIER")[1]
+    
+    
 
     def parse_insert_columns(self):
-        self.eat("OPNBK")
+        self.eat("OPDBK")
         columns = []
-        while self.pos < len(self.query) and  self.current_token()[0] == "IDENTIFIER":
-            columns.append(self.eat("IDENTIFIER")[1])
+        while self.current_token() and  (self.current_token()[0] == "IDENTIFIER" or self.current_token()[0] == "COMMA"):
+            if self.current_token()[0] != 'COMMA':
+                columns.append(self.eat("IDENTIFIER")[1])
+            else:
+                self.eat("COMMA")
         self.eat("CLDBK")
         return columns
+    
+    
     def parse_insert_values(self):
-        self.eat("OPENBK")
+        self.eat("OPDBK")
         values = []
-        while self.pos < len(self.query) and self.current_token()[0] == "IDENTIFIER":
-            values.append(self.eat("IDENTIFIER")[1])
+        while self.current_token() and (self.current_token()[0] == "IDENTIFIER" or self.current_token()[0] == "COMMA"):
+           if self.current_token()[0] != 'COMMA':
+                values.append(self.eat("IDENTIFIER")[1])
+           else:
+               self.eat("COMMA")
         self.eat("CLDBK")
         return values
 

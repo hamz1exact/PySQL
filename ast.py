@@ -26,10 +26,7 @@ class LogicalCondition:
 
 
 class InsertStatement:
-    def __init__(self, columns, values):
+    def __init__(self, table, columns, values):
+        self.table = table
         self.columns = columns
         self.values = values
-        print(self.columns)
-        print(self.values)
-    
-        
