@@ -112,7 +112,8 @@ class Parser:
         self.eat("FROM")
         table = self.parse_table()
         where = None
-        if self.current_token()[0] == "WHERE":
+        token = self.current_token()
+        if token and token[0] == "WHERE":
             self.eat("WHERE")
             where = self.parse_condition_tree()
         self.eat("SEMICOLON")
