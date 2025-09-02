@@ -191,4 +191,3 @@ class Parser:
             return LogicalCondition(right_node, operator, left_node)
         else:
             return left_node
-
