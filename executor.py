@@ -161,6 +161,6 @@ def execute_update_query(ast, database):
                     if ast.columns[col].isdigit():
                         raise ValueError(
                                 f"Invalid value for column '{col}': expected a string (non-numeric), got digits only -> '{ast.columns[col]}'")
-                row[col] = ast.columns[row]
+                row[col] = str(ast.columns[col])
                 cnt += 1
     print(f"{cnt} row(s) updated in '{table_name}'")
