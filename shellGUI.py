@@ -851,6 +851,10 @@ SELECT * FROM users;"""
                     ast = parser.parse_update_statement()
                     execute(ast, database)
                     self.log_message("UPDATE query executed successfully.", "SUCCESS")
+                elif first_token == "DELETE":
+                    ast=parser.parse_delete_statement()
+                    execute(ast, database)
+                    self.log_message("UPDATE query executed successfully.", "SUCCESS")
                 else:
                     self.log_error(f"Unsupported query type: {first_token}")
             except KeyError as k:
@@ -869,7 +873,7 @@ SELECT * FROM users;"""
 
         if self.status_var.get() != "Error":
             self.status_var.set("Execution Complete")
-    
+            
     def show_success_message(self, title, message):
         """Show a success message"""
         self.clear_results()

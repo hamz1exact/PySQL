@@ -79,13 +79,16 @@ while True:
         elif lexer.tokens[0][0] == "UPDATE":
             ast = parser.parse_update_statement()
             execute(ast, database)
-            
+        elif lexer.tokens[0][0] == "DELETE":
+            ast = parser.parse_delete_statement()
+            execute(ast, database)
+        else:
+            raise ValueError(f"Invalid Keyword {lexer.tokens[0][1]}")
+        continue
              
     except KeyboardInterrupt:
         exit()
     except KeyError as k:
         print(f"Row / column {k} Not Found")
-    except Exception as e:
-        print("Error:", e)
-
-
+    # except Exception as e:
+    #     print("Error:", e)

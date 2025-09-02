@@ -1,4 +1,4 @@
-from ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement
+from ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
 
 def execute(ast, database):
     if isinstance(ast, SelectStatement) or isinstance(ast, LogicalCondition):
@@ -7,7 +7,9 @@ def execute(ast, database):
         execute_insert_query(ast, database)
     elif isinstance(ast, UpdateStatement):
         execute_update_query(ast, database)
-
+    elif isinstance(ast, DeleteStatement):
+        execute_delete_query(ast, database)
+        
 def execute_select_query(ast, database):
     table_name = ast.table
     if table_name not in database:
@@ -164,3 +166,21 @@ def execute_update_query(ast, database):
                 row[col] = str(ast.columns[col])
                 cnt += 1
     print(f"{cnt} row(s) updated in '{table_name}'")
+    
+    
+def execute_delete_query(ast, database):
+    if ast.table not in database:
+        raise ValueError(f"Table '{ast.table}' does not exist")
+    if ast.where == None:
+        n = len(database[ast.table])
+        del database[ast.table][:]
+        print(f"{n} rows Deleted")
+        return
+    table = database[ast.table]
+    n = 0
+    for i in range(len(table) - 1, 1, -1):  # start from last data row
+        row = table[i]
+        if condition_evaluation(ast.where, row):
+            del table[i]
+            n += 1
+    print(f"{n} rows deleted")

@@ -36,5 +36,9 @@ class UpdateStatement:
         self.table = table
         self.columns = columns
         self.where = where
-        
+
+class DeleteStatement:
+    def __init__(self, table, where = None):
+        self.table = table
+        self.where = where
         

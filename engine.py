@@ -1,8 +1,8 @@
-from ast import LogicalCondition, Condition, SelectStatement, InsertStatement, UpdateStatement
+from ast import LogicalCondition, Condition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
 from executor import execute 
 
 class Lexer:
-    keywords = ("SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET")
+    keywords = ("SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE")
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
     SpecialCharacters = ("@", "_", "+", "-", ".")
@@ -132,7 +132,7 @@ class Parser:
             var = self.eat("IDENTIFIER")
             columns.append(var[1])
             token = self.current_token()
-            if token is not None and token[0] == "COMMA":
+            if token and token[0] == "COMMA":
                 self.eat("COMMA")
             else:
                 break
@@ -200,7 +200,8 @@ class Parser:
         self.eat("SET")
         columns = self.parse_update_columns()
         where = None
-        if self.current_token()[0] == "WHERE":
+        curr_token  = self.current_token()
+        if curr_token and curr_token[0] == "WHERE":
             self.eat("WHERE")
             where = self.parse_condition_tree()
         self.eat("SEMICOLON")
@@ -219,8 +220,14 @@ class Parser:
             columns[col] = val
         return columns
 
-
-
-
-
-
+    def parse_delete_statement(self):
+        self.eat("DELETE")
+        self.eat("FROM")
+        table = self.eat("IDENTIFIER")[1]
+        token = self.current_token()
+        where = None
+        if token and token[0] == "WHERE":
+            self.eat("WHERE")
+            where = self.parse_condition_tree()
+        self.eat("SEMICOLON")
+        return DeleteStatement(table, where)
