@@ -37,3 +37,4 @@ class UpdateStatement:
         self.columns = columns
         self.where = where
         
+        

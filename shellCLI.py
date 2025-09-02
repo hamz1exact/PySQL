@@ -76,6 +76,9 @@ while True:
         elif lexer.tokens[0][0] == "INSERT":
             ast = parser.parse_insert_statement()
             execute(ast, database)
+        elif lexer.tokens[0][0] == "UPDATE":
+            ast = parser.parse_update_statement()
+            execute(ast, database)
             
              
     except KeyboardInterrupt:

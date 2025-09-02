@@ -685,7 +685,6 @@ INSERT INTO users (name, email, age) VALUES ('John Doe', 'john@example.com', 30)
         
         self.tree.tag_configure('oddrow', background=self.colors['bg_secondary'])
         self.log_message(f"Found {len(database)} tables in database.", "SUCCESS")
-    
     def execute_query(self):
         """Execute the SU-SQL query with modern feedback"""
         query = self.query_text.get('1.0', tk.END).strip()
@@ -729,8 +728,10 @@ INSERT INTO users (name, email, age) VALUES ('John Doe', 'john@example.com', 30)
                 self.notebook.select(0)  # Switch to results tab
                 
             elif first_token == "UPDATE":
-                self.log_error("UPDATE statement support coming soon!")
-                
+                ast = parser.parse_update_statement()
+                execute(ast, database)
+                self.show_success_message(f"Update successfully applied to table","Data has been Updated to the database" )
+                self.notebook.select(0)
             else:
                 self.log_error(f"Unsupported query type: {first_token}")
                 return

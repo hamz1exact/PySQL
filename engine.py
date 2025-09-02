@@ -1,8 +1,8 @@
-from ast import LogicalCondition, Condition, SelectStatement, InsertStatement
+from ast import LogicalCondition, Condition, SelectStatement, InsertStatement, UpdateStatement
 from executor import execute 
 
 class Lexer:
-    keywords = ("SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES")
+    keywords = ("SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET")
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
     SpecialCharacters = ("@", "_", "+", "-", ".")
@@ -119,6 +119,7 @@ class Parser:
         return SelectStatement(columns, table, where)
 
 
+
               
     def parse_columns(self):
         token = self.current_token()
@@ -180,6 +181,7 @@ class Parser:
                self.eat("COMMA")
         self.eat("CLDBK")
         return values
+
     def parse_condition_tree(self):
         col = self.eat("IDENTIFIER")[1]
         op  = self.eat("OPT")[1]
@@ -191,3 +193,33 @@ class Parser:
             return LogicalCondition(right_node, operator, left_node)
         else:
             return left_node
+    def parse_update_statement(self):
+        self.eat("UPDATE")
+        table_name = self.eat("IDENTIFIER")[1]
+        self.eat("SET")
+        columns = self.parse_update_columns()
+        where = None
+        if self.current_token()[0] == "WHERE":
+            self.eat("WHERE")
+            where = self.parse_condition_tree()
+        self.eat("SEMICOLON")
+        return UpdateStatement(table_name, columns, where)
+
+    def parse_update_columns(self):
+        columns = {}
+        while self.current_token() and self.current_token()[0] != "SEMICOLON" and self.current_token()[0] not in Lexer.keywords:
+            if self.current_token()[0] == "COMMA":
+                self.eat("COMMA")
+            col = self.eat("IDENTIFIER")[1]
+            opt = self.eat("OPT")[1]
+            val = self.eat("IDENTIFIER")[1]
+            if opt not in ("=", "=="):
+                raise SyntaxError(f"Invalid assignment operator '{opt}' for column '{col}'. Use '=' or '=='.")
+            columns[col] = val
+        return columns
+
+
+
+
+
+
