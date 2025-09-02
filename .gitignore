@@ -3,7 +3,7 @@ usage.md
 __pycache__/
 *.py[cod]
 *$py.class
-
+Components/
 
 # C extensions
 *.so
