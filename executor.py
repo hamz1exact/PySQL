@@ -1,5 +1,4 @@
-from ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
-
+from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
 def execute(ast, database):
     if isinstance(ast, SelectStatement) or isinstance(ast, LogicalCondition):
         return execute_select_query(ast, database)

@@ -1,4 +1,4 @@
-from ast import LogicalCondition, Condition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
+from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
 from executor import execute 
 
 class Lexer:
