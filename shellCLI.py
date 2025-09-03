@@ -1,5 +1,8 @@
 import sys
-from database import database
+from engine import db_manager
+
+database = db_manager.active_db
+
 def print_table(rows):
     if not rows:
         print("Empty result")
@@ -82,7 +85,7 @@ while True:
             continue  # skip empty input
 
         token_type = lexer.tokens[0][0]
-
+        next_token_type = lexer.tokens[1][0]
         if token_type == "SELECT":
             ast = parser.parse_select_statement()
             rows = execute(ast, database)
@@ -90,6 +93,7 @@ while True:
         elif token_type == "INSERT":
             ast = parser.parse_insert_statement()
             execute(ast, database)
+            db_manager.save_database_file()
         elif token_type == "UPDATE":
             ast = parser.parse_update_statement()
             execute(ast, database)
@@ -97,8 +101,13 @@ while True:
             ast = parser.parse_delete_statement()
             execute(ast, database)
         elif token_type == "CREATE":
-            ast = parser.parse_create_table()
-            print(ast)  # or save the table in DB
+            if next_token_type == "DATABASE":
+                ast = parser.parse_create_database()
+            elif next_token_type == "TABLE":
+                ast = parser.parse_create_table()
+                print(ast)
+        elif token_type == "USE":
+             ast = parser.parse_use_statement()
         else:
             raise ValueError(f"Invalid Keyword '{lexer.tokens[0][1]}'")
 

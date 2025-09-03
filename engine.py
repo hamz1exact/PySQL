@@ -1,7 +1,12 @@
 from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
 from executor import execute 
 from datetime import datetime
+from database_manager import DatabaseManager, Table
 import re
+from checker import CheckDate, CheckTime, CheckDataType
+
+db_manager = DatabaseManager()
+
 class Lexer:
     # Keywords and data types
     keywords = (
@@ -328,13 +333,17 @@ class Parser:
         self.eat("DATABASE")
         db_name = self.eat("IDENTIFIER")[1]
         self.eat("SEMICOLON")
+        db_manager.create_database(db_name)
+        db_manager.use_database(db_name)
+
+
 
     def parse_create_table(self):
         self.eat("CREATE")
         self.eat("TABLE")
         table_name = self.eat("IDENTIFIER")[1]
+        table_name = table_name.strip()
         self.eat("OPDBK")  # (
-
         schema = {}
         auto = {}
         defaults = {}
@@ -370,7 +379,7 @@ class Parser:
                     
                     default_value = self.eat(token_type)[1]
                     
-                    col_type_type = self.getDataType(col_type)
+                    col_type_type = CheckDataType(col_type)
                     
                     if col_type.upper() == "CHAR":
                         if len(str(default_value)) != 1:
@@ -387,21 +396,18 @@ class Parser:
                                 f"Invalid value '{default_value}' for column '{col_name}', PLAINSTR must contain only letters and spaces"
                             )
                     elif col_type.upper() == "TIME":
-                        try:
-                            datetime.strptime(default_value, "%H:%M:%S").time()
-                        except ValueError:
-                            raise ValueError(
-                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
-                                f"must be in format HH:MM:SS"
-                            )
+                            if not CheckTime(default_value):
+                                raise ValueError(
+                                    f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
+                                    f"must be in format HH:MM:SS"
+                                )
                     elif col_type.upper() == "DATE":
-                        try:
-                            datetime.strptime(default_value, "%Y-%m-%d").date()
-                        except ValueError:
+                        if not CheckDate(default_value):
                             raise ValueError(
-                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
-                                f"must be in format YYYY:MM:DD"
-                            )
+                                    f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
+                                    f"must be in format YYYY:MM:DD"
+                                )
+                            
                     if col_type_type != type(default_value):
                         raise ValueError(f"Invalid Value, Column DataType {col_type_type} Does Not Match the Default Value Type {type(default_value)} !")
                     
@@ -417,13 +423,35 @@ class Parser:
 
         self.eat("CLDBK")  # )
         self.eat("SEMICOLON")
+        if table_name in db_manager.active_db:
+            print(db_manager.getrows(table_name))
+        table = Table(table_name, schema, defaults, auto)
+        db_manager.active_db[table_name] = table
+        db_manager.save_database_file()
 
-        print(table_name, schema, auto, defaults)
-        # return table_name, schema, auto, defaults
-    def getDataType(self, col_type, custom_type = None):
+    def getDataType(self, col_type):
         checker = {str:("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
             int: ("INT", "FLOAT"),
             bool: ("BOOLEAN")}
         for key in checker:
             if col_type in checker[key]:
                 return key
+    # def CheckDate(self, inp):
+    #     try:
+    #         if datetime.strptime(inp, "%Y-%m-%d").date():
+    #             return True
+    #     except Exception:
+    #         return False
+    # def CheckTime(self, inp):
+    #     try:
+    #         if datetime.strptime(inp, "%H:%M:%S").time():
+    #             return True
+    #     except Exception:
+    #         return False
+
+    def parse_use_statement(self):
+        self.eat("USE")
+        db_name = self.eat("IDENTIFIER")[1]
+        self.eat("SEMICOLON")
+        db_manager.use_database(db_name)
+        db_manager.save_database_file()

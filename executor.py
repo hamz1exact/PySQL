@@ -1,6 +1,7 @@
 from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
+from checker import CheckDate, CheckTime, CheckDataType
 def execute(ast, database):
-    if isinstance(ast, SelectStatement) or isinstance(ast, LogicalCondition):
+    if isinstance(ast, SelectStatement):
         return execute_select_query(ast, database)
     elif isinstance(ast, InsertStatement):
         execute_insert_query(ast, database)
@@ -13,7 +14,7 @@ def execute_select_query(ast, database):
     table_name = ast.table
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
-    table = database[table_name][2:]
+    table = database[table_name].rows
     requested_columns = ast.columns
     if requested_columns == ['*']:
         columns_to_return = table[0].keys() if table else []
@@ -30,8 +31,9 @@ def execute_select_query(ast, database):
     return result
 
 
-def condition_evaluation(where, row):
 
+def condition_evaluation(where, row):
+    
     if isinstance(where, Condition):
         if type(row[where.column]) == str:
             left = row[where.column].lower()
@@ -64,70 +66,44 @@ def execute_insert_query(ast, database):
     table_name = ast.table
     columns = ast.columns
     values = ast.values
-
-    # Check table existence
     if table_name not in database:
-       raise ValueError(f"Table '{table_name}' does not exist")
-
-    table = database[table_name]
-    if not table or len(table) < 2:
-        raise ValueError(f"Table '{table_name}' is not properly initialized")
-
-    # First row: column types
-    class_table = table[0]
-
-    # Second row: default values
-    default_row = table[1]
-
-    # Check value count
+        raise ValueError(f"Table '{table_name}' does not exist")
+    table_obj = database[table_name]
+    table_rows = table_obj.rows
+    table_schema = table_obj.schema
+    table_default = table_obj.defaults
+    table_auto = table_obj.auto
+    
     if len(values) != len(columns):
         raise ValueError(
             f"Number of values ({len(values)}) does not match number of columns ({len(columns)}). "
             f"Columns: {columns}, Values: {values}"
         )
-
     new_row = {}
-
-    for col, col_type in class_table.items():
-        if col in columns:
-            # Get the value provided by user
-            idx = columns.index(col)
+    for schema_col, schema_val in table_schema.items():
+        schema_type = CheckDataType(schema_val)
+        if schema_col in columns:
+            idx = columns.index(schema_col)
             val = values[idx]
-
-            # Type conversion
-            try:
-                if col_type == int:
-                    val = int(val)
-                elif col_type == bool:
-                    if isinstance(val, str):
-                        val = val.lower()
-                        if val == "true":
-                            val = True
-                        elif val == "false":
-                            val = False
-                        else:
-                            raise ValueError(f"Invalid boolean value for column '{col}': {val}")
-                    else:
-                        val = bool(val)
-                # Add more types here if needed
-            except Exception as e:
-                raise ValueError(f"Error converting value for column '{col}': {e}")
-            if type(val) != int and type (val) != bool and val.isdigit():
-                raise ValueError(
-                                f"Invalid value for column '{col}': expected a string (non-numeric), got digits only -> '{val}'")
-            new_row[col] = val
-        else:
-            # Missing value → use default
-            if col == "id":
-                # Simple auto-increment: max existing id + 1
-                existing_ids = [r["id"] for r in table[1:]]  # skip type row
-                new_row[col] = max(existing_ids, default=0) + 1
+            if type(val) != schema_type:
+                raise ValueError(f"Expected {schema_type} DataType, But {type(val)} Were Given")
             else:
-                new_row[col] = default_row[col]
-
-    table.append(new_row)
+                if schema_col in table_auto:
+                    table_auto[schema_col]  = val
+                new_row[schema_col] = val
+        else:
+            if schema_col in table_auto:
+                table_auto[schema_col] += 1
+                new_row[schema_col] = table_auto.get(schema_col)
+            elif schema_col in table_default:
+                new_row[schema_col] = table_default[schema_col]
+            else:
+                new_row[schema_col] = None
+                
+    table_rows.append(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
-
+    
+        
 
 def execute_update_query(ast, database):
     table_name = ast.table
@@ -183,3 +159,5 @@ def execute_delete_query(ast, database):
             del table[i]
             n += 1
     print(f"{n} rows deleted")
+    
+    
