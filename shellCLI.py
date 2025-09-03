@@ -49,49 +49,62 @@ def show_tables(database):
     
 from engine import Lexer, Parser  # import the formatter
 from executor import execute
+
 while True:
     try:
-        query = input("\n> ")
-        print()
-        lexer = Lexer(query)
-        parser = Parser(lexer.tokens)
+        # ---------------- Read multi-line query until semicolon ----------------
+        query_lines = []
+        while True:
+            line = input("> ")
+            query_lines.append(line)
+            if "clear" in line or "ls" in line:
+                break
+            if ";" in line:
+                break
+        query = " ".join(query_lines).strip()
+
+        # ---------------- Handle shell commands ----------------
         if query.lower() == "clear":
             import os
-            if os.name == 'nt':
-                os.system('cls')
-            else:
-                os.system('clear')
+            os.system("cls" if os.name == "nt" else "clear")
             continue
-        
+
         if query.lower() == "ls":
             parser = Parser([])
             show_tables(database)
             continue
-        
-        if lexer.tokens[0][0] == "SELECT":
+
+        # ---------------- Lexer & Parser ----------------
+        lexer = Lexer(query)
+        parser = Parser(lexer.tokens)
+
+        if not lexer.tokens:
+            continue  # skip empty input
+
+        token_type = lexer.tokens[0][0]
+
+        if token_type == "SELECT":
             ast = parser.parse_select_statement()
-            # rows = execute(ast, database)
-            # print_table(rows)
-        
-        elif lexer.tokens[0][0] == "INSERT":
+            rows = execute(ast, database)
+            print_table(rows)
+        elif token_type == "INSERT":
             ast = parser.parse_insert_statement()
-            # execute(ast, database)
-        elif lexer.tokens[0][0] == "UPDATE":
+            execute(ast, database)
+        elif token_type == "UPDATE":
             ast = parser.parse_update_statement()
-            # execute(ast, database)
-        elif lexer.tokens[0][0] == "DELETE":
+            execute(ast, database)
+        elif token_type == "DELETE":
             ast = parser.parse_delete_statement()
-            # execute(ast, database)
-        elif lexer.tokens[0][0] == "CREATE":
+            execute(ast, database)
+        elif token_type == "CREATE":
             ast = parser.parse_create_table()
-            # print(ast)
+            print(ast)  # or save the table in DB
         else:
-            raise ValueError(f"Invalid Keyword {lexer.tokens[0][1]}")
-        continue
-             
+            raise ValueError(f"Invalid Keyword '{lexer.tokens[0][1]}'")
+
     except KeyboardInterrupt:
         exit()
     except KeyError as k:
-        print(f"Row / column {k} Not Found")
+        print(f"Row / column {k} not found")
     except Exception as e:
         print("Error:", e)
