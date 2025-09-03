@@ -1,6 +1,7 @@
 from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
 from executor import execute 
-
+from datetime import datetime
+import re
 class Lexer:
     # Keywords and data types
     keywords = (
@@ -8,7 +9,7 @@ class Lexer:
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT"
     )
-    DataTypes = ("INT", "FLOAT", "BOOLEAN", "CHAR", "STR", "CSTR", "DATE", "TIMESTAMP", "AUTO_INT")
+    DataTypes = ("INT", "FLOAT", "BOOLEAN", "CHAR", "STR", "PLAINSTR", "DATE", "TIME", "AUTO_INT")
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
     SpecialCharacters = ("@", "_", "+", "-", ".")
@@ -94,7 +95,7 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        print(self.tokens)
+        # print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -166,7 +167,6 @@ class Parser:
             where = self.parse_condition_tree()
         self.eat("SEMICOLON")
         return SelectStatement(columns, table, where)
-
 
 
               
@@ -342,7 +342,7 @@ class Parser:
         while self.current_token() and self.current_token()[0] != "CLDBK":
             # Column name
             col_name = self.eat("IDENTIFIER")[1]
-
+            auto_int = False
             # Column type
             col_type = self.eat("DATATYPE")[1]
             schema[col_name] = col_type
@@ -350,20 +350,61 @@ class Parser:
             # Handle AUTO_INT
             if col_type.upper() == "AUTO_INT":
                 auto[col_name] = 0
+                auto_int = True
 
             # Handle DEFAULT values
             if self.current_token() and self.current_token()[0] == "DEFAULT":
+                if auto_int:
+                    raise ValueError(f"Invalid DEFAULT for column '{col_name}', AUTO_INT columns cannot have explicit default values.")
+                
                 self.eat("DEFAULT")
                 opt = self.eat("OPT")[1]
                 if opt != "=" and opt != "==":
-                    raise ValueError(
-                        "Syntax error in DEFAULT clause: expected '=' or '==' after DEFAULT keyword"
-                    )
+                    raise ValueError("Syntax error in DEFAULT clause: expected '=' or '==' after DEFAULT keyword")
+                
 
                 # Value type-aware
                 token_type, token_value = self.current_token()
+                
                 if token_type in ("NUMBER", "STRING", "BOOLEAN"):
+                    
                     default_value = self.eat(token_type)[1]
+                    
+                    col_type_type = self.getDataType(col_type)
+                    
+                    if col_type.upper() == "CHAR":
+                        if len(str(default_value)) != 1:
+                            raise ValueError(
+                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': CHAR must be exactly 1 character"
+                            )
+                    elif col_type.upper() == "PLAINSTR":
+                        if not isinstance(default_value, str):
+                            raise ValueError(
+                                f"Invalid value '{default_value}' for column '{col_name}', must be a string"
+                            )
+                        if not re.fullmatch(r"[A-Za-z ]+", default_value):
+                            raise ValueError(
+                                f"Invalid value '{default_value}' for column '{col_name}', PLAINSTR must contain only letters and spaces"
+                            )
+                    elif col_type.upper() == "TIME":
+                        try:
+                            datetime.strptime(default_value, "%H:%M:%S").time()
+                        except ValueError:
+                            raise ValueError(
+                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
+                                f"must be in format HH:MM:SS"
+                            )
+                    elif col_type.upper() == "DATE":
+                        try:
+                            datetime.strptime(default_value, "%Y-%m-%d").date()
+                        except ValueError:
+                            raise ValueError(
+                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
+                                f"must be in format YYYY:MM:DD"
+                            )
+                    if col_type_type != type(default_value):
+                        raise ValueError(f"Invalid Value, Column DataType {col_type_type} Does Not Match the Default Value Type {type(default_value)} !")
+                    
                 else:
                     raise SyntaxError(
                         f"Unexpected token type '{token_type}' in DEFAULT clause for column '{col_name}'"
@@ -378,4 +419,11 @@ class Parser:
         self.eat("SEMICOLON")
 
         print(table_name, schema, auto, defaults)
-        return table_name, schema, auto, defaults
+        # return table_name, schema, auto, defaults
+    def getDataType(self, col_type, custom_type = None):
+        checker = {str:("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
+            int: ("INT", "FLOAT"),
+            bool: ("BOOLEAN")}
+        for key in checker:
+            if col_type in checker[key]:
+                return key

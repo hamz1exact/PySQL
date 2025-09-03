@@ -70,18 +70,21 @@ while True:
         
         if lexer.tokens[0][0] == "SELECT":
             ast = parser.parse_select_statement()
-            rows = execute(ast, database)
-            print_table(rows)
+            # rows = execute(ast, database)
+            # print_table(rows)
         
         elif lexer.tokens[0][0] == "INSERT":
             ast = parser.parse_insert_statement()
-            execute(ast, database)
+            # execute(ast, database)
         elif lexer.tokens[0][0] == "UPDATE":
             ast = parser.parse_update_statement()
-            execute(ast, database)
+            # execute(ast, database)
         elif lexer.tokens[0][0] == "DELETE":
             ast = parser.parse_delete_statement()
-            execute(ast, database)
+            # execute(ast, database)
+        elif lexer.tokens[0][0] == "CREATE":
+            ast = parser.parse_create_table()
+            # print(ast)
         else:
             raise ValueError(f"Invalid Keyword {lexer.tokens[0][1]}")
         continue
@@ -90,5 +93,5 @@ while True:
         exit()
     except KeyError as k:
         print(f"Row / column {k} Not Found")
-    # except Exception as e:
-    #     print("Error:", e)
+    except Exception as e:
+        print("Error:", e)
