@@ -3,10 +3,11 @@ from tkinter import ttk, messagebox, scrolledtext
 import sys
 import os
 import re
-from database import database
-from engine import Lexer, Parser
+
+from engine import Lexer, Parser, db_manager
 from executor import execute
 
+database = db_manager.active_db
 class LineNumberedText:
     """Text widget with line numbers like a real IDE"""
     def __init__(self, parent, **kwargs):

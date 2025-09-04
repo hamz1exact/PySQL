@@ -72,6 +72,7 @@ class DatabaseManager:
         db_file = os.path.join(self.db_folder, f"{db_name}.su")
         if db_file not in self.databases:
             raise ValueError(f"Database '{db_name}' does not exist")
+        # self.active_db = db_name
         self.active_db_name = db_file
         self.load_database_file()
         self.update_cache()

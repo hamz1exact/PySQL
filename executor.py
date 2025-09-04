@@ -26,7 +26,7 @@ def execute_select_query(ast, database):
     result = []
     for row in table:
         if ast.where is None or condition_evaluation(ast.where, row):
-            selected_row = {col: row[col] for col in columns_to_return if row[col] is not None}
+            selected_row = {col: row.get(col) for col in columns_to_return}
             result.append(selected_row)
     return result
 

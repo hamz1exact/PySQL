@@ -5,17 +5,17 @@ import traceback
 import re
 
 # Import your existing modules - UPDATED FOR NEW DATABASE STRUCTURE
-from database_manager import DatabaseManager
-from engine import Lexer, Parser
+
+from engine import Lexer, Parser, db_manager
 from executor import execute
 
 app = Flask(__name__)
 CORS(app)
 
-# Initialize database manager - NEW
-db_manager = DatabaseManager()
-database = db_manager.active_db
+# Initialize db_manager.active_dbmanager - NEW
 
+def get_current_database():
+    return db_manager.active_db
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -26,6 +26,9 @@ HTML_TEMPLATE = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/theme/material-darker.min.css">
     <style>
+    document.addEventListener("DOMContentLoaded", () => {
+    refreshTables();
+    });
         * {
             margin: 0;
             padding: 0;
@@ -171,6 +174,24 @@ HTML_TEMPLATE = """
             color: #858585;
             margin-top: 2px;
         }
+        /* Make table headers resizable */
+        .table-result th {
+            position: relative;
+            user-select: none;
+            cursor: col-resize;
+        }
+
+        /* The draggable handle on the right side of each th */
+        .table-result th .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 5px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 1;
+}
+
         
         .content-area {
             flex: 1;
@@ -285,6 +306,27 @@ HTML_TEMPLATE = """
             background: #252526;
         }
         
+        /* Make custom-sql keywords blue */
+        .cm-s-material-darker .cm-keyword {
+            color: #18AEFF !important; /* Blue */
+        }
+        .cm-s-material-darker .cm-number {
+            color: #F9A03F !important;
+        }
+        .cm-s-material-darker .cm-variable,
+        .cm-s-material-darker .cm-type {
+        color: #ffffff !important; /* White text */
+}
+
+        /* Optional: types can be green */
+        .cm-s-material-darker .cm-type {
+            color: #E6E69D !important;
+        }
+
+        .cm-s-material-darker .cm-string {
+            color: #ce9178 !important;
+        }
+
         .data-table {
             width: 100%;
             border-collapse: collapse;
@@ -473,10 +515,7 @@ HTML_TEMPLATE = """
                         <span class="editor-title">SQL Editor</span>
                     </div>
                     <div class="editor-container">
-                        <textarea id="editor">-- Welcome to SQL IDE Pro
--- Write your SQL queries here
-
-SELECT * FROM users LIMIT 10;</textarea>
+                        <textarea id="editor"></textarea>
                     </div>
                 </div>
                 
@@ -510,8 +549,70 @@ SELECT * FROM users LIMIT 10;</textarea>
         let currentResults = [];
         
         window.addEventListener('load', () => {
+            // Define custom SQL keywords for your engine
+            const customKeywords = {
+                'USE': true, 'SET': true, 'SWITCH': true,
+                'SELECT': true, 'FROM': true, 'WHERE': true, 'INSERT': true, 'UPDATE': true, 'DELETE': true,
+                'CREATE': true, 'DROP': true, 'ALTER': true, 'TABLE': true, 'DATABASE': true,
+                'AND': true, 'OR': true, 'NOT': true, 'IN': true, 'BETWEEN': true, 'LIKE': true,
+                'ORDER': true, 'BY': true, 'GROUP': true, 'HAVING': true, 'LIMIT': true, 'USE': true
+            };
+            
+            const customTypes = {
+                'INT': true, 'STR': true, 'PLAINSTR': true,
+                'VARCHAR': true, 'CHAR': true, 'TEXT': true, 'DATE': true, 'DATETIME': true,
+                'DECIMAL': true, 'FLOAT': true, 'DOUBLE': true, 'BOOLEAN': true, 'BOOL': true,
+                "AUTO_INT":true
+            };
+            
+            // Create custom SQL mode
+            CodeMirror.defineMode("custom-sql", function() {
+                return {
+                    token: function(stream, state) {
+                        if (stream.eatSpace()) return null;
+                        
+                        // Comments
+                        if (stream.match(/--.*$/)) {
+                            return "comment";
+                        }
+                        if (stream.match(/\/\*[\s\S]*?\*\//)) {
+                            return "comment";
+                        }
+                        
+                        // Strings
+                        if (stream.match(/'[^']*'/)) {
+                            return "string";
+                        }
+                        if (stream.match(/"[^"]*"/)) {
+                            return "string";
+                        }
+                        
+                        // Numbers
+                        if (stream.match(/\d+(\.\d+)?/)) {
+                            return "number";
+                        }
+                        
+                        // Keywords and types
+                        const word = stream.match(/\w+/);
+                        if (word) {
+                            const upperWord = word[0].toUpperCase();
+                            if (customKeywords[upperWord]) {
+                                return "keyword"; // Blue color
+                            }
+                            if (customTypes[upperWord]) {
+                                return "type"; // Different color for types
+                            }
+                            return "variable";
+                        }
+                        
+                        stream.next();
+                        return null;
+                    }
+                };
+            });
+            
             editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
-                mode: 'sql',
+                mode: 'custom-sql',
                 theme: 'material-darker',
                 lineNumbers: true,
                 lineWrapping: true,
@@ -660,9 +761,9 @@ SELECT * FROM users LIMIT 10;</textarea>
         
         async function runQuery(query, isLast = true) {
             if (!query.trim()) return;
-            
+
             updateStatus('Executing query...');
-            
+
             try {
                 const response = await fetch('/api/execute', {
                     method: 'POST',
@@ -670,20 +771,27 @@ SELECT * FROM users LIMIT 10;</textarea>
                     body: JSON.stringify({ query })
                 });
                 const result = await response.json();
-                
+
                 if (isLast) {
                     displayResults(result, query);
                 }
-                
+
                 if (result.success) {
                     updateStatus(result.message || 'Query executed successfully');
+
+                    // ✅ Automatically refresh tables if the query affects DB structure
+                    const queryType = query.trim().split(' ')[0].toUpperCase();
+                    if (['USE', 'CREATE', 'DROP', 'ALTER'].includes(queryType)) {
+                        refreshTables();
+                    }
+
                 } else {
                     updateStatus(`Error: ${result.error}`);
                     if (isLast) {
                         showMessage(result.error, 'error');
                     }
                 }
-                
+
             } catch (error) {
                 updateStatus(`Network error: ${error.message}`);
                 if (isLast) {
@@ -702,7 +810,8 @@ SELECT * FROM users LIMIT 10;</textarea>
             
             if (result.data && result.data.length > 0) {
                 currentResults = result.data;
-                const tableHtml = createDataTable(result.data);
+                const tableHtml = createDataTable(result.data, result.columns);
+
                 const queryInfo = `<div class="query-info">
                     <strong>${result.data.length}</strong> rows returned • 
                     Query executed in <strong>${result.execution_time || 'N/A'}</strong>
@@ -715,43 +824,103 @@ SELECT * FROM users LIMIT 10;</textarea>
                 content.innerHTML = `<div class="message message-info">Query executed successfully</div>`;
             }
         }
-        
-        function createDataTable(data) {
-            if (!data || data.length === 0) {
-                return '<div class="empty-state"><p>No data to display</p></div>';
+        function buildTable(columns, rows) {
+    const table = document.createElement('table');
+    table.className = 'table-result';
+    
+    // Table header
+    const thead = document.createElement('thead');
+    const tr = document.createElement('tr');
+    columns.forEach(col => {
+        const th = document.createElement('th');
+        th.textContent = col;
+
+        // Add resize handle
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        th.appendChild(handle);
+
+        tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+    table.appendChild(thead);
+
+    // Table body
+    const tbody = document.createElement('tbody');
+    rows.forEach(row => {
+        const tr = document.createElement('tr');
+        columns.forEach(col => {
+            const td = document.createElement('td');
+            td.textContent = row[col];
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    enableColumnResize(table); // attach resize logic
+    return table;
+}
+function enableColumnResize(table) {
+    const ths = table.querySelectorAll('th');
+    ths.forEach(th => {
+        const handle = th.querySelector('.resize-handle');
+        let startX, startWidth;
+
+        handle.addEventListener('mousedown', (e) => {
+            startX = e.pageX;
+            startWidth = th.offsetWidth;
+
+            function onMouseMove(e) {
+                const newWidth = startWidth + (e.pageX - startX);
+                th.style.width = newWidth + 'px';
             }
-            
-            // Get columns from the first data row to respect original order
-            const columns = Object.keys(data[0]);
-            
-            const headerRow = columns.map((col, index) => 
-                `<th draggable="true" data-column="${col}" data-index="${index}" 
-                    ondragstart="handleDragStart(event)" 
-                    ondragover="handleDragOver(event)" 
-                    ondrop="handleDrop(event)" 
-                    ondragend="handleDragEnd(event)"
-                    style="position: relative; resize: horizontal; overflow: hidden; min-width: 80px;">
-                    ${escapeHtml(col)}
-                </th>`
-            ).join('');
-            
-            const bodyRows = data.map(row => {
-                const cells = columns.map(col => {
-                    const value = row[col];
-                    return `<td class="${getValueClass(value)}" data-column="${col}">${formatValue(value)}</td>`;
-                }).join('');
-                return `<tr>${cells}</tr>`;
-            }).join('');
-            
-            return `
-                <div class="table-container">
-                    <table class="data-table" id="data-table">
-                        <thead><tr>${headerRow}</tr></thead>
-                        <tbody>${bodyRows}</tbody>
-                    </table>
-                </div>
-            `;
-        }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    });
+}
+
+        function createDataTable(data, columns) {
+    if (!data || data.length === 0) {
+        return '<div class="empty-state"><p>No data to display</p></div>';
+    }
+
+    // Use provided column order
+    const headerRow = columns.map((col, index) =>
+        `<th data-column="${col}" data-index="${index}" 
+            style="position: relative; min-width: 80px; overflow: hidden;">
+            ${escapeHtml(col)}
+        </th>`
+    ).join('');
+
+    const bodyRows = data.map(row => {
+        const cells = columns.map((col, colIndex) => {
+            const value = row[colIndex];  // ✅ index-based access
+            return `<td class="${getValueClass(value)}" data-column="${col}">${formatValue(value)}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
+
+    return `
+        <div class="table-container">
+            <table class="data-table" id="data-table">
+                <thead><tr>${headerRow}</tr></thead>
+                <tbody>${bodyRows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+        const table = document.getElementById('data-table');
+        enableColumnResize(table); // this will make the columns resizable
+
         let draggedColumn = null;
         let columnOrder = [];
         
@@ -985,40 +1154,51 @@ def execute_single_query(query):
         
         if first_token == "SELECT":
             ast = parser.parse_select_statement()
-            rows = execute(ast, database)
-            
-            # Preserve database column order for new Table structure
-            if rows and len(rows) > 0:
-                table_name = ast.table
-                if table_name in database:
-                    table_obj = database[table_name]
+            rows = execute(ast, db_manager.active_db)
+            rows_len = len(rows)
+            if rows_len >= 1:
+                msg = "Query executed successfully"
+            else:
+                msg = "Query executed successfully, But No Rows Found"
+            table_name = ast.table
+
+            if table_name in db_manager.active_db:
+                table_obj = db_manager.active_db[table_name]
+
+                if rows and len(rows) > 0:
                     if hasattr(table_obj, 'schema') and table_obj.schema:
                         # Get original column order from table schema
-                        original_columns = list(table_obj.schema.keys())
-                        
-                        # Reorder each row to match original schema order
+                        ordered_cols = list(table_obj.schema.keys())
+
+                        # Reorder each row to match schema order, return as lists
                         ordered_rows = []
                         for row in rows:
-                            ordered_row = {}
-                            # Add columns in original order
-                            for col in original_columns:
-                                if col in row:
-                                    ordered_row[col] = row[col]
-                            # Add any remaining columns not in schema (shouldn't happen)
-                            for key, value in row.items():
-                                if key not in ordered_row:
-                                    ordered_row[key] = value
+                            ordered_row = [row.get(col, None) for col in ordered_cols]
                             ordered_rows.append(ordered_row)
                         rows = ordered_rows
-            
+                    else:
+                        # No schema → fallback to first row keys
+                        ordered_cols = list(rows[0].keys())
+                        rows = [[row[col] for col in ordered_cols] for row in rows]
+                else:
+                    ordered_cols = []
+                    rows = []
+            else:
+                ordered_cols = []
+                rows = []
+
+            get_current_database()
             execution_time = f"{(time.time() - start_time) * 1000:.2f}ms"
-            
+
             return {
                 "success": True,
-                "data": rows,
-                "message": "Query executed successfully",
+                "columns": ordered_cols,  # guaranteed schema order
+                "data": rows,             # list of lists, aligned with columns
+                "message": msg,
                 "execution_time": execution_time
             }
+
+
         elif first_token == "USE":
             ast = parser.parse_use_statement()
             import io, sys
@@ -1026,11 +1206,11 @@ def execute_single_query(query):
             sys.stdout = captured_output = io.StringIO()
             
             try:
-                execute(ast, database)
+                # FIXED: Pass current database, but the parser will update db_manager
+                execute(ast, get_current_database())
                 message = captured_output.getvalue().strip()
             finally:
                 sys.stdout = old_stdout
-            
             execution_time = f"{(time.time() - start_time) * 1000:.2f}ms"
             
             return {
@@ -1044,18 +1224,19 @@ def execute_single_query(query):
             if second_token == "DATABASE":
                 
                 ast = parser.parse_create_database()
+                get_tables()
                 import io, sys
                 old_stdout = sys.stdout
                 sys.stdout = captured_output = io.StringIO()
                 
                 try:
-                    execute(ast, database)
+                    execute(ast, get_current_database())
                     message = captured_output.getvalue().strip()
                 finally:
                     sys.stdout = old_stdout
                 
                 execution_time = f"{(time.time() - start_time) * 1000:.2f}ms"
-                
+                get_tables()
                 return {
                     "success": True,
                     "message": message or "Database Created successfully",
@@ -1068,7 +1249,7 @@ def execute_single_query(query):
                 sys.stdout = captured_output = io.StringIO()
                 
                 try:
-                    execute(ast, database)
+                    execute(ast, get_current_database())
                     message = captured_output.getvalue().strip()
                 finally:
                     sys.stdout = old_stdout
@@ -1089,8 +1270,9 @@ def execute_single_query(query):
             sys.stdout = captured_output = io.StringIO()
             
             try:
-                execute(ast, database)
-                # Save database after INSERT
+                db_manager.active_db= get_current_database()
+                execute(ast, db_manager.active_db)
+                # Save db_manager.active_dbafter INSERT
                 if hasattr(db_manager, 'save_database_file'):
                     db_manager.save_database_file()
                 message = captured_output.getvalue().strip()
@@ -1112,8 +1294,8 @@ def execute_single_query(query):
             sys.stdout = captured_output = io.StringIO()
             
             try:
-                execute(ast, database)
-                # Save database after UPDATE
+                execute(ast, db_manager.active_db)
+                # Save db_manager.active_dbafter UPDATE
                 if hasattr(db_manager, 'save_database_file'):
                     db_manager.save_database_file()
                 message = captured_output.getvalue().strip()
@@ -1127,7 +1309,6 @@ def execute_single_query(query):
                 "message": message or "Rows updated successfully",
                 "execution_time": execution_time
             }
-        
         elif first_token == "DELETE":
             ast = parser.parse_delete_statement()
             import io, sys
@@ -1135,8 +1316,8 @@ def execute_single_query(query):
             sys.stdout = captured_output = io.StringIO()
             
             try:
-                execute(ast, database)
-                # Save database after DELETE
+                execute(ast, db_manager.active_db)
+                # Save db_manager.active_dbafter DELETE
                 if hasattr(db_manager, 'save_database_file'):
                     db_manager.save_database_file()
                 message = captured_output.getvalue().strip()
@@ -1154,7 +1335,7 @@ def execute_single_query(query):
         else:
             return {
                 "success": False,
-                "error": f"Unsupported SQL command: {first_token}"
+                "error": f"Unsupported SQL command: {lexer.tokens[0][1]}"
             }
     
     except ValueError as ve:
@@ -1167,7 +1348,11 @@ def execute_single_query(query):
 @app.route('/api/tables', methods=['GET'])
 def get_tables():
     try:
-        tables = show_tables_info(database)
+        db_manager.load_database_file()  
+        print(db_manager.active_db_name)
+        print(db_manager.active_db)
+        
+        tables = show_tables_info(db_manager.active_db)
         return jsonify({
             "success": True,
             "tables": tables
@@ -1179,14 +1364,14 @@ def get_tables():
         })
 
 if __name__ == '__main__':
-    print("🗄️ Starting SQL IDE Pro...")
-    print("🚀 Server running at: http://localhost:1234")
-    print("💡 Features:")
-    print("   • CodeMirror editor with SQL syntax highlighting")
-    print("   • Execute single query (Ctrl+Enter)")
-    print("   • Execute multiple queries (Ctrl+Shift+Enter)")
-    print("   • Resizable panels and table browser")
-    print("   • Professional VS Code-like interface")
-    print("   • Auto-save after INSERT/UPDATE/DELETE")
-    print("🔧 Make sure your engine.py, executor.py, sql_ast.py, and database_manager.py are in the same directory")
+    # print("🗄️ Starting SQL IDE Pro...")
+    # print("🚀 Server running at: http://localhost:1234")
+    # print("💡 Features:")
+    # print("   • CodeMirror editor with SQL syntax highlighting")
+    # print("   • Execute single query (Ctrl+Enter)")
+    # print("   • Execute multiple queries (Ctrl+Shift+Enter)")
+    # print("   • Resizable panels and table browser")
+    # print("   • Professional VS Code-like interface")
+    # print("   • Auto-save after INSERT/UPDATE/DELETE")
+    # print("🔧 Make sure your engine.py, executor.py, sql_ast.py, and database_manager.py are in the same directory")
     app.run(host="0.0.0.0", port=1234, debug=True)

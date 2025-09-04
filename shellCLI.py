@@ -1,7 +1,7 @@
 import sys
 from engine import db_manager
 
-database = db_manager.active_db
+
 
 def print_table(rows):
     if not rows:
@@ -54,6 +54,7 @@ from engine import Lexer, Parser  # import the formatter
 from executor import execute
 
 while True:
+    database = db_manager.active_db
     try:
         # ---------------- Read multi-line query until semicolon ----------------
         query_lines = []
@@ -106,7 +107,6 @@ while True:
                 ast = parser.parse_create_database()
             elif next_token_type == "TABLE":
                 ast = parser.parse_create_table()
-                print(ast)
         elif token_type == "USE":
              ast = parser.parse_use_statement()
         else:
@@ -114,7 +114,7 @@ while True:
 
     except KeyboardInterrupt:
         exit()
-    except KeyError as k:
-        print(f"Row / column {k} not found")
-    except Exception as e:
-        print("Error:", e)
+    # except KeyError as k:
+    #     print(f"Row / column {k} not found")
+    # except Exception as e:
+    #     print("Error:", e)

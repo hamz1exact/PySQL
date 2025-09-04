@@ -4,7 +4,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 Components/
-
+databases/hamza.su
+databases/users.su
 # C extensions
 *.so
 
@@ -32,3 +33,5 @@ sql2.py
 # OS generated files
 .DS_Store
 Thumbs.db
+
+.su_cache
