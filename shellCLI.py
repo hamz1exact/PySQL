@@ -97,6 +97,7 @@ while True:
         elif token_type == "UPDATE":
             ast = parser.parse_update_statement()
             execute(ast, database)
+            db_manager.save_database_file()
         elif token_type == "DELETE":
             ast = parser.parse_delete_statement()
             execute(ast, database)

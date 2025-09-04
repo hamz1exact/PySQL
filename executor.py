@@ -103,45 +103,28 @@ def execute_insert_query(ast, database):
     table_rows.append(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
     
-        
-
 def execute_update_query(ast, database):
     table_name = ast.table
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
-    table = database[table_name][2:]
-    DT = database[table_name][0]
+    table_obj = database[table_name]
+    table_rows = table_obj.rows
+    table_schema = table_obj.schema
     cnt = 0
-    for row in table:
-        for col in row:
-            if col in ast.columns and (ast.where is None or condition_evaluation(ast.where, row)):
-                if DT[col] == int:
-                    try:
-                        row[col] = int(ast.columns[col])
-                        cnt += 1
-                        break
-                    except Exception as e:
-                        raise ValueError(f"Error converting value for column '{col}': {e}")
-                elif DT[col] == bool:
-                    try:
-                        if ast.columns[col].upper() == "TRUE":
-                            row[col] = True
-                            cnt += 1
-                            break
-                        if ast.columns[col].upper() == "FALSE":
-                            row[col] = False
-                            cnt += 1
-                            break
-                    except Exception as e:
-                        raise ValueError(f"Error converting value for column '{col}': {e}")
-                else:
-                    if ast.columns[col].isdigit():
-                        raise ValueError(
-                                f"Invalid value for column '{col}': expected a string (non-numeric), got digits only -> '{ast.columns[col]}'")
-                row[col] = str(ast.columns[col])
+
+    for row in table_rows:
+        if ast.where is None or condition_evaluation(ast.where, row):
+            for col, new_val in ast.columns.items():
+                if col not in table_schema:
+                    raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
+                expected_type = CheckDataType(table_schema[col])
+                if type(new_val) != expected_type:
+                    raise ValueError(
+                        f"Expected {expected_type} for column '{col}', but got {type(new_val)}"
+                    )
+                row[col] = new_val  
                 cnt += 1
     print(f"{cnt} row(s) updated in '{table_name}'")
-    
     
 def execute_delete_query(ast, database):
     if ast.table not in database:

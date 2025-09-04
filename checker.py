@@ -17,7 +17,8 @@ def CheckTime(inp):
 
 def CheckDataType(col_type):
     checker = {str:("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
-        int: ("INT", "FLOAT", "AUTO_INT"),
+        int: ("INT", "AUTO_INT"),
+        float:("FLOAT"),
         bool: ("BOOLEAN")}
     for key in checker:
         if col_type in checker[key]:
