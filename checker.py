@@ -26,8 +26,8 @@ def PlainstringChecker(inp):
 
 def CheckDataType(col_type):
     checker = {str:("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
-        int: ("INT", "AUTO_INT"),
-        float:("FLOAT"),
+        int: ("INT", "AUTO_INT", "FLOAT"),
+        float:("FLOAT", "INT"),
         bool: ("BOOLEAN")}
     for key in checker:
         if col_type in checker[key]:

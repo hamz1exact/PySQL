@@ -34,10 +34,12 @@ def execute_select_query(ast, database):
 
 
 def condition_evaluation(where, row, table_schema):
-    
     if isinstance(where, Condition):
         col_type = CheckDataType(table_schema[str(where.column)])
-        if col_type != type(where.value):
+        if col_type in (float, int) and type(where.value) in (float, int):
+            pass
+        elif col_type != type(where.value):
+            print(col_type, type(where.value))
             raise ValueError (f"Given Datatype {type(where.value)} does not match the default datatype of column {where.column} -> {col_type}\nPlease Write --help <data_type> (i.e --help {table_schema[str(where.column)].capitalize()}) for more information\n")
         
         
@@ -45,7 +47,7 @@ def condition_evaluation(where, row, table_schema):
             left = row[where.column].lower()
         else:
             left = row[where.column]
-        right = where.value
+        right = str(where.value).lower() if type(where.value) == str else where.value
         op  = where.operator
         if op == "=": return left == right
         if op == "!=": return left != right
@@ -119,7 +121,7 @@ def execute_update_query(ast, database):
     cnt = 0
 
     for row in table_rows:
-        if ast.where is None or condition_evaluation(ast.where, row):
+        if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             for col, new_val in ast.columns.items():
                 if col not in table_schema:
                     raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")

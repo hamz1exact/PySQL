@@ -25,6 +25,8 @@ others/
 venv/
 env/
 ENV/
+shellv2.py
+shell.py
 
 # IDE / editor settings
 .vscode/

@@ -1,6 +1,6 @@
-
-import msgpack
 import os
+import platform
+import msgpack
 class Table:
     def __init__(self, name, schema, defaults=None, auto=None):
         self.name = name

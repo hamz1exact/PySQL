@@ -865,13 +865,7 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
                     <div class="editor-container">
-                        <textarea id="editor">-- Welcome to SQL IDE Pro
--- Write your SQL queries here
--- Use Ctrl+Enter to execute current query
--- Use Ctrl+Shift+Enter to execute all queries
--- Use Shift+/ to toggle comments on selected lines
-
-SELECT * FROM users LIMIT 10;</textarea>
+                        <textarea id="editor"></textarea>
                     </div>
                 </div>
                 
