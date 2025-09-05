@@ -3,7 +3,7 @@ from executor import execute
 from datetime import datetime
 from database_manager import DatabaseManager, Table
 import re
-from checker import CheckDate, CheckTime, CheckDataType
+from checker import *
 
 db_manager = DatabaseManager()
 
@@ -382,7 +382,7 @@ class Parser:
                     col_type_type = CheckDataType(col_type)
                     
                     if col_type.upper() == "CHAR":
-                        if len(str(default_value)) != 1:
+                        if not CharChecker(default_value):
                             raise ValueError(
                                 f"Invalid DEFAULT value '{default_value}' for column '{col_name}': CHAR must be exactly 1 character"
                             )
@@ -391,7 +391,7 @@ class Parser:
                             raise ValueError(
                                 f"Invalid value '{default_value}' for column '{col_name}', must be a string"
                             )
-                        if not re.fullmatch(r"[A-Za-z ]+", default_value):
+                        if not PlainstringChecker(default_value):
                             raise ValueError(
                                 f"Invalid value '{default_value}' for column '{col_name}', PLAINSTR must contain only letters and spaces"
                             )

@@ -4,11 +4,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 Components/
-databases/hamza.su
-databases/users.su
+databases/
+.databases/
+.databases/hamza.su
+.databases/users.su
+
 # C extensions
 *.so
-
+app.spec
+dist/
+build/
 # Distribution / packaging
 build/
 dist/

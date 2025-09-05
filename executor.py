@@ -1,5 +1,5 @@
 from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
-from checker import CheckDate, CheckTime, CheckDataType
+from checker import *
 def execute(ast, database):
     if isinstance(ast, SelectStatement):
         return execute_select_query(ast, database)
@@ -16,6 +16,7 @@ def execute_select_query(ast, database):
         raise ValueError(f"Table '{table_name}' does not exist")
     table = database[table_name].rows
     requested_columns = ast.columns
+    table_schema = database[table_name].schema
     if requested_columns == ['*']:
         columns_to_return = table[0].keys() if table else []
     else:
@@ -25,16 +26,21 @@ def execute_select_query(ast, database):
         columns_to_return = requested_columns
     result = []
     for row in table:
-        if ast.where is None or condition_evaluation(ast.where, row):
+        if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             selected_row = {col: row.get(col) for col in columns_to_return}
             result.append(selected_row)
     return result
 
 
 
-def condition_evaluation(where, row):
+def condition_evaluation(where, row, table_schema):
     
     if isinstance(where, Condition):
+        col_type = CheckDataType(table_schema[str(where.column)])
+        if col_type != type(where.value):
+            raise ValueError (f"Given Datatype {type(where.value)} does not match the default datatype of column {where.column} -> {col_type}\nPlease Write --help <data_type> (i.e --help {table_schema[str(where.column)].capitalize()}) for more information\n")
+        
+        
         if type(row[where.column]) == str:
             left = row[where.column].lower()
         else:
@@ -52,8 +58,8 @@ def condition_evaluation(where, row):
     elif isinstance(where, LogicalCondition):
 
         MainOperator = where.MainOperator.upper()
-        left_result = condition_evaluation(where.left, row)
-        right_result = condition_evaluation(where.right, row)
+        left_result = condition_evaluation(where.left, row, table_schema)
+        right_result = condition_evaluation(where.right, row, table_schema)
         
         if MainOperator == "AND":
             return left_result and right_result

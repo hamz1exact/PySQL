@@ -11,7 +11,13 @@ from executor import execute
 
 app = Flask(__name__)
 CORS(app)
-
+try:
+    db_manager.load_database_file()  # This should load your default DB
+    if not hasattr(db_manager, 'active_db_name') or not db_manager.active_db_name:
+        # Set to whatever your default database name should be
+        db_manager.active_db_name = "main"  # or "default" or whatever
+except:
+    pass
 # Initialize db_manager.active_dbmanager - NEW
 
 def get_current_database():
@@ -25,10 +31,12 @@ HTML_TEMPLATE = """
     <title>SQL IDE Pro</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/theme/material-darker.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/addon/dialog/dialog.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/addon/search/matchesonscrollbar.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    
+
     <style>
-    document.addEventListener("DOMContentLoaded", () => {
-    refreshTables();
-    });
         * {
             margin: 0;
             padding: 0;
@@ -51,22 +59,34 @@ HTML_TEMPLATE = """
         }
         
         .title-bar {
-            background: #2d2d30;
-            border-bottom: 1px solid #3e3e42;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
+            border-bottom: 1px solid #007acc;
             padding: 8px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            height: 35px;
+            height: 40px;
+            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.1);
         }
         
         .title-bar h1 {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
-            color: #cccccc;
+            color: #ffffff;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
+        }
+        
+        .db-info {
+            background: rgba(0, 122, 204, 0.1);
+            border: 1px solid #007acc;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            color: #4fc3f7;
+            margin-left: 16px;
+            animation: fadeInRight 0.5s ease;
         }
         
         .title-bar-buttons {
@@ -75,41 +95,62 @@ HTML_TEMPLATE = """
         }
         
         .btn {
-            padding: 4px 12px;
+            padding: 6px 14px;
             border: 1px solid #464647;
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: pointer;
             font-weight: 500;
             font-size: 12px;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
             background: #3c3c3c;
             color: #cccccc;
             font-family: inherit;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
         }
         
         .btn:hover {
             background: #4a4a4a;
             border-color: #007acc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 122, 204, 0.2);
         }
         
         .btn-primary {
-            background: #0e639c;
+            background: linear-gradient(135deg, #0e639c 0%, #1177bb 100%);
             border-color: #007acc;
             color: white;
         }
         
         .btn-primary:hover {
-            background: #1177bb;
+            background: linear-gradient(135deg, #1177bb 0%, #1a8bcc 100%);
+            box-shadow: 0 4px 16px rgba(0, 122, 204, 0.4);
         }
         
         .btn-danger {
-            background: #a1260d;
+            background: linear-gradient(135deg, #a1260d 0%, #c5391a 100%);
             border-color: #f85149;
             color: white;
         }
         
         .btn-danger:hover {
-            background: #c5391a;
+            background: linear-gradient(135deg, #c5391a 0%, #e5452a 100%);
+            box-shadow: 0 4px 16px rgba(248, 81, 73, 0.4);
         }
         
         .main-layout {
@@ -119,12 +160,13 @@ HTML_TEMPLATE = """
         }
         
         .sidebar {
-            width: 250px;
+            width: 280px;
             background: #252526;
             border-right: 1px solid #3e3e42;
             display: flex;
             flex-direction: column;
-            transition: width 0.3s ease;
+            transition: all 0.3s ease;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
         }
         
         .sidebar.collapsed {
@@ -138,12 +180,13 @@ HTML_TEMPLATE = """
             display: flex;
             align-items: center;
             justify-content: space-between;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
         }
         
         .sidebar-title {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
-            color: #cccccc;
+            color: #ffffff;
         }
         
         .sidebar-content {
@@ -153,45 +196,54 @@ HTML_TEMPLATE = """
         }
         
         .table-item {
-            padding: 8px 16px;
+            padding: 12px 16px;
             cursor: pointer;
             border-bottom: 1px solid #2d2d30;
-            transition: background 0.2s;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .table-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: #007acc;
+            transform: scaleY(0);
+            transition: transform 0.2s ease;
+        }
+        
+        .table-item:hover::before {
+            transform: scaleY(1);
         }
         
         .table-item:hover {
             background: #2a2d2e;
+            transform: translateX(4px);
         }
         
         .table-name {
             font-weight: 600;
             color: #4ec9b0;
-            font-size: 13px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .table-name::before {
+            content: "🗃️";
+            font-size: 12px;
         }
         
         .table-info {
             font-size: 11px;
             color: #858585;
-            margin-top: 2px;
+            margin-top: 4px;
+            padding-left: 20px;
         }
-        /* Make table headers resizable */
-        .table-result th {
-            position: relative;
-            user-select: none;
-            cursor: col-resize;
-        }
-
-        /* The draggable handle on the right side of each th */
-        .table-result th .resize-handle {
-            position: absolute;
-            right: 0;
-            top: 0;
-            width: 5px;
-            height: 100%;
-            cursor: col-resize;
-            z-index: 1;
-}
-
         
         .content-area {
             flex: 1;
@@ -201,13 +253,25 @@ HTML_TEMPLATE = """
         }
         
         .toolbar {
-            background: #2d2d30;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
             border-bottom: 1px solid #3e3e42;
             padding: 8px 16px;
             display: flex;
             align-items: center;
             gap: 8px;
-            height: 40px;
+            height: 45px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .toolbar-group {
+            display: flex;
+            gap: 4px;
+            padding: 0 8px;
+            border-right: 1px solid #464647;
+        }
+        
+        .toolbar-group:last-child {
+            border-right: none;
         }
         
         .editor-panel {
@@ -220,7 +284,7 @@ HTML_TEMPLATE = """
         }
         
         .editor-header {
-            background: #2d2d30;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
             border-bottom: 1px solid #3e3e42;
             padding: 8px 16px;
             display: flex;
@@ -231,31 +295,73 @@ HTML_TEMPLATE = """
         
         .editor-title {
             font-size: 13px;
-            color: #cccccc;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        
+        .editor-stats {
+            font-size: 11px;
+            color: #858585;
+            display: flex;
+            gap: 12px;
         }
         
         .editor-container {
             flex: 1;
             min-height: 150px;
+            position: relative;
         }
         
         .CodeMirror {
             height: 100% !important;
             font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Monaco', 'Consolas', monospace !important;
             font-size: 14px !important;
+            line-height: 1.6 !important;
+        }
+        
+        .CodeMirror-gutters {
+            background: #252526 !important;
+            border-right: 1px solid #3e3e42 !important;
+        }
+        
+        .CodeMirror-linenumber {
+            color: #858585 !important;
+            padding: 0 8px !important;
+        }
+        
+        .CodeMirror-activeline-background {
+            background: rgba(0, 122, 204, 0.05) !important;
+        }
+        
+        .CodeMirror-selected {
+            background: rgba(0, 122, 204, 0.2) !important;
         }
         
         .resizer {
-            height: 4px;
-            background: #2d2d30;
+            height: 6px;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
             cursor: row-resize;
             border-top: 1px solid #3e3e42;
             border-bottom: 1px solid #3e3e42;
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .resizer::after {
+            content: '⋯⋯⋯';
+            color: #858585;
+            font-size: 12px;
+            letter-spacing: 2px;
         }
         
         .resizer:hover {
-            background: #007acc;
+            background: linear-gradient(135deg, #007acc 0%, #1177bb 100%);
+        }
+        
+        .resizer:hover::after {
+            color: white;
         }
         
         .results-panel {
@@ -267,7 +373,7 @@ HTML_TEMPLATE = """
         }
         
         .results-header {
-            background: #2d2d30;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
             border-bottom: 1px solid #3e3e42;
             padding: 8px 16px;
             display: flex;
@@ -278,7 +384,29 @@ HTML_TEMPLATE = """
         
         .results-title {
             font-size: 13px;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        
+        .results-actions {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .results-btn {
+            padding: 4px 8px;
+            border: 1px solid #464647;
+            border-radius: 3px;
+            background: transparent;
             color: #cccccc;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+        
+        .results-btn:hover {
+            background: #4a4a4a;
+            border-color: #007acc;
         }
         
         .results-content {
@@ -288,22 +416,37 @@ HTML_TEMPLATE = """
         }
         
         .status-bar {
-            background: #007acc;
+            background: linear-gradient(135deg, #007acc 0%, #1177bb 100%);
             color: white;
-            padding: 4px 16px;
+            padding: 6px 16px;
             font-size: 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            height: 25px;
+            height: 28px;
+            box-shadow: 0 -2px 8px rgba(0, 122, 204, 0.1);
+        }
+        
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
         
         .table-container {
             margin: 16px;
             border: 1px solid #3e3e42;
-            border-radius: 4px;
+            border-radius: 8px;
             overflow: hidden;
             background: #252526;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            animation: fadeInUp 0.3s ease;
         }
         
         /* Make custom-sql keywords blue */
@@ -326,7 +469,7 @@ HTML_TEMPLATE = """
         .cm-s-material-darker .cm-string {
             color: #ce9178 !important;
         }
-
+        
         .data-table {
             width: 100%;
             border-collapse: collapse;
@@ -335,88 +478,143 @@ HTML_TEMPLATE = """
         }
         
         .data-table th {
-            background: #2d2d30;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
             color: #4ec9b0;
-            padding: 8px 12px;
+            padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #3e3e42;
+            border-bottom: 2px solid #007acc;
             border-right: 1px solid #3e3e42;
             font-weight: 600;
             font-size: 12px;
             position: sticky;
             top: 0;
-            min-width: 80px;
-            cursor: grab;
+            min-width: 100px;
+            cursor: pointer;
             user-select: none;
-            resize: horizontal;
-            overflow: hidden;
+            transition: all 0.2s ease;
         }
-        .data-table th:active {
-            cursor: grabbing;
-            }
-
-        .data-table th.dragging {
+        
+        .data-table th:hover {
+            background: linear-gradient(135deg, #3c3c3c 0%, #4a4a4a 100%);
+            color: #ffffff;
+        }
+        
+        .data-table th.sortable::after {
+            content: ' ↕';
             opacity: 0.5;
-            background: #007acc;
+            margin-left: 4px;
         }
-
-        .data-table th.drop-target {
-            background: #4ec9b0;
+        
+        .data-table th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+            color: #007acc;
+        }
+        
+        .data-table th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+            color: #007acc;
         }
         
         .data-table td {
-            padding: 6px 12px;
+            padding: 10px 12px;
             border-bottom: 1px solid #2d2d30;
             border-right: 1px solid #2d2d30;
             color: #d4d4d4;
             word-break: break-word;
+            transition: background 0.2s ease;
         }
         
         .data-table tr:hover {
-            background: #2a2d2e;
+            background: rgba(0, 122, 204, 0.1);
         }
         
         .data-table tr:nth-child(even) {
             background: rgba(255, 255, 255, 0.02);
         }
         
+        .data-table tr:nth-child(even):hover {
+            background: rgba(0, 122, 204, 0.1);
+        }
+        
         .null-value {
             color: #608b4e;
             font-style: italic;
+            background: rgba(96, 139, 78, 0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
         }
         
         .number-value {
             color: #b5cea8;
             text-align: right;
+            font-weight: 500;
         }
         
         .string-value {
             color: #ce9178;
         }
         
+        .boolean-value {
+            color: #569cd6;
+            font-weight: bold;
+        }
+        
         .message {
             margin: 16px;
-            padding: 12px 16px;
-            border-radius: 4px;
+            padding: 16px 20px;
+            border-radius: 8px;
             font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideInDown 0.3s ease;
+            border-left: 4px solid;
+        }
+        
+        .message::before {
+            font-size: 18px;
         }
         
         .message-success {
-            background: rgba(106, 153, 85, 0.1);
-            border: 1px solid #6a9955;
+            background: rgba(106, 153, 85, 0.15);
+            border-color: #6a9955;
             color: #6a9955;
         }
         
+        .message-success::before {
+            content: '✅';
+        }
+        
         .message-error {
-            background: rgba(244, 71, 71, 0.1);
-            border: 1px solid #f44747;
+            background: rgba(244, 71, 71, 0.15);
+            border-color: #f44747;
             color: #f44747;
         }
         
+        .message-error::before {
+            content: '❌';
+        }
+        
         .message-info {
-            background: rgba(0, 122, 204, 0.1);
-            border: 1px solid #007acc;
+            background: rgba(0, 122, 204, 0.15);
+            border-color: #007acc;
             color: #007acc;
+        }
+        
+        .message-info::before {
+            content: 'ℹ️';
+        }
+        
+        .message-warning {
+            background: rgba(255, 193, 7, 0.15);
+            border-color: #ffc107;
+            color: #ffc107;
+        }
+        
+        .message-warning::before {
+            content: '⚠️';
         }
         
         .empty-state {
@@ -424,9 +622,15 @@ HTML_TEMPLATE = """
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 200px;
+            height: 250px;
             color: #858585;
-            font-size: 13px;
+            font-size: 14px;
+            gap: 12px;
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            opacity: 0.3;
         }
         
         .loading-spinner {
@@ -446,12 +650,88 @@ HTML_TEMPLATE = """
         }
         
         .query-info {
-            font-size: 11px;
+            font-size: 12px;
             color: #858585;
-            margin: 8px 16px;
+            margin: 12px 16px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%);
+            border-radius: 6px;
+            border-left: 4px solid #007acc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .query-stats {
+            display: flex;
+            gap: 16px;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 6px;
+            color: white;
+            font-size: 13px;
+            z-index: 1000;
+            min-width: 300px;
+            animation: slideInRight 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        .notification.success {
+            background: linear-gradient(135deg, #6a9955 0%, #7aa968 100%);
+        }
+        
+        .notification.error {
+            background: linear-gradient(135deg, #f44747 0%, #ff5757 100%);
+        }
+        
+        .notification.info {
+            background: linear-gradient(135deg, #007acc 0%, #1177bb 100%);
+        }
+        
+        .notification.warning {
+            background: linear-gradient(135deg, #ffc107 0%, #ffcd38 100%);
+            color: #000;
+        }
+        
+        .fullscreen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .fullscreen-table {
+            background: #1e1e1e;
+            border-radius: 8px;
+            max-width: 95%;
+            max-height: 95%;
+            overflow: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+        
+        .close-fullscreen {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #f44747;
+            border: none;
+            color: white;
             padding: 8px 12px;
-            background: #2d2d30;
-            border-radius: 3px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
         }
         
         ::-webkit-scrollbar {
@@ -461,15 +741,61 @@ HTML_TEMPLATE = """
         
         ::-webkit-scrollbar-track {
             background: #2d2d30;
+            border-radius: 6px;
         }
         
         ::-webkit-scrollbar-thumb {
-            background: #464647;
+            background: linear-gradient(135deg, #464647 0%, #5a5a5c 100%);
             border-radius: 6px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-            background: #5a5a5c;
+            background: linear-gradient(135deg, #5a5a5c 0%, #6a6a6c 100%);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes fadeInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .tooltip {
+            position: relative;
+        }
+        
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d2d30;
+            color: #ffffff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 1px solid #007acc;
         }
     </style>
 </head>
@@ -479,21 +805,31 @@ HTML_TEMPLATE = """
             <h1>
                 <span>🗄️</span>
                 SQL IDE Pro
+                <div class="db-info" id="db-info">
+                    Connected: <span id="current-database">Loading...</span>
+                </div>
             </h1>
             <div class="title-bar-buttons">
-                <button class="btn" onclick="toggleSidebar()">Toggle Tables</button>
-                <button class="btn btn-danger" onclick="clearAll()">Clear All</button>
+                <button class="btn tooltip" onclick="toggleSidebar()" data-tooltip="Toggle database explorer">
+                    📊 Toggle Tables
+                </button>
+                <button class="btn btn-danger tooltip" onclick="clearAll()" data-tooltip="Clear editor and results">
+                    🗑️ Clear All
+                </button>
             </div>
         </div>
         
         <div class="main-layout">
             <div class="sidebar" id="sidebar">
                 <div class="sidebar-header">
-                    <span class="sidebar-title">Tables</span>
-                    <button class="btn" onclick="refreshTables()">↻</button>
+                    <span class="sidebar-title">Database Explorer</span>
+                    <button class="btn tooltip" onclick="refreshTables()" data-tooltip="Refresh tables">
+                        🔄
+                    </button>
                 </div>
                 <div class="sidebar-content" id="tables-list">
                     <div class="empty-state">
+                        <span class="loading-spinner"></span>
                         <span>Loading tables...</span>
                     </div>
                 </div>
@@ -501,21 +837,41 @@ HTML_TEMPLATE = """
             
             <div class="content-area">
                 <div class="toolbar">
-                    <button class="btn btn-primary" onclick="executeQuery()" title="Ctrl+Enter">
-                        ▶ Execute
-                    </button>
-                    <button class="btn" onclick="executeAllQueries()" title="Ctrl+Shift+Enter">
-                        ▶▶ Execute All
-                    </button>
-                    <button class="btn" onclick="clearEditor()">Clear Editor</button>
+                    <div class="toolbar-group">
+                        <button class="btn btn-primary tooltip" onclick="executeQuery()" data-tooltip="Execute current query (Ctrl+Enter)">
+                            ▶ Execute
+                        </button>
+                        <button class="btn tooltip" onclick="executeAllQueries()" data-tooltip="Execute all queries (Ctrl+Shift+Enter)">
+                            ▶▶ Execute All
+                        </button>
+                    </div>
+                    <div class="toolbar-group">
+                        <button class="btn tooltip" onclick="clearEditor()" data-tooltip="Clear editor">
+                            📝 Clear Editor
+                        </button>
+                        <button class="btn tooltip" onclick="showFindDialog()" data-tooltip="Find & Replace (Ctrl+F)">
+                            🔍 Find
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="editor-panel" id="editor-panel">
                     <div class="editor-header">
                         <span class="editor-title">SQL Editor</span>
+                        <div class="editor-stats">
+                            <span id="cursor-pos">Ln 1, Col 1</span>
+                            <span id="selection-info"></span>
+                            <span id="char-count">0 chars</span>
+                        </div>
                     </div>
                     <div class="editor-container">
-                        <textarea id="editor"></textarea>
+                        <textarea id="editor">-- Welcome to SQL IDE Pro
+-- Write your SQL queries here
+-- Use Ctrl+Enter to execute current query
+-- Use Ctrl+Shift+Enter to execute all queries
+-- Use Shift+/ to toggle comments on selected lines
+
+SELECT * FROM users LIMIT 10;</textarea>
                     </div>
                 </div>
                 
@@ -524,11 +880,20 @@ HTML_TEMPLATE = """
                 <div class="results-panel" id="results-panel">
                     <div class="results-header">
                         <span class="results-title">Query Results</span>
+                        <div class="results-actions">
+                            <button class="results-btn tooltip" onclick="exportResults('csv')" data-tooltip="Export as CSV">
+                                📄 CSV
+                            </button>
+                            <button class="results-btn tooltip" onclick="exportResults('json')" data-tooltip="Export as JSON">
+                                📋 JSON
+                            </button>
+                        </div>
                     </div>
                     <div class="results-content" id="results-content">
                         <div class="empty-state">
-                            <span>📊</span>
+                            <div class="empty-state-icon">📊</div>
                             <p>Execute a query to see results here</p>
+                            <small>Use Ctrl+Enter to execute the current query</small>
                         </div>
                     </div>
                 </div>
@@ -536,99 +901,229 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="status-bar">
-            <span id="status-text">Ready</span>
-            <span id="status-info">SQL IDE Pro v1.0</span>
+            <div class="status-left">
+                <span id="status-text">Ready</span>
+            </div>
+            <div class="status-right">
+                <span id="query-count">0 queries executed</span>
+                <span>SQL IDE Pro v1.0</span>
+            </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/addon/search/searchcursor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/addon/search/search.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/addon/dialog/dialog.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/addon/search/matchesonscrollbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/addon/search/jump-to-line.min.js"></script>
     
+
     <script>
-        let editor;
-        let currentResults = [];
+    let editor;
+    let currentResults = [];
+    let queryCount = 0;
+    let currentSort = { column: null, direction: null };
+
+    document.addEventListener("DOMContentLoaded", () => {
+        initializeEditor();
+        refreshTables();
+        loadCurrentDatabase();
+        setupResizer();
+        setupNotifications();
+    });
+
+    function initializeEditor() {
+        // Define custom SQL keywords for your engine
+        const customKeywords = {
+            'USE': true, 'SET': true, 'SWITCH': true,
+            'SELECT': true, 'FROM': true, 'WHERE': true, 'INSERT': true, 'UPDATE': true, 'DELETE': true,
+            'CREATE': true, 'DROP': true, 'ALTER': true, 'TABLE': true, 'DATABASE': true,
+            'AND': true, 'OR': true, 'NOT': true, 'IN': true, 'BETWEEN': true, 'LIKE': true,
+            'ORDER': true, 'BY': true, 'GROUP': true, 'HAVING': true, 'LIMIT': true, 'USE': true, "DEFAULT": true,
+        };
         
-        window.addEventListener('load', () => {
-            // Define custom SQL keywords for your engine
-            const customKeywords = {
-                'USE': true, 'SET': true, 'SWITCH': true,
-                'SELECT': true, 'FROM': true, 'WHERE': true, 'INSERT': true, 'UPDATE': true, 'DELETE': true,
-                'CREATE': true, 'DROP': true, 'ALTER': true, 'TABLE': true, 'DATABASE': true,
-                'AND': true, 'OR': true, 'NOT': true, 'IN': true, 'BETWEEN': true, 'LIKE': true,
-                'ORDER': true, 'BY': true, 'GROUP': true, 'HAVING': true, 'LIMIT': true, 'USE': true
-            };
-            
-            const customTypes = {
-                'INT': true, 'STR': true, 'PLAINSTR': true,
-                'VARCHAR': true, 'CHAR': true, 'TEXT': true, 'DATE': true, 'DATETIME': true,
-                'DECIMAL': true, 'FLOAT': true, 'DOUBLE': true, 'BOOLEAN': true, 'BOOL': true,
-                "AUTO_INT":true
-            };
-            
-            // Create custom SQL mode
-            CodeMirror.defineMode("custom-sql", function() {
-                return {
-                    token: function(stream, state) {
-                        if (stream.eatSpace()) return null;
-                        
-                        // Comments
-                        if (stream.match(/--.*$/)) {
-                            return "comment";
-                        }
-                        if (stream.match(/\/\*[\s\S]*?\*\//)) {
-                            return "comment";
-                        }
-                        
-                        // Strings
-                        if (stream.match(/'[^']*'/)) {
-                            return "string";
-                        }
-                        if (stream.match(/"[^"]*"/)) {
-                            return "string";
-                        }
-                        
-                        // Numbers
-                        if (stream.match(/\d+(\.\d+)?/)) {
-                            return "number";
-                        }
-                        
-                        // Keywords and types
-                        const word = stream.match(/\w+/);
-                        if (word) {
-                            const upperWord = word[0].toUpperCase();
-                            if (customKeywords[upperWord]) {
-                                return "keyword"; // Blue color
-                            }
-                            if (customTypes[upperWord]) {
-                                return "type"; // Different color for types
-                            }
-                            return "variable";
-                        }
-                        
-                        stream.next();
-                        return null;
+        const customTypes = {
+            'INT': true, 'STR': true, 'PLAINSTR': true,
+            'VARCHAR': true, 'CHAR': true, 'TEXT': true, 'DATE': true, 'DATETIME': true,
+            'DECIMAL': true, 'FLOAT': true, 'DOUBLE': true, 'BOOLEAN': true, 'BOOL': true,
+            "AUTO_INT":true
+        };
+        
+        // Create custom SQL mode
+        CodeMirror.defineMode("custom-sql", function() {
+            return {
+                token: function(stream, state) {
+                    if (stream.eatSpace()) return null;
+                    
+                    // Comments
+                    if (stream.match(/--.*$/)) {
+                        return "comment";
                     }
-                };
-            });
-            
-            editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
-                mode: 'custom-sql',
-                theme: 'material-darker',
-                lineNumbers: true,
-                lineWrapping: true,
-                indentWithTabs: true,
-                smartIndent: true,
-                autofocus: true,
-                extraKeys: {
-                    "Ctrl-Enter": executeQuery,
-                    "Ctrl-Shift-Enter": executeAllQueries,
-                    "F5": executeQuery
+                    if (stream.match(/\/\*[\s\S]*?\*\//)) {
+                        return "comment";
+                    }
+                    
+                    // Strings
+                    if (stream.match(/'[^']*'/)) {
+                        return "string";
+                    }
+                    if (stream.match(/"[^"]*"/)) {
+                        return "string";
+                    }
+                    
+                    // Numbers
+                    if (stream.match(/\d+(\.\d+)?/)) {
+                        return "number";
+                    }
+                    
+                    // Keywords and types
+                    const word = stream.match(/\w+/);
+                    if (word) {
+                        const upperWord = word[0].toUpperCase();
+                        if (customKeywords[upperWord]) {
+                            return "keyword";
+                        }
+                        if (customTypes[upperWord]) {
+                            return "type";
+                        }
+                        return "variable";
+                    }
+                    
+                    stream.next();
+                    return null;
                 }
-            });
-            
-            refreshTables();
-            setupResizer();
+            };
         });
+        
+        editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+            mode: 'custom-sql',
+            theme: 'material-darker',
+            lineNumbers: true,
+            lineWrapping: true,
+            indentWithTabs: true,
+            smartIndent: true,
+            autofocus: true,
+            extraKeys: {
+                "Ctrl-Enter": executeQuery,
+                "Ctrl-Shift-Enter": executeAllQueries,
+                "F5": executeQuery
+            }
+        });
+    }
+
+
+function exportResults(format) {
+    if (!currentResults || currentResults.length === 0) {
+        alert('No data to export');
+        return;
+    }
+    
+    let content, filename;
+    
+    if (format === 'csv') {
+        // Get actual column names from table headers
+        const tableHeaders = document.querySelectorAll('#data-table th');
+        let columnNames = [];
+        
+        if (tableHeaders.length > 0) {
+            columnNames = Array.from(tableHeaders).map(th => th.textContent.trim());
+        } else {
+            // Fallback column names if no table headers found
+            const colCount = currentResults[0] ? currentResults[0].length : 0;
+            for (let i = 0; i < colCount; i++) {
+                columnNames.push(`column_${i + 1}`);
+            }
+        }
+        
+        // Build CSV using array approach (avoid string concatenation)
+        const csvLines = [];
+        
+        // Add header row
+        csvLines.push(columnNames.join(','));
+        
+        // Add all data rows
+        currentResults.forEach(row => {
+            // Clean each cell value and handle commas/quotes
+            const cleanedRow = row.map(cell => {
+                if (cell === null || cell === undefined) return '';
+                let value = String(cell);
+                // If value contains comma or quotes, wrap in quotes and escape quotes
+                if (value.includes(',') || value.includes('"')) {
+                    value = '"' + value.replace(/"/g, '""') + '"';
+                }
+                return value;
+            });
+            csvLines.push(cleanedRow.join(','));
+        });
+        
+        content = csvLines.join('%0A');
+        filename = 'query_results.csv';
+        
+    } else if (format === 'json') {
+        // Get column names for JSON
+        const tableHeaders = document.querySelectorAll('#data-table th');
+        let columnNames = [];
+        
+        if (tableHeaders.length > 0) {
+            columnNames = Array.from(tableHeaders).map(th => th.textContent.trim());
+        } else {
+            const colCount = currentResults[0] ? currentResults[0].length : 0;
+            for (let i = 0; i < colCount; i++) {
+                columnNames.push(`column_${i + 1}`);
+            }
+        }
+        
+        // Convert to JSON format
+        const jsonData = currentResults.map(row => {
+            const rowObject = {};
+            columnNames.forEach((colName, index) => {
+                rowObject[colName] = row[index];
+            });
+            return rowObject;
+        });
+        
+        content = encodeURIComponent(JSON.stringify(jsonData, null, 2));
+        filename = 'query_results.json';
+        
+    } else {
+        alert('Format not supported. Use csv or json');
+        return;
+    }
+    
+    // Create and trigger download
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + content);
+    element.setAttribute('download', filename);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    
+    showMessage(`Export completed: ${filename} with ${currentResults.length} rows`, 'success');
+}
+
+function showNotification(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('notification-container');
+    if (!container) return;
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    container.appendChild(notification);
+    
+    // Auto remove after duration
+    setTimeout(() => {
+        notification.style.animation = 'slideInRight 0.3s ease reverse';
+        setTimeout(() => {
+            if (container.contains(notification)) {
+                container.removeChild(notification);
+            }
+        }, 300);
+    }, duration);
+}
         
         function setupResizer() {
             const resizer = document.getElementById('resizer');
@@ -638,24 +1133,26 @@ HTML_TEMPLATE = """
             
             resizer.addEventListener('mousedown', (e) => {
                 isResizing = true;
+                document.body.style.cursor = 'row-resize';
                 document.addEventListener('mousemove', handleResize);
                 document.addEventListener('mouseup', () => {
                     isResizing = false;
+                    document.body.style.cursor = 'default';
                     document.removeEventListener('mousemove', handleResize);
                 });
             });
             
-            function handleResize(e) {
+        function handleResize(e) {
                 if (!isResizing) return;
                 
                 const container = document.querySelector('.content-area');
                 const containerRect = container.getBoundingClientRect();
                 const mouseY = e.clientY - containerRect.top;
-                const toolbarHeight = 40;
+                const toolbarHeight = 45;
                 const minHeight = 150;
                 
                 const editorHeight = Math.max(minHeight, mouseY - toolbarHeight);
-                const totalHeight = containerRect.height - toolbarHeight - 4;
+                const totalHeight = containerRect.height - toolbarHeight - 6;
                 const resultsHeight = Math.max(minHeight, totalHeight - editorHeight);
                 
                 editorPanel.style.height = `${editorHeight}px`;
@@ -666,10 +1163,63 @@ HTML_TEMPLATE = """
                 }
             }
         }
+    async function loadCurrentDatabase() {
+        try {
+            const response = await fetch('/api/current-database');
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.database) {
+                    document.getElementById('current-database').textContent = result.database;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading current database:', error);
+            document.getElementById('current-database').textContent = 'Unknown';
+        }
+    }
         
+        function setupNotifications() {
+            // Create notification container if it doesn't exist
+            if (!document.getElementById('notification-container')) {
+                const container = document.createElement('div');
+                container.id = 'notification-container';
+                container.style.cssText = 'position: fixed; top: 60px; right: 20px; z-index: 1000;';
+                document.body.appendChild(container);
+            }
+        }
+        
+        function showNotification(message, type = 'info', duration = 4000) {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            container.appendChild(notification);
+            
+            // Auto remove after duration
+            setTimeout(() => {
+                notification.style.animation = 'slideInRight 0.3s ease reverse';
+                setTimeout(() => {
+                    if (container.contains(notification)) {
+                        container.removeChild(notification);
+                    }
+                }, 300);
+            }, duration);
+        }
+        
+        
+        
+        function showFindDialog() {
+            CodeMirror.commands.find(editor);
+        }
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('collapsed');
+            
+            // Refresh editor after sidebar toggle
+            setTimeout(() => {
+                if (editor) editor.refresh();
+            }, 300);
         }
         
         async function executeQuery() {
@@ -683,23 +1233,25 @@ HTML_TEMPLATE = """
             }
             
             if (!query.trim()) {
-                showMessage('No query to execute', 'error');
+                showMessage('No query to execute', 'warning');
                 return;
             }
             
             await runQuery(query.trim());
         }
         
+        
         async function executeAllQueries() {
             const allText = editor.getValue();
             const queries = splitQueries(allText);
             
             if (queries.length === 0) {
-                showMessage('No queries found', 'error');
+                showMessage('No queries found', 'warning');
                 return;
             }
             
             updateStatus(`Executing ${queries.length} queries...`);
+            showMessage(`Executing ${queries.length} queries`, 'info');
             
             for (let i = 0; i < queries.length; i++) {
                 const query = queries[i].trim();
@@ -777,6 +1329,8 @@ HTML_TEMPLATE = """
                 }
 
                 if (result.success) {
+                    queryCount++;
+                    updateQueryCount();
                     updateStatus(result.message || 'Query executed successfully');
 
                     // ✅ Automatically refresh tables if the query affects DB structure
@@ -784,6 +1338,9 @@ HTML_TEMPLATE = """
                     if (['USE', 'CREATE', 'DROP', 'ALTER'].includes(queryType)) {
                         refreshTables();
                     }
+                     if (queryType === 'USE') {
+                        loadCurrentDatabase(); // Refresh the database name
+                        }
 
                 } else {
                     updateStatus(`Error: ${result.error}`);
@@ -813,159 +1370,148 @@ HTML_TEMPLATE = """
                 const tableHtml = createDataTable(result.data, result.columns);
 
                 const queryInfo = `<div class="query-info">
-                    <strong>${result.data.length}</strong> rows returned • 
-                    Query executed in <strong>${result.execution_time || 'N/A'}</strong>
+                    <div class="query-stats">
+                        <span><strong>${result.data.length}</strong> rows returned</span>
+                        <span>Query executed in <strong>${result.execution_time || 'N/A'}</strong></span>
+                        <span><strong>${result.columns ? result.columns.length : 0}</strong> columns</span>
+                    </div>
+                    <div>
+                        Query #${queryCount + 1}
+                    </div>
                 </div>`;
                 
                 content.innerHTML = tableHtml + queryInfo;
+                setupTableSorting();
             } else if (result.message) {
                 content.innerHTML = `<div class="message message-success">${escapeHtml(result.message)}</div>`;
             } else {
                 content.innerHTML = `<div class="message message-info">Query executed successfully</div>`;
             }
         }
-        function buildTable(columns, rows) {
-    const table = document.createElement('table');
-    table.className = 'table-result';
-    
-    // Table header
-    const thead = document.createElement('thead');
-    const tr = document.createElement('tr');
-    columns.forEach(col => {
-        const th = document.createElement('th');
-        th.textContent = col;
-
-        // Add resize handle
-        const handle = document.createElement('div');
-        handle.className = 'resize-handle';
-        th.appendChild(handle);
-
-        tr.appendChild(th);
-    });
-    thead.appendChild(tr);
-    table.appendChild(thead);
-
-    // Table body
-    const tbody = document.createElement('tbody');
-    rows.forEach(row => {
-        const tr = document.createElement('tr');
-        columns.forEach(col => {
-            const td = document.createElement('td');
-            td.textContent = row[col];
-            tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-
-    enableColumnResize(table); // attach resize logic
-    return table;
-}
-function enableColumnResize(table) {
-    const ths = table.querySelectorAll('th');
-    ths.forEach(th => {
-        const handle = th.querySelector('.resize-handle');
-        let startX, startWidth;
-
-        handle.addEventListener('mousedown', (e) => {
-            startX = e.pageX;
-            startWidth = th.offsetWidth;
-
-            function onMouseMove(e) {
-                const newWidth = startWidth + (e.pageX - startX);
-                th.style.width = newWidth + 'px';
+        
+                function setupTableSorting() {
+            // Table sorting is handled by the sortTable function
+            currentSort = { column: null, direction: null };
+        }
+        
+        function sortTable(columnName) {
+            if (!currentResults || currentResults.length === 0) return;
+            
+            const columns = Array.from(document.querySelectorAll('#data-table th')).map(th => th.dataset.column);
+            const columnIndex = columns.indexOf(columnName);
+            
+            if (columnIndex === -1) return;
+            
+            // Determine sort direction
+            let direction = 'asc';
+            if (currentSort.column === columnName && currentSort.direction === 'asc') {
+                direction = 'desc';
             }
-
-            function onMouseUp() {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
+            
+            // Sort the data
+            const sortedData = [...currentResults].sort((a, b) => {
+                const aVal = a[columnIndex];
+                const bVal = b[columnIndex];
+                
+                // Handle null values
+                if (aVal === null || aVal === undefined) return direction === 'asc' ? 1 : -1;
+                if (bVal === null || bVal === undefined) return direction === 'asc' ? -1 : 1;
+                
+                // Compare values
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+                
+                const aStr = String(aVal).toLowerCase();
+                const bStr = String(bVal).toLowerCase();
+                
+                if (direction === 'asc') {
+                    return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
+                } else {
+                    return aStr > bStr ? -1 : aStr < bStr ? 1 : 0;
+                }
+            });
+            
+            // Update current sort state
+            currentSort = { column: columnName, direction };
+            
+            // Update UI
+            document.querySelectorAll('#data-table th').forEach(th => {
+                th.className = 'sortable';
+            });
+            
+            const sortedHeader = document.querySelector(`#data-table th[data-column="${columnName}"]`);
+            if (sortedHeader) {
+                sortedHeader.className = `sortable sort-${direction}`;
             }
+            
+            // Rebuild table body
+            const tbody = document.querySelector('#data-table tbody');
+            const columns_list = columns;
+            
+            tbody.innerHTML = sortedData.map(row => {
+                const cells = columns_list.map((col, colIndex) => {
+                    const value = row[colIndex];
+                    return `<td class="${getValueClass(value)}" data-column="${col}">${formatValue(value)}</td>`;
+                }).join('');
+                return `<tr>${cells}</tr>`;
+            }).join('');
+            
+            currentResults = sortedData;
+            
+            showNotification(`Sorted by ${columnName} (${direction})`, 'info', 2000);
+        }
 
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-    });
-}
 
         function createDataTable(data, columns) {
-    if (!data || data.length === 0) {
-        return '<div class="empty-state"><p>No data to display</p></div>';
-    }
+            if (!data || data.length === 0) {
+                return '<div class="empty-state"><div class="empty-state-icon">📊</div><p>No data to display</p></div>';
+            }
 
-    // Use provided column order
-    const headerRow = columns.map((col, index) =>
-        `<th data-column="${col}" data-index="${index}" 
-            style="position: relative; min-width: 80px; overflow: hidden;">
-            ${escapeHtml(col)}
-        </th>`
-    ).join('');
+            const headerRow = columns.map((col, index) =>
+                `<th class="sortable" data-column="${col}" data-index="${index}" onclick="sortTable('${col}')">
+                    ${escapeHtml(col)}
+                </th>`
+            ).join('');
 
-    const bodyRows = data.map(row => {
-        const cells = columns.map((col, colIndex) => {
-            const value = row[colIndex];  // ✅ index-based access
-            return `<td class="${getValueClass(value)}" data-column="${col}">${formatValue(value)}</td>`;
-        }).join('');
-        return `<tr>${cells}</tr>`;
-    }).join('');
+            const bodyRows = data.map(row => {
+                const cells = columns.map((col, colIndex) => {
+                    const value = row[colIndex];
+                    return `<td class="${getValueClass(value)}" data-column="${col}">${formatValue(value)}</td>`;
+                }).join('');
+                return `<tr>${cells}</tr>`;
+            }).join('');
 
-    return `
-        <div class="table-container">
-            <table class="data-table" id="data-table">
-                <thead><tr>${headerRow}</tr></thead>
-                <tbody>${bodyRows}</tbody>
-            </table>
-        </div>
-    `;
-}
-
-        const table = document.getElementById('data-table');
-        enableColumnResize(table); // this will make the columns resizable
-
-        let draggedColumn = null;
-        let columnOrder = [];
+            return `
+                <div class="table-container">
+                    <table class="data-table" id="data-table">
+                        <thead><tr>${headerRow}</tr></thead>
+                        <tbody>${bodyRows}</tbody>
+                    </table>
+                </div>
+            `;
+        }
         
         function getValueClass(value) {
             if (value === null || value === undefined) return 'null-value';
             if (typeof value === 'number') return 'number-value';
+            if (typeof value === 'boolean') return 'boolean-value';
             if (typeof value === 'string') return 'string-value';
             return '';
         }
-        function handleDragStart(e) {
-        draggedColumn = e.target.dataset.column;
-        e.target.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        }
+        
+        
+    
         
         function formatValue(value) {
             if (value === null || value === undefined) return '<span class="null-value">NULL</span>';
-            if (typeof value === 'boolean') return value ? 'true' : 'false';
+            if (typeof value === 'boolean') return `<span class="boolean-value">${value ? 'TRUE' : 'FALSE'}</span>`;
             if (typeof value === 'string') return escapeHtml(value);
             return escapeHtml(String(value));
         }
         
-        function handleDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        e.target.classList.add('drop-target');
-        }
         
-        function handleDrop(e) {
-            e.preventDefault();
-            const targetColumn = e.target.dataset.column;
-            
-            if (draggedColumn && targetColumn && draggedColumn !== targetColumn) {
-                reorderColumns(draggedColumn, targetColumn);
-            }
-            
-            // Remove all visual indicators
-            document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
-            }
-        function handleDragEnd(e) {
-            e.target.classList.remove('dragging');
-            document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
-            draggedColumn = null;
-        }
-        
+
         function reorderColumns(draggedCol, targetCol) {
         if (!currentResults || currentResults.length === 0) return;
         
@@ -987,6 +1533,8 @@ function enableColumnResize(table) {
             return newRow;
     });
     
+    
+    
     // Update the display
         currentResults = reorderedData;
         const content = document.getElementById('results-content');
@@ -1002,7 +1550,7 @@ function enableColumnResize(table) {
         
         async function refreshTables() {
             const tablesList = document.getElementById('tables-list');
-            tablesList.innerHTML = '<div class="empty-state"><span class="loading-spinner"></span>Loading tables...</div>';
+            tablesList.innerHTML = '<div class="empty-state"><span class="loading-spinner"></span><span>Loading tables...</span></div>';
             
             try {
                 const response = await fetch('/api/tables');
@@ -1017,12 +1565,12 @@ function enableColumnResize(table) {
                     `).join('');
                     tablesList.innerHTML = tablesHtml;
                 } else {
-                    tablesList.innerHTML = '<div class="empty-state"><p>No tables found</p></div>';
+                    tablesList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗂️</div><p>No tables found</p><small>Create a table to get started</small></div>';
                 }
                 
             } catch (error) {
                 console.error('Error loading tables:', error);
-                tablesList.innerHTML = '<div class="empty-state"><p>Error loading tables</p></div>';
+                tablesList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Error loading tables</p></div>';
             }
         }
         
@@ -1043,6 +1591,10 @@ function enableColumnResize(table) {
             document.getElementById('status-text').textContent = message;
         }
         
+        function updateQueryCount() {
+            document.getElementById('query-count').textContent = `${queryCount} queries executed`;
+        }
+        
         function clearEditor() {
             if (editor) {
                 editor.setValue('');
@@ -1055,11 +1607,14 @@ function enableColumnResize(table) {
             const content = document.getElementById('results-content');
             content.innerHTML = `
                 <div class="empty-state">
-                    <span>📊</span>
+                    <div class="empty-state-icon">📊</div>
                     <p>Execute a query to see results here</p>
+                    <small>Use Ctrl+Enter to execute the current query</small>
                 </div>
             `;
             currentResults = [];
+            queryCount = 0;
+            updateQueryCount();
             updateStatus('Ready');
         }
     </script>
@@ -1103,6 +1658,19 @@ def split_queries(query_text):
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/current-database', methods=['GET'])
+def get_current_database_name():
+    try:
+        return jsonify({
+            "success": True,
+            "database": db_manager.active_db_name or "default"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
 
 @app.route('/api/execute', methods=['POST'])
 def execute_query():
@@ -1207,12 +1775,13 @@ def execute_single_query(query):
             
             try:
                 # FIXED: Pass current database, but the parser will update db_manager
-                execute(ast, get_current_database())
+                # execute(ast, get_current_database())
                 message = captured_output.getvalue().strip()
+            
             finally:
                 sys.stdout = old_stdout
+                
             execution_time = f"{(time.time() - start_time) * 1000:.2f}ms"
-            
             return {
                 "success": True,
                 "message": message or "Database switched successfully",
@@ -1364,14 +1933,4 @@ def get_tables():
         })
 
 if __name__ == '__main__':
-    # print("🗄️ Starting SQL IDE Pro...")
-    # print("🚀 Server running at: http://localhost:1234")
-    # print("💡 Features:")
-    # print("   • CodeMirror editor with SQL syntax highlighting")
-    # print("   • Execute single query (Ctrl+Enter)")
-    # print("   • Execute multiple queries (Ctrl+Shift+Enter)")
-    # print("   • Resizable panels and table browser")
-    # print("   • Professional VS Code-like interface")
-    # print("   • Auto-save after INSERT/UPDATE/DELETE")
-    # print("🔧 Make sure your engine.py, executor.py, sql_ast.py, and database_manager.py are in the same directory")
-    app.run(host="0.0.0.0", port=1234, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=False)
