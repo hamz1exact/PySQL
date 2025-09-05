@@ -39,7 +39,7 @@ def condition_evaluation(where, row, table_schema):
         if col_type in (float, int) and type(where.value) in (float, int):
             pass
         elif col_type != type(where.value):
-            print(col_type, type(where.value))
+
             raise ValueError (f"Given Datatype {type(where.value)} does not match the default datatype of column {where.column} -> {col_type}\nPlease Write --help <data_type> (i.e --help {table_schema[str(where.column)].capitalize()}) for more information\n")
         
         
@@ -91,6 +91,7 @@ def execute_insert_query(ast, database):
     for schema_col, schema_val in table_schema.items():
         schema_type = CheckDataType(schema_val)
         if schema_col in columns:
+            
             idx = columns.index(schema_col)
             val = values[idx]
             if schema_val == "CHAR":
@@ -101,6 +102,11 @@ def execute_insert_query(ast, database):
                                     )
                     else:
                         raise ValueError(f"{schema_col} expect <class 'char'> DataType, But {type(val)} were given")
+                else:
+                    if schema_col in table_auto:
+                        table_auto[schema_col]  = val
+                    else:
+                        new_row[schema_col] = val
             elif schema_val == "PLAINSTR":
                 if not PlainstringChecker(val):
                     if not isinstance(val, str):
@@ -111,25 +117,40 @@ def execute_insert_query(ast, database):
                         raise ValueError(
                                 f"{schema_col} expect PlainString Input, so the input must contain only letters and spaces"
                             )
+                else:
+                    if schema_col in table_auto:
+                        table_auto[schema_col]  = val
+                    else:
+                        new_row[schema_col] = val
             elif schema_val == "TIME":
                     if not CheckTime(val):
                                 raise ValueError(
                                     f"Invalid value '{val}' for column '{schema_col}': "
                                     f"must be in format HH:MM:SS"
                                 )
+                    else:
+                        if schema_col in table_auto:
+                            table_auto[schema_col]  = val
+                        else:
+                            new_row[schema_col] = val
             elif schema_val == "DATE":
                 if not CheckDate(val):
                             raise ValueError(
                                     f"Invalid value '{val}' for column '{schema_col}': "
                                     f"must be in format YYYY:MM:DD"
                                 )
-                    
+                else:
+                        if schema_col in table_auto:
+                            table_auto[schema_col]  = val
+                        else:
+                            new_row[schema_col] = val
             elif not DataType_evaluation(schema_val, val):
                 raise ValueError(f"Columns {schema_col} Expected {schema_type} DataType, But {type(val)} Were Given")
             else:
                 if schema_col in table_auto:
                     table_auto[schema_col]  = val
-                new_row[schema_col] = val
+                else:
+                    new_row[schema_col] = val
         else:
             if schema_col in table_auto:
                 table_auto[schema_col] += 1
@@ -140,6 +161,7 @@ def execute_insert_query(ast, database):
                 new_row[schema_col] = None
                 
     table_rows.append(new_row)
+    print(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
     
 def execute_update_query(ast, database):

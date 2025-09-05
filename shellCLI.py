@@ -114,7 +114,7 @@ while True:
 
     except KeyboardInterrupt:
         exit()
-    # except KeyError as k:
-    #     print(f"Row / column {k} not found")
-    # except Exception as e:
-    #     print("Error:", e)
+    except KeyError as k:
+        print(f"Row / column {k} not found")
+    except Exception as e:
+        print("Error:", e)
