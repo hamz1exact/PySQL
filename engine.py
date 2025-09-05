@@ -408,8 +408,9 @@ class Parser:
                                     f"must be in format YYYY:MM:DD"
                                 )
                             
-                    if col_type_type != type(default_value):
-                        raise ValueError(f"Invalid Value, Column DataType {col_type_type} Does Not Match the Default Value Type {type(default_value)} !")
+                    elif not DataType_evaluation(col_type, default_value):
+                        raise ValueError(f"Invalid Value, {col_name} Column's DataType {col_type_type} Does Not Match the Default Value Type {type(default_value)}")
+
                     
                 else:
                     raise SyntaxError(

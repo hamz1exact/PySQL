@@ -15,25 +15,27 @@ def CheckTime(inp):
     
     
 def CharChecker(inp):
-    if len(inp) != 1 or not isinstance(inp, str):
+    if not isinstance(inp, str) or len(inp) != 1:
         return False
     return True
 
 def PlainstringChecker(inp):
-    if not re.fullmatch(r"[A-Za-z ]+", inp) or not not isinstance(inp, str):
+    if not isinstance(inp, str) or not re.fullmatch(r"[A-Za-z ]+", inp):
         return False
     return True
 
 def CheckDataType(col_type):
-    checker = {str:("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
-        int: ("INT", "AUTO_INT", "FLOAT"),
-        float:("FLOAT", "INT"),
-        bool: ("BOOLEAN")}
+    checker = {
+        str: ("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
+        int: ("INT", "AUTO_INT"),
+        float: ("FLOAT", "DECIMAL", "DOUBLE"),
+        bool: ("BOOLEAN")
+    }
+    col_type = str(col_type).upper()
     for key in checker:
         if col_type in checker[key]:
             return key
     return None
-
 
 
 def DataType_evaluation(col_type, value):
@@ -42,7 +44,10 @@ def DataType_evaluation(col_type, value):
     #     int: ("INT", "AUTO_INT"),
     #     bool: ("BOOLEAN")
     #          }
-    if CheckDataType(col_type) == type(value):
+    py_type = CheckDataType(col_type)
+    if py_type in (int, float) and isinstance(value, (int, float)):
+        return True
+    elif CheckDataType(col_type) == type(value):
         if col_type == "CHAR":
             return CharChecker(value)
         if col_type == "TIME":
@@ -55,6 +60,8 @@ def DataType_evaluation(col_type, value):
             return True
     else:
         return False
+    
+print(DataType_evaluation("FLOAT", 1))
 
         
     

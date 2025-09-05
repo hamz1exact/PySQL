@@ -93,8 +93,39 @@ def execute_insert_query(ast, database):
         if schema_col in columns:
             idx = columns.index(schema_col)
             val = values[idx]
-            if type(val) != schema_type:
-                raise ValueError(f"Expected {schema_type} DataType, But {type(val)} Were Given")
+            if schema_val == "CHAR":
+                if not CharChecker(val):
+                    if type(val) == str:
+                        raise ValueError(
+                                    f"{schema_col} Column has CHAR Datatype, a CHAR must be exactly 1 character"
+                                    )
+                    else:
+                        raise ValueError(f"{schema_col} expect <class 'char'> DataType, But {type(val)} were given")
+            elif schema_val == "PLAINSTR":
+                if not PlainstringChecker(val):
+                    if not isinstance(val, str):
+                        raise ValueError(
+                                f"Invalid value '{val}' for column '{schema_col}', Input must be a string"
+                            )
+                    else:
+                        raise ValueError(
+                                f"{schema_col} expect PlainString Input, so the input must contain only letters and spaces"
+                            )
+            elif schema_val == "TIME":
+                    if not CheckTime(val):
+                                raise ValueError(
+                                    f"Invalid value '{val}' for column '{schema_col}': "
+                                    f"must be in format HH:MM:SS"
+                                )
+            elif schema_val == "DATE":
+                if not CheckDate(val):
+                            raise ValueError(
+                                    f"Invalid value '{val}' for column '{schema_col}': "
+                                    f"must be in format YYYY:MM:DD"
+                                )
+                    
+            elif not DataType_evaluation(schema_val, val):
+                raise ValueError(f"Columns {schema_col} Expected {schema_type} DataType, But {type(val)} Were Given")
             else:
                 if schema_col in table_auto:
                     table_auto[schema_col]  = val
