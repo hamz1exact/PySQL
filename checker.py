@@ -1,5 +1,24 @@
 from datetime import datetime
 import re
+    
+# """    checker = {
+#         str: ("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
+#         int: ("INT", "AUTO_INT"),
+#         float: ("FLOAT", "DECIMAL", "DOUBLE"),
+#         bool: ("BOOLEAN")
+#     } """
+
+def getSchemaDataType(schema_val):
+    if schema_val in ("INT", "AUTO_INT"):
+        return int
+    if schema_val in ("FLOAT", "DECIMAL", "DOUBLE"):
+        return float
+    if schema_val == "BOOLEAN":
+        return bool
+    if schema_val in ("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"):
+        return str
+    
+    
 def CheckDate(inp):
         try:
             if datetime.strptime(inp, "%Y-%m-%d").date():
@@ -45,7 +64,7 @@ def DataType_evaluation(col_type, value):
     #     bool: ("BOOLEAN")
     #          }
     py_type = CheckDataType(col_type)
-    if py_type in (int, float) and isinstance(value, (int, float)):
+    if py_type in (int, float) and type(value) in (int, float):
         return True
     elif CheckDataType(col_type) == type(value):
         if col_type == "CHAR":
@@ -72,10 +91,11 @@ def data_validator(schema_col, schema_val, given_val):
         else:
             return True
     elif curr_val == "PLAINSTR":
-        if not isinstance(given_val, str):
-            raise ValueError(f"Invalud Values '{given_val}' for columns {schema_col}, input must be  a string")
-        else:
-            raise ValueError(f"{schema_col} expect PlainString Input, so the input must be contain only leters and spaces")
+        if not PlainstringChecker(given_val):
+            if isinstance(given_val, str):
+                raise ValueError(f"Invalud Values '{given_val}' for columns {schema_col}, input must be  a string")
+            else:
+                raise ValueError(f"{schema_col} expect PlainString Input, so the input must be contain only leters and spaces")
     elif curr_val == "TIME":
         if not CheckTime(given_val):
             raise ValueError (f"Invalid Value -> {given_val} for columns -> {schema_col}: input must be in format HH:MM:SS")
@@ -83,8 +103,8 @@ def data_validator(schema_col, schema_val, given_val):
             return True
     elif curr_val == "DATE":
         if not CheckDate(given_val):
-            raise ValueError(f"Invalid Value -> {given_val} -> for columns -> {schema_col}: input must be in format -> YYYY:MM:DD")
+            raise ValueError(f"Invalid Value -> {given_val} for columns -> {schema_col}: input must be in format -> YYYY:MM:DD")
     elif not DataType_evaluation(schema_val, given_val):
-        raise ValueError(f"Column -> '{schema_col}' Expect {CheckDataType(schema_val)} DataType, But {type(given_val)} were given")
-    else:
-        return True
+        raise ValueError(f"Column -> '{schema_col}' Expect 'class <{schema_val.lower()}>' DataType, But {type(given_val)} were given")
+    return True
+    

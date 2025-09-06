@@ -437,18 +437,7 @@ class Parser:
         for key in checker:
             if col_type in checker[key]:
                 return key
-    # def CheckDate(self, inp):
-    #     try:
-    #         if datetime.strptime(inp, "%Y-%m-%d").date():
-    #             return True
-    #     except Exception:
-    #         return False
-    # def CheckTime(self, inp):
-    #     try:
-    #         if datetime.strptime(inp, "%H:%M:%S").time():
-    #             return True
-    #     except Exception:
-    #         return False
+
 
     def parse_use_statement(self):
         self.eat("USE")

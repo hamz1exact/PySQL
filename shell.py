@@ -351,13 +351,27 @@ class SQLShell:
         """Get current connection information"""
         current_db = getattr(db_manager, 'active_db_name', None)
         if current_db:
-            return f"{Colors.GREEN}Connected to database: {Colors.BOLD}{current_db}{Colors.RESET}"
+            import os
+            filename = os.path.basename(current_db)
+            if filename.endswith('.su'):
+                filename = filename[:-3]
+            return f"{Colors.GREEN}Connected to database: {Colors.BOLD}{filename}{Colors.RESET}"
         else:
             return f"{Colors.YELLOW}No database selected. Use {Colors.BOLD}USE database_name{Colors.RESET}{Colors.YELLOW} to connect.{Colors.RESET}"
-    
     def get_prompt(self) -> str:
         """Generate the command prompt"""
         db_name = getattr(db_manager, 'active_db_name', None) or 'none'
+        
+        # Extract just the filename without path and extension
+        if db_name and db_name != 'none':
+            import os
+            # Get just the filename from the full path
+            filename = os.path.basename(db_name)
+            # Remove the .su extension if present
+            if filename.endswith('.su'):
+                filename = filename[:-3]
+            db_name = filename
+        
         prompt = self.config.prompt_format.format(db=db_name)
         
         if self.config.colorize_output:
@@ -462,19 +476,19 @@ class SQLShell:
                 ast = parser.parse_insert_statement()
                 result = execute(ast, database)
                 db_manager.save_database_file()
-                self._handle_modify_result("INSERT", result, start_time)
+                self._handle_modify_result("INSERT", start_time)
                 
             elif token_type == "UPDATE":
                 ast = parser.parse_update_statement()
                 result = execute(ast, database)
                 db_manager.save_database_file()
-                self._handle_modify_result("UPDATE", result, start_time)
+                self._handle_modify_result("UPDATE",  start_time)
                 
             elif token_type == "DELETE":
                 ast = parser.parse_delete_statement()
                 result = execute(ast, database)
                 db_manager.save_database_file()
-                self._handle_modify_result("DELETE", result, start_time)
+                self._handle_modify_result("DELETE",  start_time)
                 
             elif token_type == "CREATE":
                 if next_token_type == "DATABASE":
@@ -548,16 +562,14 @@ class SQLShell:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
             print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
     
-    def _handle_modify_result(self, operation, result, start_time):
+    def _handle_modify_result(self, operation,  start_time):
         """Handle INSERT/UPDATE/DELETE results"""
         execution_time = time.time() - start_time
         
         # Assuming your execute function returns some indication of success
-        if result is not None:
-            print(f"{Colors.GREEN}{operation} completed successfully{Colors.RESET}")
-        else:
-            print(f"{Colors.RED}{operation} failed{Colors.RESET}")
-        
+  
+        print(f"{Colors.GREEN}{operation} completed successfully{Colors.RESET}")
+
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
             print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
@@ -566,19 +578,25 @@ class SQLShell:
         """Handle CREATE/DROP/ALTER results"""
         execution_time = time.time() - start_time
         
-        print(f"{Colors.GREEN}{operation} completed successfully{Colors.RESET}")
+        print(f"\n{Colors.GREEN}{operation} completed successfully{Colors.RESET}\n")
         
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
             print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
     
-    def _handle_use_result(self, result, start_time):
-        """Handle USE database results"""
+    def _handle_use_result(self, results, start_time):
         execution_time = time.time() - start_time
         
-
-        print(f"{Colors.GREEN}Switched to database: {Colors.BOLD}{db_manager.active_db_name}{Colors.RESET}")
-
+        # Extract clean database name for display
+        current_db_name = getattr(db_manager, 'active_db_name', 'unknown')
+        if current_db_name and current_db_name != 'unknown':
+            import os
+            filename = os.path.basename(current_db_name)
+            if filename.endswith('.su'):
+                filename = filename[:-3]
+            current_db_name = filename
+        
+        print(f"\n{Colors.GREEN}Switched to database: {Colors.BOLD}{current_db_name}{Colors.RESET}\n")
         
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
