@@ -55,7 +55,7 @@ class DatabaseManager:
     def auto_use_recent_db(self):
         if hasattr(self, "recent") and self.recent and os.path.exists(self.recent):
             self.active_db_name = self.recent
-            print(f"Auto-connecting to last used database: {self.active_db_name}")
+            # print(f"Auto-connecting to last used database: {self.active_db_name}")
             self.load_database_file()
 
     # ---------------- Database Operations ----------------

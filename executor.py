@@ -98,7 +98,7 @@ def execute_insert_query(ast, database):
                 if not CharChecker(val):
                     if type(val) == str:
                         raise ValueError(
-                                    f"{schema_col} Column has CHAR Datatype, a CHAR must be exactly 1 character"
+                                    f"{schema_col} Column has <class 'char'> Datatype, a <class 'char'> length must be exactly 1 character"
                                     )
                     else:
                         raise ValueError(f"{schema_col} expect <class 'char'> DataType, But {type(val)} were given")
@@ -176,13 +176,42 @@ def execute_update_query(ast, database):
     for row in table_rows:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             for col, new_val in ast.columns.items():
+                schema_dp = table_schema[col]
                 if col not in table_schema:
                     raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
                 expected_type = CheckDataType(table_schema[col])
-                if type(new_val) != expected_type:
-                    raise ValueError(
-                        f"Expected {expected_type} for column '{col}', but got {type(new_val)}"
-                    )
+                if schema_dp == "CHAR":
+                    if not CharChecker(new_val):
+                        if type(new_val) == str:
+                            raise ValueError(
+                                        f"{col} Column has <class 'char'> Datatype, a <class 'char'> length must be exactly 1 character"
+                                        )
+                        else:
+                            raise ValueError(f"{col} expect <class 'char'> DataType, But {type(new_val)} were given")
+                elif schema_dp == "PLAINSTR":
+                    if not PlainstringChecker(new_val):
+                        if not isinstance(new_val, str):
+                            raise ValueError(
+                                    f"Invalid value '{new_val}' for column '{col}', Input must be a string"
+                                )
+                        else:
+                            raise ValueError(
+                                    f"{col} expect PlainString Input, so the input must contain only letters and spaces"
+                                )
+                elif schema_dp == "TIME":
+                    if not CheckTime(new_val):
+                                raise ValueError(
+                                    f"Invalid value '{new_val}' for column '{col}': "
+                                    f"must be in format HH:MM:SS"
+                                )
+                elif schema_dp == "DATE":
+                    if not CheckDate(new_val):
+                                raise ValueError(
+                                        f"Invalid value '{new_val}' for column '{col}': "
+                                        f"must be in format YYYY:MM:DD"
+                                    )
+                elif not DataType_evaluation(schema_dp, new_val):
+                    raise ValueError(f"Columns {col} Expected {CheckDataType(schema_dp)} DataType, But {type(new_val)} Were Given")
                 row[col] = new_val  
                 cnt += 1
     print(f"{cnt} row(s) updated in '{table_name}'")

@@ -73,6 +73,8 @@ class Config:
         self.colorize_output = True
         self.table_format = 'ascii'  # ascii, markdown, csv
         self.timing = True
+        self.last_result = None  # Store last SELECT result
+        self.last_columns = None
         
         # Load config from file if exists
         self.config_file = Path.home() / '.sqlshell_config.json'
@@ -769,15 +771,138 @@ class SQLShell:
     
     def _cmd_export(self, args):
         """Export last query result"""
-        # This would need to store the last result
-        print("Export functionality not yet implemented")
-    
+        if len(args) < 2:
+            print(f"{Colors.RED}Usage: \\export <format> <filename>{Colors.RESET}")
+            print(f"{Colors.YELLOW}Supported formats: csv, json, sql{Colors.RESET}")
+            return
+        
+        if not self.last_result:
+            print(f"{Colors.RED}No query result to export. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        format_type = args[0].lower()
+        filename = args[1]
+        
+        try:
+            if format_type == 'csv':
+                self._export_csv(filename)
+            elif format_type == 'json':
+                self._export_json(filename)
+            elif format_type == 'sql':
+                self._export_sql(filename)
+            else:
+                print(f"{Colors.RED}Unsupported format: {format_type}{Colors.RESET}")
+                print(f"{Colors.YELLOW}Supported formats: csv, json, sql{Colors.RESET}")
+                return
+            
+            row_count = len(self.last_result)
+            print(f"{Colors.GREEN}Exported {row_count} rows to {filename} ({format_type.upper()} format){Colors.RESET}")
+        except Exception as e:
+            print(f"{Colors.RED}Export failed: {str(e)}{Colors.RESET}")
+
+            
+    def _export_csv(self, filename):
+        """Export to CSV format"""
+        import csv
+        
+        if not filename.endswith('.csv'):
+            filename += '.csv'
+        
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            if not self.last_result:
+                return
+            
+            # Get column names from first row
+            columns = list(self.last_result[0].keys())
+            writer = csv.writer(csvfile)
+            
+            # Write header
+            writer.writerow(columns)
+            
+            # Write data rows
+            for row in self.last_result:
+                row_data = [row.get(col, '') for col in columns]
+                writer.writerow(row_data)
+                
+    def _handle_select_result(self, result, start_time):
+        """Handle SELECT query results"""
+        execution_time = time.time() - start_time
+        
+        # Store result for export functionality
+        self.last_result = result
+        
+        if result:  # Assuming result is a list of dictionaries for SELECT
+            # Format and display table
+            formatted_table = self.formatter.format_table(result)
+            print(formatted_table)
+            
+            # Show summary
+            if self.config.show_row_count:
+                row_count = len(result)
+                plural = 's' if row_count != 1 else ''
+                print(f"\n{Colors.BRIGHT_BLACK}({row_count} row{plural}){Colors.RESET}")
+        else:
+            print(f"{Colors.BRIGHT_BLACK}Empty result set{Colors.RESET}")
+            self.last_result = None  # No data to export
+        
+        if self.config.timing:
+            time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
+            print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
+            
+    def _export_json(self, filename):
+        """Export to JSON format"""
+        import json
+        
+        if not filename.endswith('.json'):
+            filename += '.json'
+        
+        with open(filename, 'w', encoding='utf-8') as jsonfile:
+            json.dump(self.last_result, jsonfile, indent=2, default=str)
+    def _export_sql(self, filename):
+        """Export as SQL INSERT statements"""
+        if not filename.endswith('.sql'):
+            filename += '.sql'
+        
+        if not self.last_result:
+            return
+        
+        # We need table name - ask user or use generic name
+        table_name = input(f"Enter table name for INSERT statements (default: exported_data): ").strip()
+        if not table_name:
+            table_name = "exported_data"
+        
+        with open(filename, 'w', encoding='utf-8') as sqlfile:
+            columns = list(self.last_result[0].keys())
+            
+            # Write header comment
+            sqlfile.write(f"-- Exported data from SQL Shell Pro\n")
+            sqlfile.write(f"-- Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            sqlfile.write(f"-- Rows: {len(self.last_result)}\n\n")
+            
+            # Write INSERT statements
+            for row in self.last_result:
+                values = []
+                for col in columns:
+                    value = row.get(col)
+                    if value is None:
+                        values.append('NULL')
+                    elif isinstance(value, str):
+                        # Escape single quotes
+                        escaped_value = value.replace("'", "''")
+                        values.append(f"'{escaped_value}'")
+                    elif isinstance(value, bool):
+                        values.append('TRUE' if value else 'FALSE')
+                    else:
+                        values.append(str(value))
+                
+                columns_str = ', '.join(columns)
+                values_str = ', '.join(values)
+                sqlfile.write(f"INSERT INTO {table_name} ({columns_str}) VALUES ({values_str});\n")
     def _cmd_import(self, args):
         """Import SQL file"""
         if not args:
             print(f"{Colors.RED}Usage: \\import <filename>{Colors.RESET}")
-            return
-        
+            return        
         filename = args[0]
         try:
             with open(filename, 'r') as f:

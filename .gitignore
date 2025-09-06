@@ -26,7 +26,7 @@ venv/
 env/
 ENV/
 shellv2.py
-shell.py
+
 
 # IDE / editor settings
 .vscode/
@@ -37,8 +37,11 @@ shell.py
 patch.py
 sql2.py
 
+
 # OS generated files
 .DS_Store
 Thumbs.db
-
+shellCLI.py
 .su_cache
+shellbeta.py
+shellCLI.py

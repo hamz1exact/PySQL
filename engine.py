@@ -384,7 +384,7 @@ class Parser:
                     if col_type.upper() == "CHAR":
                         if not CharChecker(default_value):
                             raise ValueError(
-                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': CHAR must be exactly 1 character"
+                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': <class 'char'> length must be exactly 1 character"
                             )
                     elif col_type.upper() == "PLAINSTR":
                         if not isinstance(default_value, str):

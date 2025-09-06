@@ -61,8 +61,6 @@ def DataType_evaluation(col_type, value):
     else:
         return False
     
-print(DataType_evaluation("FLOAT", 1))
 
-        
     
     
