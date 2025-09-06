@@ -91,7 +91,6 @@ def execute_insert_query(ast, database):
     for schema_col, schema_val in table_schema.items():
         schema_type = CheckDataType(schema_val)
         if schema_col in columns:
-            
             idx = columns.index(schema_col)
             val = values[idx]
             if schema_val == "CHAR":
@@ -176,7 +175,7 @@ def execute_update_query(ast, database):
     for row in table_rows:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             for col, new_val in ast.columns.items():
-                schema_dp = table_schema[col]
+                schema_dp = table_schema[col]              
                 if col not in table_schema:
                     raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
                 expected_type = CheckDataType(table_schema[col])

@@ -61,6 +61,30 @@ def DataType_evaluation(col_type, value):
     else:
         return False
     
-
-    
-    
+def data_validator(schema_col, schema_val, given_val):
+    curr_val = schema_val.upper()
+    if curr_val == "CHAR":
+        if not CharChecker(given_val):
+            if type(given_val) == str:
+                raise ValueError(f"{schema_col} Column has <class 'char'> Datatype, a <class 'char'> length must be exactly 1 character, but {len(given_val)} chars were given")
+            else:
+                raise ValueError(f"{schema_col} Expect <class 'char'> DataType, But {type(given_val)} were given")
+        else:
+            return True
+    elif curr_val == "PLAINSTR":
+        if not isinstance(given_val, str):
+            raise ValueError(f"Invalud Values '{given_val}' for columns {schema_col}, input must be  a string")
+        else:
+            raise ValueError(f"{schema_col} expect PlainString Input, so the input must be contain only leters and spaces")
+    elif curr_val == "TIME":
+        if not CheckTime(given_val):
+            raise ValueError (f"Invalid Value -> {given_val} for columns -> {schema_col}: input must be in format HH:MM:SS")
+        else:
+            return True
+    elif curr_val == "DATE":
+        if not CheckDate(given_val):
+            raise ValueError(f"Invalid Value -> {given_val} -> for columns -> {schema_col}: input must be in format -> YYYY:MM:DD")
+    elif not DataType_evaluation(schema_val, given_val):
+        raise ValueError(f"Column -> '{schema_col}' Expect {CheckDataType(schema_val)} DataType, But {type(given_val)} were given")
+    else:
+        return True
