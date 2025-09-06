@@ -4,6 +4,7 @@ from datetime import datetime
 from database_manager import DatabaseManager, Table
 import re
 from checker import *
+from datatypes import *
 
 db_manager = DatabaseManager()
 
@@ -14,7 +15,19 @@ class Lexer:
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT"
     )
-    DataTypes = ("INT", "FLOAT", "BOOLEAN", "CHAR", "STR", "PLAINSTR", "DATE", "TIME", "AUTO_INT")
+    datatypes = {
+        "INT": INT,
+        "INTEGER": INT,
+        "STRING":VARCHAR,
+        "FLOAT": FLOAT,
+        "BOOLEAN": BOOLEAN,
+        "CHAR": CHAR,
+        "VARCHAR": VARCHAR,
+        "TEXT": TEXT,
+        "SERIAL": SERIAL,
+        "DATE": DATE,
+        "TIME": TIME,
+    }
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
     SpecialCharacters = ("@", "_", "+", "-", ".")
@@ -43,7 +56,7 @@ class Lexer:
                     self.tokens.append((upper_word, upper_word))
                 elif upper_word in Lexer.MainOperators:
                     self.tokens.append(("MAINOPT", upper_word))
-                elif upper_word in Lexer.DataTypes:
+                elif upper_word in Lexer.datatypes:
                     self.tokens.append(("DATATYPE", upper_word))
                 elif word.lower() == "true":
                     self.tokens.append(("BOOLEAN", True))
@@ -100,7 +113,6 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        # print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -346,86 +358,50 @@ class Parser:
         self.eat("OPDBK")  # (
         schema = {}
         auto = {}
-        defaults = {}
-
+        defaults = {} 
+        is_serial = False
         while self.current_token() and self.current_token()[0] != "CLDBK":
             # Column name
             col_name = self.eat("IDENTIFIER")[1]
-            auto_int = False
             # Column type
             col_type = self.eat("DATATYPE")[1]
-            schema[col_name] = col_type
-
-            # Handle AUTO_INT
-            if col_type.upper() == "AUTO_INT":
-                auto[col_name] = 0
-                auto_int = True
+            if col_type in Lexer.datatypes:
+                schema[col_name] = Lexer.datatypes[col_type]
+            else:
+                raise ValueError(f"Unknown Datatype -> {col_type}")
+            # Handle SERIAL
+            if col_type.upper() == "SERIAL":
+                auto[col_name] = Lexer.datatypes["SERIAL"]()
+                is_serial = True
+            else:
+                is_serial = False
 
             # Handle DEFAULT values
             if self.current_token() and self.current_token()[0] == "DEFAULT":
-                if auto_int:
-                    raise ValueError(f"Invalid DEFAULT for column '{col_name}', AUTO_INT columns cannot have explicit default values.")
+                if is_serial:
+                    raise ValueError(f"Invalid DEFAULT for column '{col_name}', SERIAL columns cannot have explicit default values.")
                 
                 self.eat("DEFAULT")
                 opt = self.eat("OPT")[1]
-                if opt != "=" and opt != "==":
+                if opt not in ("=", "=="):
                     raise ValueError("Syntax error in DEFAULT clause: expected '=' or '==' after DEFAULT keyword")
-                
-
-                # Value type-aware
                 token_type, token_value = self.current_token()
-                
-                if token_type in ("NUMBER", "STRING", "BOOLEAN"):
-                    
+                if token_type:
                     default_value = self.eat(token_type)[1]
-                    
-                    col_type_type = CheckDataType(col_type)
-                    
-                    if col_type.upper() == "CHAR":
-                        if not CharChecker(default_value):
-                            raise ValueError(
-                                f"Invalid DEFAULT value '{default_value}' for column '{col_name}': <class 'char'> length must be exactly 1 character"
-                            )
-                    elif col_type.upper() == "PLAINSTR":
-                        if not isinstance(default_value, str):
-                            raise ValueError(
-                                f"Invalid value '{default_value}' for column '{col_name}', must be a string"
-                            )
-                        if not PlainstringChecker(default_value):
-                            raise ValueError(
-                                f"Invalid value '{default_value}' for column '{col_name}', PLAINSTR must contain only letters and spaces"
-                            )
-                    elif col_type.upper() == "TIME":
-                            if not CheckTime(default_value):
-                                raise ValueError(
-                                    f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
-                                    f"must be in format HH:MM:SS"
-                                )
-                    elif col_type.upper() == "DATE":
-                        if not CheckDate(default_value):
-                            raise ValueError(
-                                    f"Invalid DEFAULT value '{default_value}' for column '{col_name}': "
-                                    f"must be in format YYYY:MM:DD"
-                                )
-                            
-                    elif not DataType_evaluation(col_type, default_value):
-                        raise ValueError(f"Invalid Value, {col_name} Column's DataType {col_type_type} Does Not Match the Default Value Type {type(default_value)}")
-
-                    
-                else:
-                    raise SyntaxError(
-                        f"Unexpected token type '{token_type}' in DEFAULT clause for column '{col_name}'"
-                    )
-                defaults[col_name] = default_value
-
+                    defaults[col_name] = schema[col_name](default_value)
             # Skip comma if present
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
+            print(col_name)
 
         self.eat("CLDBK")  # )
         self.eat("SEMICOLON")
-        if table_name in db_manager.active_db:
-            print(db_manager.getrows(table_name))
+        print("schema", schema)
+        print()
+        print("defaults", defaults)
+        print()
+        print("auto", auto)
+
         table = Table(table_name, schema, defaults, auto)
         db_manager.active_db[table_name] = table
         db_manager.save_database_file()

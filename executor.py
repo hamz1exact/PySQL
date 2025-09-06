@@ -1,5 +1,6 @@
 from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
 from checker import *
+from datatypes import SQLType
 def execute(ast, database):
     if isinstance(ast, SelectStatement):
         return execute_select_query(ast, database)
@@ -9,7 +10,7 @@ def execute(ast, database):
         execute_update_query(ast, database)
     elif isinstance(ast, DeleteStatement):
         execute_delete_query(ast, database)
-        
+
 def execute_select_query(ast, database):
     table_name = ast.table
     if table_name not in database:
@@ -28,35 +29,21 @@ def execute_select_query(ast, database):
     for row in table:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             selected_row = {col: row.get(col) for col in columns_to_return}
-            result.append(selected_row)
+            result.append(serialize_row(selected_row))
     return result
-
-
 
 def condition_evaluation(where, row, table_schema):
     if isinstance(where, Condition):
-        if where.column not in table_schema:
-            raise ValueError(f"Where Column -> '{where.column}' does not exist")
-        col_type = CheckDataType(table_schema[str(where.column)])
-        if col_type in (float, int) and type(where.value) in (float, int):
-            pass
-        elif col_type != type(where.value):
-            raise ValueError (f"Given Datatype {type(where.value)} does not match the default datatype of column {where.column} -> {col_type}\nPlease Write --help <data_type> (i.e --help {table_schema[str(where.column)].capitalize()}) for more information\n")
-        
-
-        if type(row[where.column]) == str:
-            left = row[where.column].lower()
-        else:
-            left = row[where.column]
-        
-        right = str(where.value).lower() if type(where.value) == str else where.value
+        col = row[where.column]
+        val = table_schema[where.column](where.value)
         op  = where.operator
-        if op == "=": return left == right
-        if op == "!=": return left != right
-        if op == "<": return left < right
-        if op == "<=": return left <= right
-        if op == ">": return left > right
-        if op == ">=": return left >= right
+        
+        if op == "=": return col == val
+        if op == "!=": return col != val
+        if op == "<": return col < val
+        if op == "<=": return col <= val
+        if op == ">": return col > val
+        if op == ">=": return col >= val
         raise ValueError(f"Unknown operator {op}")
 
     elif isinstance(where, LogicalCondition):
@@ -90,30 +77,18 @@ def execute_insert_query(ast, database):
             f"Columns: {columns}, Values: {values}"
         )
     new_row = {}
-    for schema_col, schema_val in table_schema.items():
-        if schema_col in columns:
-            idx = columns.index(schema_col)
+    for col_name, col_val in table_schema.items():
+        if col_name in columns:
+            idx = columns.index(col_name)
             val = values[idx]
-            eval_dp = data_validator(schema_col, schema_val, val)
-            if eval_dp:
-                val = getSchemaDataType(schema_val)(val)
-                if schema_col in table_auto:
-                    table_auto[schema_col]  = val
-                else:
-                    new_row[schema_col] = val
-            else:
-                print(eval_dp)
+            new_row[col_name] = table_schema[col_name](val)
+        elif col_name in table_auto:
+            new_row[col_name] = table_auto[col_name].next()
+        elif col_name in table_default:
+            new_row[col_name] = table_default[col_name]
         else:
-            if schema_col in table_auto:
-                table_auto[schema_col] += 1
-                new_row[schema_col] = table_auto.get(schema_col)
-            elif schema_col in table_default:
-                new_row[schema_col] = table_default[schema_col]
-            else:
-                new_row[schema_col] = None
-                
+            new_row[col_name] = None                
     table_rows.append(new_row)
-    print(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
     
 def execute_update_query(ast, database):
@@ -125,22 +100,16 @@ def execute_update_query(ast, database):
     table_schema = table_obj.schema
     cnt = 0
     for column in ast.columns.keys():
-            if column not in table_schema:
-                raise ValueError(f"Column '{column}' does not exist")
-    
+        if column not in table_schema:
+            raise ValueError(f"Column '{column}' does not exist")
+
+    # Loop through rows
     for row in table_rows:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             for col, new_val in ast.columns.items():
-                schema_dp = table_schema[col]              
-                if col not in table_schema:
-                    raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
-                DVT = data_validator(col, schema_dp, new_val)
-                if DVT == True:
-                    new_val = getSchemaDataType(schema_dp)(new_val)
-                    row[col] = new_val
-                    cnt += 1
-                else:
-                    print(DVT)
+                # Wrap raw Python value in correct SQLType
+                row[col] = table_schema[col](new_val)
+                cnt += 1
     print(f"{cnt} row(s) updated in '{table_name}'")
     
 def execute_delete_query(ast, database):
@@ -155,7 +124,7 @@ def execute_delete_query(ast, database):
     table_rows = table_obg.rows
     table_schema = table_obg.schema
     n = 0
-    for i in range(len(table_rows) - 1, 1, -1):  # start from last data row
+    for i in range(len(table_rows) - 1, -1, -1):  # start from last data row
         row = table_rows[i]
         if condition_evaluation(ast.where, row, table_schema):
             del table_rows[i]
@@ -163,3 +132,6 @@ def execute_delete_query(ast, database):
     print(f"{n} rows deleted")
     
     
+def serialize_row(row):
+    """Convert SQLType objects to raw Python values for display or SELECT output."""
+    return {col: (val.value if isinstance(val, SQLType) else val) for col, val in row.items()}

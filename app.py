@@ -538,13 +538,7 @@ HTML_TEMPLATE = """
             background: rgba(0, 122, 204, 0.1);
         }
         
-        .null-value {
-            color: #608b4e;
-            font-style: italic;
-            background: rgba(96, 139, 78, 0.1);
-            padding: 2px 4px;
-            border-radius: 3px;
-        }
+
         
         .number-value {
             color: #b5cea8;
@@ -918,7 +912,7 @@ HTML_TEMPLATE = """
     let editor;
     let currentResults = [];
     let queryCount = 0;
-    let currentSort = { column: null, direction: null };
+    
 
     document.addEventListener("DOMContentLoaded", () => {
         initializeEditor();
@@ -942,7 +936,7 @@ HTML_TEMPLATE = """
             'INT': true, 'STR': true, 'PLAINSTR': true,
             'VARCHAR': true, 'CHAR': true, 'TEXT': true, 'DATE': true, 'DATETIME': true,
             'DECIMAL': true, 'FLOAT': true, 'DOUBLE': true, 'BOOLEAN': true, 'BOOL': true,
-            "AUTO_INT":true
+            "SERIAL":true
         };
         
         // Create custom SQL mode
@@ -1041,7 +1035,7 @@ function exportResults(format) {
         currentResults.forEach(row => {
             // Clean each cell value and handle commas/quotes
             const cleanedRow = row.map(cell => {
-                if (cell === null || cell === undefined) return '';
+                //if (cell === null || cell === undefined) return '';
                 let value = String(cell);
                 // If value contains comma or quotes, wrap in quotes and escape quotes
                 if (value.includes(',') || value.includes('"')) {
@@ -1329,7 +1323,7 @@ function showNotification(message, type = 'info', duration = 4000) {
 
                     // ✅ Automatically refresh tables if the query affects DB structure
                     const queryType = query.trim().split(' ')[0].toUpperCase();
-                    if (['USE', 'CREATE', 'DROP', 'ALTER'].includes(queryType)) {
+                    if (['USE', 'CREATE', 'DROP', 'ALTER', 'UPDATE', 'DELETE', 'INSERT'].includes(queryType)) {
                         refreshTables();
                     }
                      if (queryType === 'USE') {
@@ -1385,7 +1379,7 @@ function showNotification(message, type = 'info', duration = 4000) {
         
                 function setupTableSorting() {
             // Table sorting is handled by the sortTable function
-            currentSort = { column: null, direction: null };
+            
         }
         
         function sortTable(columnName) {
@@ -1408,8 +1402,8 @@ function showNotification(message, type = 'info', duration = 4000) {
                 const bVal = b[columnIndex];
                 
                 // Handle null values
-                if (aVal === null || aVal === undefined) return direction === 'asc' ? 1 : -1;
-                if (bVal === null || bVal === undefined) return direction === 'asc' ? -1 : 1;
+                //if (aVal === null || aVal === undefined) return direction === 'asc' ? 1 : -1;
+                //if (bVal === null || bVal === undefined) return direction === 'asc' ? -1 : 1;
                 
                 // Compare values
                 if (typeof aVal === 'number' && typeof bVal === 'number') {
@@ -1463,7 +1457,7 @@ function showNotification(message, type = 'info', duration = 4000) {
             }
 
             const headerRow = columns.map((col, index) =>
-                `<th class="sortable" data-column="${col}" data-index="${index}" onclick="sortTable('${col}')">
+                `<th>
                     ${escapeHtml(col)}
                 </th>`
             ).join('');
@@ -1487,7 +1481,6 @@ function showNotification(message, type = 'info', duration = 4000) {
         }
         
         function getValueClass(value) {
-            if (value === null || value === undefined) return 'null-value';
             if (typeof value === 'number') return 'number-value';
             if (typeof value === 'boolean') return 'boolean-value';
             if (typeof value === 'string') return 'string-value';
@@ -1498,7 +1491,8 @@ function showNotification(message, type = 'info', duration = 4000) {
     
         
         function formatValue(value) {
-            if (value === null || value === undefined) return '<span class="null-value">NULL</span>';
+            
+            
             if (typeof value === 'boolean') return `<span class="boolean-value">${value ? 'TRUE' : 'FALSE'}</span>`;
             if (typeof value === 'string') return escapeHtml(value);
             return escapeHtml(String(value));
@@ -1728,20 +1722,15 @@ def execute_single_query(query):
                 table_obj = db_manager.active_db[table_name]
 
                 if rows and len(rows) > 0:
-                    if hasattr(table_obj, 'schema') and table_obj.schema:
-                        # Get original column order from table schema
-                        ordered_cols = list(table_obj.schema.keys())
-
-                        # Reorder each row to match schema order, return as lists
-                        ordered_rows = []
-                        for row in rows:
-                            ordered_row = [row.get(col, None) for col in ordered_cols]
-                            ordered_rows.append(ordered_row)
-                        rows = ordered_rows
-                    else:
-                        # No schema → fallback to first row keys
-                        ordered_cols = list(rows[0].keys())
-                        rows = [[row[col] for col in ordered_cols] for row in rows]
+                    # Get columns from the actual result (selected columns only)
+                    ordered_cols = list(rows[0].keys())
+                    
+                    # Convert to list format for frontend
+                    ordered_rows = []
+                    for row in rows:
+                        ordered_row = [row[col] for col in ordered_cols]
+                        ordered_rows.append(ordered_row)
+                    rows = ordered_rows
                 else:
                     ordered_cols = []
                     rows = []
@@ -1754,7 +1743,7 @@ def execute_single_query(query):
 
             return {
                 "success": True,
-                "columns": ordered_cols,  # guaranteed schema order
+                "columns": ordered_cols,  # only selected columns
                 "data": rows,             # list of lists, aligned with columns
                 "message": msg,
                 "execution_time": execution_time
@@ -1833,11 +1822,10 @@ def execute_single_query(query):
             sys.stdout = captured_output = io.StringIO()
             
             try:
-                db_manager.active_db= get_current_database()
+                db_manager.active_db = get_current_database()
                 execute(ast, db_manager.active_db)
-                # Save db_manager.active_dbafter INSERT
-                if hasattr(db_manager, 'save_database_file'):
-                    db_manager.save_database_file()
+
+                db_manager.save_database_file()
                 message = captured_output.getvalue().strip()
             finally:
                 sys.stdout = old_stdout
@@ -1859,8 +1847,7 @@ def execute_single_query(query):
             try:
                 execute(ast, db_manager.active_db)
                 # Save db_manager.active_dbafter UPDATE
-                if hasattr(db_manager, 'save_database_file'):
-                    db_manager.save_database_file()
+                db_manager.save_database_file()
                 message = captured_output.getvalue().strip()
             finally:
                 sys.stdout = old_stdout
@@ -1880,9 +1867,7 @@ def execute_single_query(query):
             
             try:
                 execute(ast, db_manager.active_db)
-                # Save db_manager.active_dbafter DELETE
-                if hasattr(db_manager, 'save_database_file'):
-                    db_manager.save_database_file()
+                db_manager.save_database_file()
                 message = captured_output.getvalue().strip()
             finally:
                 sys.stdout = old_stdout

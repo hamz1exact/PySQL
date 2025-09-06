@@ -3,13 +3,13 @@ import re
     
 # """    checker = {
 #         str: ("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
-#         int: ("INT", "AUTO_INT"),
+#         int: ("INT", "SERIAL"),
 #         float: ("FLOAT", "DECIMAL", "DOUBLE"),
 #         bool: ("BOOLEAN")
 #     } """
 
 def getSchemaDataType(schema_val):
-    if schema_val in ("INT", "AUTO_INT"):
+    if schema_val in ("INT", "SERIAL"):
         return int
     if schema_val in ("FLOAT", "DECIMAL", "DOUBLE"):
         return float
@@ -46,7 +46,7 @@ def PlainstringChecker(inp):
 def CheckDataType(col_type):
     checker = {
         str: ("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
-        int: ("INT", "AUTO_INT"),
+        int: ("INT"),
         float: ("FLOAT", "DECIMAL", "DOUBLE"),
         bool: ("BOOLEAN")
     }
@@ -60,7 +60,7 @@ def CheckDataType(col_type):
 def DataType_evaluation(col_type, value):
     # checker = {
     #     str:("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
-    #     int: ("INT", "AUTO_INT"),
+    #     int: ("INT", "SERIAL"),
     #     bool: ("BOOLEAN")
     #          }
     py_type = CheckDataType(col_type)
@@ -108,3 +108,5 @@ def data_validator(schema_col, schema_val, given_val):
         raise ValueError(f"Column -> '{schema_col}' Expect 'class <{schema_val.lower()}>' DataType, But {type(given_val)} were given")
     return True
     
+
+print(CheckDate("2024-09-01"))

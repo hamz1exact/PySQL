@@ -9,6 +9,8 @@ import time
 import json
 import csv
 import readline
+from importlib import reload
+import database_manager
 import atexit
 import re
 from datetime import datetime
@@ -377,8 +379,10 @@ class SQLShell:
         if self.config.colorize_output:
             return f"{Colors.BOLD + Colors.BLUE}{prompt}{Colors.RESET}"
         return prompt
-    
+
+
     def run(self):
+        # reload(database_manager)
         """Main shell loop"""
         self.print_banner()
         
@@ -497,6 +501,7 @@ class SQLShell:
                     self._handle_ddl_result("CREATE DATABASE",  start_time)
                 elif next_token_type == "TABLE":
                     ast = parser.parse_create_table()
+                    print(ast)
                     db_manager.save_database_file()
                     self._handle_ddl_result("CREATE TABLE",  start_time)
                 else:

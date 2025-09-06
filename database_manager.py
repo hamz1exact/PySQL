@@ -1,29 +1,27 @@
 import os
 import platform
 import msgpack
+from datatypes import datatypes  # assuming Lexer.datatypes contains your SQLType classes
 
 class Table:
     def __init__(self, name, schema, defaults=None, auto=None):
         self.name = name
-        self.schema = schema
-        self.defaults = defaults or {}
-        self.auto = auto or {}
-        self.rows = []
+        self.schema = schema                  # dict[col_name] = SQLType class
+        self.defaults = defaults or {}        # dict[col_name] = SQLType instance
+        self.auto = auto or {}                # dict[col_name] = SQLType instance (SERIAL)
+        self.rows = []                        # list of dicts with parsed Python values
 
 class DatabaseManager:
     def __init__(self):
         home = os.path.expanduser("~")
 
         if platform.system() == "Windows":
-            # Example: C:\Users\<User>\AppData\Roaming\su_sql
             self.db_folder = os.path.join(os.getenv("APPDATA"), "su_sql")
         else:
-            # Example: ~/.su_sql
             self.db_folder = os.path.join(home, ".su_sql")
 
-        # Hidden cache file inside db folder
+        # Hidden cache file
         self.cache_file = os.path.join(self.db_folder, ".su_cache")
-
         os.makedirs(self.db_folder, exist_ok=True)
 
         self.databases = []
@@ -55,7 +53,6 @@ class DatabaseManager:
     def auto_use_recent_db(self):
         if hasattr(self, "recent") and self.recent and os.path.exists(self.recent):
             self.active_db_name = self.recent
-            # print(f"Auto-connecting to last used database: {self.active_db_name}")
             self.load_database_file()
 
     # ---------------- Database Operations ----------------
@@ -66,7 +63,7 @@ class DatabaseManager:
         self.databases.append(db_file)
         self.active_db_name = db_file
         with open(db_file, "wb") as f:
-            msgpack.pack({}, f)  # empty DB
+            msgpack.pack({}, f)
         self.update_cache()
         print(f"Database '{db_name}' created and selected")
 
@@ -83,25 +80,55 @@ class DatabaseManager:
     def load_database_file(self):
         with open(self.active_db_name, "rb") as f:
             db_data = msgpack.unpack(f)
+
         self.active_db = {}
-        for tbl_name, tbl_dict in db_data.items():
-            table = Table(
-                name=tbl_name,
-                schema=tbl_dict.get("schema", {}),
-                defaults=tbl_dict.get("defaults", {}),
-                auto=tbl_dict.get("auto", {})
-            )
-            table.rows = tbl_dict.get("rows", [])
+        for tbl_name, tbl_dict in db_data.items():  # <- now tbl_dict exists
+            # Reconstruct schema classes
+            schema = {col: datatypes[tbl_dict["schema"][col]] for col in tbl_dict["schema"]}
+            
+            # Reconstruct defaults using SQLType parse
+            defaults = {col: schema[col](tbl_dict["defaults"][col]) for col in tbl_dict.get("defaults", {})}
+
+            # Reconstruct auto values
+            auto = {col: schema[col](tbl_dict["auto"][col]) for col in tbl_dict.get("auto", {})}
+
+            # Reconstruct rows
+            rows = []
+            for row_dict in tbl_dict.get("rows", []):
+                row = {col: schema[col](row_dict[col]) for col in row_dict}
+                rows.append(row)
+
+            table = Table(tbl_name, schema, defaults, auto)
+            table.rows = rows
             self.active_db[tbl_name] = table
 
     def save_database_file(self):
         db_data = {}
+
+        def serialize_value(val):
+            from datetime import date, time
+            # If val is a SQLType instance, get its inner value
+            if hasattr(val, "value"):
+                val = val.value
+            # Serialize date and time objects to strings
+            if isinstance(val, date):
+                return val.isoformat()  # YYYY-MM-DD
+            if isinstance(val, time):
+                return val.strftime("%H:%M:%S")  # HH:MM:SS
+            return val
+
         for tbl_name, table in self.active_db.items():
             db_data[tbl_name] = {
-                "schema": table.schema,
-                "defaults": table.defaults,
-                "auto": table.auto,
-                "rows": table.rows
+                # Save class names for schema
+                "schema": {col: table.schema[col].__name__ for col in table.schema},
+                # Serialize default and auto values
+                "defaults": {col: serialize_value(table.defaults[col]) for col in table.defaults},
+                "auto": {col: serialize_value(table.auto[col]) for col in table.auto},
+                "rows": [
+                    {col: serialize_value(row[col]) for col in row}
+                    for row in table.rows
+                ]
             }
+
         with open(self.active_db_name, "wb") as f:
             msgpack.pack(db_data, f)
