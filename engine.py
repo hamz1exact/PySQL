@@ -6,6 +6,7 @@ import re
 from checker import *
 from datatypes import *
 
+
 db_manager = DatabaseManager()
 
 class Lexer:
@@ -176,13 +177,7 @@ class Parser:
 
     def parse_select_statement(self):
         self.eat("SELECT")
-        func = None
-        if self.current_token() and self.current_token()[0] == "FUNC":
-            self.eat("FUNC")
-            func = self.parse_count_function()
-            columns = [func.arg]
-        else:
-            columns = self.parse_columns()
+        columns = self.parse_columns()
         self.eat("FROM")
         table = self.parse_table()
         where = None
@@ -191,7 +186,8 @@ class Parser:
             self.eat("WHERE")
             where = self.parse_condition_tree()
         self.eat("SEMICOLON")
-        return SelectStatement(columns, func, table, where)
+
+        return SelectStatement(columns, table, where)
 
 
               
@@ -201,15 +197,42 @@ class Parser:
             self.eat("STAR")
             return ["*"]
         columns = []
+        alias = "?column?"
+        opn = False
+        if self.current_token() and self.current_token()[0] == "OPDBK":
+            self.eat("OPDBK")
+            opn = True
         while True:
-            var = self.eat("IDENTIFIER")
-            columns.append(var[1])
-            token = self.current_token()
-            if token and token[0] == "COMMA":
+            if self.current_token() and self.current_token()[0] == "FUNC":
+                func_name = self.eat("FUNC")[1]
+                self.eat("OPDBK")
+                if self.current_token() and self.current_token()[0] == "STAR":
+                    arg = self.eat("STAR")[1]
+                else:
+                    arg = self.eat("IDENTIFIER")[1]
+                self.eat("CLDBK")
+                if self.current_token() and self.current_token()[1] == "AS":
+                    self.eat("AS")
+                    alias = self.eat(self.current_token())[1] if self.current_token() and self.current_token()[0] in ("STRING", "IDENTIFIER") else "?column?"
+                columns.append(FunctionCall(func_name, arg, alias))
+                break
+                
+            elif self.current_token() and self.current_token()[0] == "IDENTIFIER":
+                var = self.eat("IDENTIFIER")[1]
+                columns.append(var)
+            
+            else:
+                raise SyntaxError(f"Expected column name or function, got {self.current_token()[0]}")
+            
+            if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
             else:
-                break
+                if opn:
+                    self.eat("CLDBK")
+                    break
+
         return columns
+                
 
 
 
@@ -353,8 +376,7 @@ class Parser:
         self.eat("DATABASE")
         db_name = self.eat("IDENTIFIER")[1]
         self.eat("SEMICOLON")
-        db_manager.create_database(db_name)
-        db_manager.use_database(db_name)
+        return CreateDatabseStatement(db_name)
 
 
 
@@ -404,31 +426,15 @@ class Parser:
 
         self.eat("CLDBK")  # )
         self.eat("SEMICOLON")
-        print("schema", schema)
-        print()
-        print("defaults", defaults)
-        print()
-        print("auto", auto)
-
-        table = Table(table_name, schema, defaults, auto)
-        db_manager.active_db[table_name] = table
-        db_manager.save_database_file()
-
-    def getDataType(self, col_type):
-        checker = {str:("PLAINSTR", "TEXT", "STR", "CHAR", "TIME", "DATE"),
-            int: ("INT", "FLOAT"),
-            bool: ("BOOLEAN")}
-        for key in checker:
-            if col_type in checker[key]:
-                return key
+        return CreateTableStatement(table_name, schema, defaults, auto)
+        
 
 
     def parse_use_statement(self):
         self.eat("USE")
         db_name = self.eat("IDENTIFIER")[1]
         self.eat("SEMICOLON")
-        db_manager.use_database(db_name)
-        db_manager.save_database_file()
+        return UseStatement(db_name)
 
     def parse_count_function(self):
         self.eat("OPDBK")

@@ -1,4 +1,5 @@
-from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
+from sql_ast import *
+from database_manager import Table
 from checker import *
 from datatypes import SQLType
 def execute(ast, database):
@@ -10,32 +11,42 @@ def execute(ast, database):
         execute_update_query(ast, database)
     elif isinstance(ast, DeleteStatement):
         execute_delete_query(ast, database)
+    elif isinstance(ast, CreateDatabseStatement):
+        execute_create_database_statement(ast, database)
+    elif isinstance(ast, CreateTableStatement):
+        execute_create_table_statement(ast, database)
+    elif isinstance(ast, UseStatement):
+        execute_use_statement(ast, database)
+    
 
 def execute_select_query(ast, database):
     table_name = ast.table
-    requested_columns = ast.columns if not ast.func else ast.func.arg
+    
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
+    
     table = database[table_name].rows
     table_schema = database[table_name].schema
-    if requested_columns == ['*'] or (ast.func and ast.func.arg == "*"):
-        columns_to_return = table[0].keys() if table else []
-    else:
-        for col in requested_columns:
-            if table and col not in table[0]:
-                raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
-        columns_to_return = requested_columns
-    result = []
-    cnt = 0
+    # Filter where rows
+    filtered_rows = []
     for row in table:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
-            if not ast.func:
-                selected_row = {col: row.get(col) for col in columns_to_return}
-                result.append(serialize_row(selected_row))
-            else:
-                cnt += 1
-        
-    return result if not ast.func else [{ast.func.alias:cnt}]
+            filtered_rows.append(row)
+    if ast.columns == ["*"]:
+        ast.columns = table[0].keys()
+    result = []
+    if any(isinstance(col, FunctionCall) for col in ast.columns):
+        result_row = {}
+        columns_to_return = table[0].keys() if table else []
+        for col in ast.columns:
+            if isinstance(col, FunctionCall):
+                result_row[col.alias] = execute_function(col, filtered_rows)
+            result = [result_row]   
+    else:
+        for row in filtered_rows:
+            selected_row = {col: row.get(col) for col in ast.columns}
+            result.append(serialize_row(selected_row))
+    return result
 
 def condition_evaluation(where, row, table_schema):
     if isinstance(where, Condition):
@@ -92,7 +103,7 @@ def execute_insert_query(ast, database):
         elif col_name in table_default:
             new_row[col_name] = table_default[col_name]
         else:
-            new_row[col_name] = None                
+            new_row[col_name] = None      
     table_rows.append(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
     
@@ -140,3 +151,34 @@ def execute_delete_query(ast, database):
 def serialize_row(row):
     """Convert SQLType objects to raw Python values for display or SELECT output."""
     return {col: (val.value if isinstance(val, SQLType) else val) for col, val in row.items()}
+
+
+def execute_create_database_statement(ast, database):
+        database.create_database(ast.database_name)
+        database.use_database(ast.database_name)
+        
+def execute_create_table_statement(ast, database):
+        table = Table(ast.table_name, ast.schema, ast.defaults, ast.auto)
+        database.active_db[ast.table_name] = table
+        database.save_database_file()
+        
+def execute_use_statement(ast, database):
+        database.use_database(ast.database_name)
+        database.save_database_file()
+
+
+def execute_function(function, rows):
+    func_name = function.function_name
+    arguments = function.arg
+    
+    if func_name == "COUNT":
+        if arguments == "*":
+            return len(rows)
+        else:
+            return len([row for row in rows if (row.get(arguments).value if isinstance(row.get(arguments), SQLType) else row.get(arguments)) is not None])
+        
+            
+        
+        
+    
+    

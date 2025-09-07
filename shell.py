@@ -497,11 +497,11 @@ class SQLShell:
             elif token_type == "CREATE":
                 if next_token_type == "DATABASE":
                     ast = parser.parse_create_database()
-                    result = execute(ast, database)
+                    result = execute(ast, db_manager)
                     self._handle_ddl_result("CREATE DATABASE",  start_time)
                 elif next_token_type == "TABLE":
                     ast = parser.parse_create_table()
-                    print(ast)
+                    execute(ast, db_manager)
                     db_manager.save_database_file()
                     self._handle_ddl_result("CREATE TABLE",  start_time)
                 else:
@@ -528,7 +528,7 @@ class SQLShell:
                 
             elif token_type == "USE":
                 ast = parser.parse_use_statement()
-                result = execute(ast, database)
+                result = execute(ast, db_manager)
                 self._handle_use_result("USE", start_time)
                 
             else:

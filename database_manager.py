@@ -1,7 +1,7 @@
 import os
 import platform
 import msgpack
-from datatypes import datatypes  # assuming Lexer.datatypes contains your SQLType classes
+from datatypes import datatypes, SERIAL  # assuming Lexer.datatypes contains your SQLType classes
 
 class Table:
     def __init__(self, name, schema, defaults=None, auto=None):
@@ -82,7 +82,7 @@ class DatabaseManager:
             db_data = msgpack.unpack(f)
 
         self.active_db = {}
-        for tbl_name, tbl_dict in db_data.items():  # <- now tbl_dict exists
+        for tbl_name, tbl_dict in db_data.items():
             # Reconstruct schema classes
             schema = {col: datatypes[tbl_dict["schema"][col]] for col in tbl_dict["schema"]}
             
@@ -100,6 +100,17 @@ class DatabaseManager:
 
             table = Table(tbl_name, schema, defaults, auto)
             table.rows = rows
+
+            # ✅ Fix SERIAL counters
+            for col, col_type in schema.items():
+                if col_type == SERIAL:  # check if this column is SERIAL
+                    max_val = 0
+                    for row in rows:
+                        if row[col] is not None:
+                            max_val = max(max_val, int(row[col].value))
+                    if col in table.auto:
+                        table.auto[col].current = max_val + 1  # resume from last
+
             self.active_db[tbl_name] = table
 
     def save_database_file(self):

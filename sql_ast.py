@@ -1,7 +1,6 @@
 class SelectStatement:
-    def __init__(self, columns = None, func = None, table = None, where = None):
+    def __init__(self, columns = None, table = None, where = None):
         self.columns = columns
-        self.func = func
         self.table = table
         self.where = where        
         
@@ -37,18 +36,24 @@ class DeleteStatement:
         self.table = table
         self.where = where
         
-class Functions:
-    def __init__(self, arg, alias = "?column?"):
+class CreateDatabseStatement:
+    def __init__(self, database_name):
+        self.database_name = database_name
+        
+class CreateTableStatement:
+    def __init__(self, table_name, schema, defaults, auto):
+        self.table_name = table_name
+        self.schema = schema
+        self.defaults = defaults
+        self.auto = auto
+
+class UseStatement:
+    def __init__(self, database_name):
+        self.database_name = database_name
+        
+        
+class FunctionCall:
+    def __init__(self, function_name, arg, alias = "?column?"):
+        self.function_name = function_name
         self.alias = alias
         self.arg = arg
-        
-class COUNT(Functions):
-    def __init__(self, arg, alias="?column?"):
-        super().__init__(arg, alias)
-    
-        
-        
-c = COUNT("*", "allwors")
-print(c.arg)
-        
-        

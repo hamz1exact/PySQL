@@ -1,11 +1,24 @@
 from datetime import datetime, time
+# from errors import 
+# class SQLType:
+#     def __init__(self, value=None):
+#         if value is not None:
+#             self.value = self.parse(value)
+#             self.validate(self.value)
+#             self.sqltype = self.Sqltype()
+            
+#         else:
+#             self.value = self.parse(value)
+#             self.sqltype = self.Sqltype()
 class SQLType:
     def __init__(self, value=None):
         if value is not None:
             self.value = self.parse(value)
             self.validate(self.value)
+            self.sqltype = self.Sqltype()
         else:
             self.value = None
+            # self.sqltype = self.Sqltype()
     def __eq__(self, other):
         return self.value == (other.value if isinstance(other, SQLType) else other)
 
@@ -40,7 +53,10 @@ class SQLType:
         
 class INT(SQLType):
     def parse(self, value):
-        
+        if value == "NULL":
+            return str(value).upper()
+        if value == None:
+            return None
         if isinstance(value, int):
             return value
         
@@ -60,8 +76,13 @@ class INT(SQLType):
         raise ValueError(f"Cannot convert {value} of type {type(value)} to INT")
     
     def validate(self, value):
-        if not isinstance(value, int) or isinstance(value, bool):
+        if isinstance(value, str):
+            pass
+        elif not isinstance(value, int) or isinstance(value, bool):
             raise ValueError(f"INT expects an integer, got {value} ({type(value)})")
+    
+    def Sqltype(self):
+        return "class '<int>'"
         
 
     
@@ -84,7 +105,9 @@ class FLOAT(SQLType):
     
     def validate(self, value):
         if not isinstance(value, float) or isinstance(value, bool):
-                    raise ValueError(f"FLOAT expects an float, got {value} ({type(value)})")
+                raise ValueError(f"FLOAT expects an float, got {value} ({type(value)})")
+    def Sqltype(self):
+        return "class '<float>'"
 
 class BOOLEAN(SQLType):
     def parse(self, value):
@@ -117,6 +140,8 @@ class BOOLEAN(SQLType):
     def validate(self, value):
         if not isinstance(value, bool):
             raise ValueError(f"BOOLEAN expects a boolean, got {value} ({type(value)})")
+    def Sqltype(self):
+        return "class '<bool>'"
         
 class CHAR(SQLType):
     def parse(self, value):
@@ -127,6 +152,8 @@ class CHAR(SQLType):
     def validate(self, value):
         if not isinstance(value, str) or len(value) != 1:
             raise ValueError(f"CHAR expects a single character, got '{value}' (length {len(value)})")
+    def Sqltype(self):
+        return "<class 'char'>"
 
 class VARCHAR(SQLType):
     def parse(self, value):
@@ -136,6 +163,8 @@ class VARCHAR(SQLType):
     def validate(self, value):
         if not isinstance(value, str):
             raise ValueError(f"VARCHAR expects a string, got {value} ({type(value)})")
+    def Sqltype(self):
+        return type(self.value)
         
 class TEXT(SQLType):
     def parse(self, value):
@@ -147,9 +176,10 @@ class TEXT(SQLType):
     def validate(self, value):
         if not isinstance(value, str):
             raise ValueError(f"TEXT expects a string, got {value} ({type(value)})")
+    def Sqltype(self, value):
+        return type(value)
 
 from datetime import datetime, date
-  # or wherever your base class is
 
 class DATE(SQLType):
     def parse(self, value):
@@ -168,6 +198,8 @@ class DATE(SQLType):
     def validate(self, value):
         # Validation just calls parse (raises error if invalid)
         self.parse(value)
+    def Sqltype(self):
+        return "<class 'date'>"
             
 
 class TIME(SQLType):
@@ -189,6 +221,8 @@ class TIME(SQLType):
     def validate(self, value):
         if not isinstance(value, time):
             raise ValueError(f"TIME expects a datetime.time object, got {value} ({type(value)})")
+    def Sqltype(self):
+        return "<class 'time'>"
         
 class SERIAL(SQLType):
     def __init__(self, value=None):
@@ -213,7 +247,27 @@ class SERIAL(SQLType):
         if not isinstance(value, int) or isinstance(value, bool):
             raise ValueError(f"SERIAL expects an integer, got {value} ({type(value)})")
         
-
+    def Sqltype(self):
+        return "<class 'auto_increment'>"
+        
+class NULLVALUE(SQLType):
+    def __init__(self, value=None):
+        super().__init__(value)
+    
+    def parse(self, value):
+        if value is None or value.lower() in ("none", 'null'):
+            value = str("NULL")
+            return value
+        else:
+            raise ValueError('error from NONE class Type')
+        
+    def validate(self, value):
+        pass
+    
+    def Sqltype(self):
+        return type(None)
+        
+    
 
 datatypes = {
     "INT": INT,
@@ -227,4 +281,9 @@ datatypes = {
     "SERIAL": SERIAL,
     "DATE": DATE,
     "TIME": TIME,
+    "NONE": NULLVALUE
 }
+
+x = 0
+map = {x: SERIAL(10)}
+print(map[x].next())
