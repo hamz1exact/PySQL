@@ -13,12 +13,12 @@ def execute(ast, database):
 
 def execute_select_query(ast, database):
     table_name = ast.table
+    requested_columns = ast.columns if not ast.func else ast.func.arg
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
     table = database[table_name].rows
-    requested_columns = ast.columns
     table_schema = database[table_name].schema
-    if requested_columns == ['*']:
+    if requested_columns == ['*'] or (ast.func and ast.func.arg == "*"):
         columns_to_return = table[0].keys() if table else []
     else:
         for col in requested_columns:
@@ -26,11 +26,16 @@ def execute_select_query(ast, database):
                 raise ValueError(f"Column '{col}' does not exist in table '{table_name}'")
         columns_to_return = requested_columns
     result = []
+    cnt = 0
     for row in table:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
-            selected_row = {col: row.get(col) for col in columns_to_return}
-            result.append(serialize_row(selected_row))
-    return result
+            if not ast.func:
+                selected_row = {col: row.get(col) for col in columns_to_return}
+                result.append(serialize_row(selected_row))
+            else:
+                cnt += 1
+        
+    return result if not ast.func else [{ast.func.alias:cnt}]
 
 def condition_evaluation(where, row, table_schema):
     if isinstance(where, Condition):

@@ -9,7 +9,7 @@ class Table:
         self.schema = schema                  # dict[col_name] = SQLType class
         self.defaults = defaults or {}        # dict[col_name] = SQLType instance
         self.auto = auto or {}                # dict[col_name] = SQLType instance (SERIAL)
-        self.rows = []                        # list of dicts with parsed Python values
+        self.rows = []                       # list of dicts with parsed Python values
 
 class DatabaseManager:
     def __init__(self):

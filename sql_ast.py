@@ -1,8 +1,10 @@
 class SelectStatement:
-    def __init__(self, columns, table, where = None):
+    def __init__(self, columns = None, func = None, table = None, where = None):
         self.columns = columns
+        self.func = func
         self.table = table
-        self.where = where
+        self.where = where        
+        
 
 class Condition:
     def __init__(self, column, operator, value):
@@ -34,3 +36,19 @@ class DeleteStatement:
     def __init__(self, table, where = None):
         self.table = table
         self.where = where
+        
+class Functions:
+    def __init__(self, arg, alias = "?column?"):
+        self.alias = alias
+        self.arg = arg
+        
+class COUNT(Functions):
+    def __init__(self, arg, alias="?column?"):
+        super().__init__(arg, alias)
+    
+        
+        
+c = COUNT("*", "allwors")
+print(c.arg)
+        
+        

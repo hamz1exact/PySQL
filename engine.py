@@ -1,4 +1,4 @@
-from sql_ast import Condition, LogicalCondition, SelectStatement, InsertStatement, UpdateStatement, DeleteStatement
+from sql_ast import *
 from executor import execute 
 from datetime import datetime
 from database_manager import DatabaseManager, Table
@@ -13,8 +13,8 @@ class Lexer:
     keywords = (
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
-        "USE", "DEFAULT"
-    )
+        "USE", "DEFAULT", "ALIAS", "AS")
+    functions = {"COUNT", "SUM", "MAX", "MIN"}
     datatypes = {
         "INT": INT,
         "INTEGER": INT,
@@ -62,6 +62,8 @@ class Lexer:
                     self.tokens.append(("BOOLEAN", True))
                 elif word.lower() == "false":
                     self.tokens.append(("BOOLEAN", False))
+                elif upper_word in Lexer.functions:
+                    self.tokens.append(("FUNC", upper_word))
                 else:
                     self.tokens.append(("IDENTIFIER", word))
                 continue
@@ -174,7 +176,13 @@ class Parser:
 
     def parse_select_statement(self):
         self.eat("SELECT")
-        columns = self.parse_columns()
+        func = None
+        if self.current_token() and self.current_token()[0] == "FUNC":
+            self.eat("FUNC")
+            func = self.parse_count_function()
+            columns = [func.arg]
+        else:
+            columns = self.parse_columns()
         self.eat("FROM")
         table = self.parse_table()
         where = None
@@ -183,7 +191,7 @@ class Parser:
             self.eat("WHERE")
             where = self.parse_condition_tree()
         self.eat("SEMICOLON")
-        return SelectStatement(columns, table, where)
+        return SelectStatement(columns, func, table, where)
 
 
               
@@ -421,3 +429,23 @@ class Parser:
         self.eat("SEMICOLON")
         db_manager.use_database(db_name)
         db_manager.save_database_file()
+
+    def parse_count_function(self):
+        self.eat("OPDBK")
+        if self.current_token():
+            if self.current_token()[0] == "STAR":
+                self.eat("STAR")
+                arg = "*"
+            else:
+                arg = self.eat("IDENTIFIER")[1]
+        self.eat("CLDBK")
+        if self.current_token() and self.current_token()[0].upper() == "AS":
+            self.eat("AS")
+            alias = self.eat("IDENTIFIER")[1]
+            return COUNT(arg, alias)
+        return COUNT(arg)
+    
+            
+        
+        
+        
