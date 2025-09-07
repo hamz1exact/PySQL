@@ -337,6 +337,7 @@ class SQLShell:
             '\\import': self._cmd_import,
             '\\version': self._cmd_version,
             '\\status': self._cmd_status,
+            '\\r': self._reload_engine,
         }
     
     def print_banner(self):
@@ -964,7 +965,27 @@ Timing: {'ON' if self.config.timing else 'OFF'}
 Echo: {'ON' if self.config.echo_queries else 'OFF'}
 Table format: {self.config.table_format}
 """)
-
+    def _reload_engine(self, args):
+        try:
+            import importlib
+            import engine
+            import executor
+            import database_manager
+            import datatypes
+            
+            importlib.reload(datatypes)
+            importlib.reload(database_manager)
+            importlib.reload(engine)
+            importlib.reload(executor)
+            
+            # Re-import the updated db_manager
+            from engine import db_manager
+            globals()['db_manager'] = db_manager
+            
+            print(f"{Colors.GREEN}Modules reloaded successfully{Colors.RESET}")
+        
+        except Exception as e:
+            print(f"{Colors.RED}Reload failed: {e}{Colors.RESET}")
 
 def main():
     """Main entry point"""

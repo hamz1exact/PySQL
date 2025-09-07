@@ -1,7 +1,8 @@
 from sql_ast import *
 from database_manager import Table
 from checker import *
-from datatypes import SQLType
+from datatypes import *
+from errors import *
 def execute(ast, database):
     if isinstance(ast, SelectStatement):
         return execute_select_query(ast, database)
@@ -21,10 +22,8 @@ def execute(ast, database):
 
 def execute_select_query(ast, database):
     table_name = ast.table
-    
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
-    
     table = database[table_name].rows
     table_schema = database[table_name].schema
     # Filter where rows
@@ -34,13 +33,21 @@ def execute_select_query(ast, database):
             filtered_rows.append(row)
     if ast.columns == ["*"]:
         ast.columns = table[0].keys()
+    else:
+        for col in ast.columns:
+            if isinstance(col, FunctionCall):
+                if not col.arg in table_schema:
+                    raise ColumnNotFoundError(col.arg, table_name)
+            else:
+                if col not in table_schema:
+                    raise ColumnNotFoundError(col, table_name)
+                    
     result = []
     if any(isinstance(col, FunctionCall) for col in ast.columns):
         result_row = {}
-        columns_to_return = table[0].keys() if table else []
         for col in ast.columns:
             if isinstance(col, FunctionCall):
-                result_row[col.alias] = execute_function(col, filtered_rows)
+                result_row[col.alias] = execute_function(col, filtered_rows, table_schema)
             result = [result_row]   
     else:
         for row in filtered_rows:
@@ -50,8 +57,12 @@ def execute_select_query(ast, database):
 
 def condition_evaluation(where, row, table_schema):
     if isinstance(where, Condition):
-        col = row[where.column]
-        val = table_schema[where.column](where.value)
+        if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
+            col = row[where.column].value.lower()
+            val = table_schema[where.column](where.value).value.lower()
+        else:
+            col = row[where.column]
+            val = table_schema[where.column](where.value)
         op  = where.operator
         
         if op == "=": return col == val
@@ -167,15 +178,24 @@ def execute_use_statement(ast, database):
         database.save_database_file()
 
 
-def execute_function(function, rows):
+def execute_function(function, rows, table_schema):
     func_name = function.function_name
     arguments = function.arg
-    
+    total = 0
     if func_name == "COUNT":
         if arguments == "*":
             return len(rows)
         else:
             return len([row for row in rows if (row.get(arguments).value if isinstance(row.get(arguments), SQLType) else row.get(arguments)) is not None])
+    elif func_name == "SUM":
+        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
+            for row in rows:
+                total += row[function.arg].value
+        else:
+            raise ValueError(f"SUM Function works Only with INT/FLOAT columns")
+        return total
+        
+            
         
             
         

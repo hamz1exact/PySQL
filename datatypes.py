@@ -107,7 +107,7 @@ class FLOAT(SQLType):
         if not isinstance(value, float) or isinstance(value, bool):
                 raise ValueError(f"FLOAT expects an float, got {value} ({type(value)})")
     def Sqltype(self):
-        return "class '<float>'"
+        return float
 
 class BOOLEAN(SQLType):
     def parse(self, value):
@@ -283,7 +283,3 @@ datatypes = {
     "TIME": TIME,
     "NONE": NULLVALUE
 }
-
-x = 0
-map = {x: SERIAL(10)}
-print(map[x].next())

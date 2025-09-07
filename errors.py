@@ -82,7 +82,3 @@ class UniqueConstraintError(ConstraintError):
     def __init__(self, column_name, value):
         super().__init__(f"Duplicate value '{value}' for UNIQUE column '{column_name}'", "UNIQUE_VIOLATION")
         
-x = INT(1)
-b = BOOLEAN(True)
-
-raise UnexpectedDataType('age', x.sqltype, b.sqltype)

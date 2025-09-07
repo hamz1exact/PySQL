@@ -116,6 +116,7 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
+        # print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -211,9 +212,12 @@ class Parser:
                 else:
                     arg = self.eat("IDENTIFIER")[1]
                 self.eat("CLDBK")
-                if self.current_token() and self.current_token()[1] == "AS":
+                if self.current_token() and self.current_token()[0] == "AS":
                     self.eat("AS")
-                    alias = self.eat(self.current_token())[1] if self.current_token() and self.current_token()[0] in ("STRING", "IDENTIFIER") else "?column?"
+                    if self.current_token()[0] == "STRING": alias = self.eat("STRING")[1]
+                    elif self.current_token()[0] == "IDENTIFIER": alias = self.eat("IDENTIFIER")[1]
+                    else:
+                        raise ValueError(f"Couldn't use {self.current_token()[1]} as an Alias, please use your alias inside -> ''")
                 columns.append(FunctionCall(func_name, arg, alias))
                 break
                 
@@ -226,10 +230,11 @@ class Parser:
             
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
+                continue
             else:
                 if opn:
                     self.eat("CLDBK")
-                    break
+                break
 
         return columns
                 
@@ -436,22 +441,5 @@ class Parser:
         self.eat("SEMICOLON")
         return UseStatement(db_name)
 
-    def parse_count_function(self):
-        self.eat("OPDBK")
-        if self.current_token():
-            if self.current_token()[0] == "STAR":
-                self.eat("STAR")
-                arg = "*"
-            else:
-                arg = self.eat("IDENTIFIER")[1]
-        self.eat("CLDBK")
-        if self.current_token() and self.current_token()[0].upper() == "AS":
-            self.eat("AS")
-            alias = self.eat("IDENTIFIER")[1]
-            return COUNT(arg, alias)
-        return COUNT(arg)
-    
-            
-        
         
         
