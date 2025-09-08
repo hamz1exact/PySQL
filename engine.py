@@ -103,7 +103,7 @@ class Lexer:
             if char == '(':
                 if self.tokens and self.tokens[-1][1] == "NOT":
                     self.tokens.pop()
-                    self.tokens.append(("LGN", "NOT"))
+                    self.tokens.append(("NegationCondition", "NOT"))
                 self.tokens.append(("OPEN_PAREN", char))
                 self.pos += 1
                 continue
@@ -326,7 +326,9 @@ class Parser:
 
     def parse_condition_tree(self):
         # --- Parse the left condition ---
-        col = self.eat("IDENTIFIER")[1]      # Column name
+        
+        if self.current_token()[0] == "IDENTIFIER":
+            col = self.eat("IDENTIFIER")[1]      # Column name
         not_in_Membership = False
         
         
@@ -394,8 +396,21 @@ class Parser:
             
             # Create the membership node with correct IN/NOT IN logic
             left_node = Membership(col, args, IN=not not_in_membership)
-                    
-            
+        
+
+        elif self.current_token()[0] =="NegationCondition":
+            self.eat("NegationCondition")
+            self.eat("OPEN_PAREN")
+            col = self.eat("IDENTIFIER")[1]
+            op = self.eat("OPT")[1]
+            if self.current_token()[0] in ("STRING", "BOOLEAN", "NUMBER"):
+                token, token_val = self.current_token()
+                val = token_val
+                self.eat(token)
+                left_node = NegationCondition(Condition(col, op, val))
+            self.eat("CLOSE_PAREN")
+
+
         elif self.current_token()[0] == "OPT":
             op = self.eat("OPT")[1]
             if self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):

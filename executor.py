@@ -56,6 +56,22 @@ def execute_select_query(ast, database):
     return result
 
 def condition_evaluation(where, row, table_schema):
+    if isinstance(where, NegationCondition):
+        if isinstance(where.expression, Condition):
+            if (isinstance(row[where.expression.column], VARCHAR) and isinstance(table_schema[where.expression.column](where.expression.value), VARCHAR)) or (isinstance(row[where.expression.column], TEXT) and isinstance(table_schema[where.expression.column](where.expression.value), TEXT)):
+                col = row[where.expression.column].value.lower()
+                val = table_schema[where.expression.column](where.expression.value).value .lower()
+            else:
+                col = row[where.expression.column]
+                val = table_schema[where.expression.column](where.expression.value)
+            op  = where.expression.operator
+            if op == "=": return not(col == val)
+            if op == "!=": return not(col != val)
+            if op == "<": return not(col < val)
+            if op == "<=": return not(col <= val)
+            if op == ">": return not(col > val)
+            if op == ">=": return not(col >= val)
+            raise ValueError(f"Unknown operator {op}")
     if isinstance(where, Membership):
         value = row.get(where.col).value if issubclass(table_schema[where.col], SQLType) else row.get(where.col)
         if type(value) == str: value = value.lower()

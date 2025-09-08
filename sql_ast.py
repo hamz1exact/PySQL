@@ -68,3 +68,8 @@ class Membership:
         self.col = col
         self.IN = IN
         self.args = args
+
+class NegationCondition:
+    def __init__(self, expression):
+        self.expression = expression
+        
