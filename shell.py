@@ -2,7 +2,19 @@
 """
 SQL Shell Pro - A professional command-line interface for your SQL engine
 """
-
+import sys
+import os
+import time
+import json
+import csv
+import threading
+import queue
+from datetime import datetime
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Union
+import argparse
+import importlib
+import subprocess
 import sys
 import os
 import time
@@ -966,26 +978,41 @@ Echo: {'ON' if self.config.echo_queries else 'OFF'}
 Table format: {self.config.table_format}
 """)
     def _reload_engine(self, args):
+        """Reload SQL engine modules"""
         try:
-            import importlib
-            import engine
-            import executor
-            import database_manager
-            import datatypes
+            # Show what we're reloading
+            modules_to_reload = ['datatypes', 'database_manager', 'engine', 'executor']
+            print(f"Modules to reload: {', '.join(modules_to_reload)}\n")
             
-            importlib.reload(datatypes)
-            importlib.reload(database_manager)
-            importlib.reload(engine)
-            importlib.reload(executor)
+            # Reload modules in dependency order
+            for module_name in modules_to_reload:
+                try:
+                    if module_name in sys.modules:
+                        importlib.reload(sys.modules[module_name])
+                        print(f" {Colors.GREEN}  Reloaded {module_name}{Colors.RESET}")
+                    else:
+                        # Try to import if not already imported
+                        __import__(module_name)
+                        print(f"  {Colors.GREEN} Imported {module_name}{Colors.RESET}")
+                except Exception as e:
+                    print(f"  {Colors.RED} Failed to reload {module_name}: {e}{Colors.RESET}")
             
             # Re-import the updated db_manager
-            from engine import db_manager
-            globals()['db_manager'] = db_manager
+            try:
+                from engine import db_manager
+                globals()['db_manager'] = db_manager
+                print(f" {Colors.GREEN}  Updated global db_manager reference{Colors.RESET}", '\n')
+            except Exception as e:
+                print(f" {Colors.RED}  Failed to update db_manager: {e}{Colors.RESET}", '\n')
             
-            print(f"{Colors.GREEN}Modules reloaded successfully{Colors.RESET}")
+            # Update prompt in case database connection changed
+            
+            print(f"{Colors.BOLD}-> Engine reload completed successfully!\n{Colors.RESET}")
         
         except Exception as e:
-            print(f"{Colors.RED}Reload failed: {e}{Colors.RESET}")
+            print(f"{Colors.RED} Reload failed: {e}{Colors.RESET}", 'error')
+            print(f"{Colors.RED}Check your module files for syntax errors.{Colors.RESET}", 'warning')
+    
 
 def main():
     """Main entry point"""

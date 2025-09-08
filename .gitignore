@@ -20,7 +20,7 @@ dist/
 *.egg-info/
 .eggs/
 others/
-
+c.py
 # Virtual environment
 venv/
 env/

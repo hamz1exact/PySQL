@@ -59,7 +59,7 @@ def condition_evaluation(where, row, table_schema):
     if isinstance(where, Condition):
         if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
             col = row[where.column].value.lower()
-            val = table_schema[where.column](where.value).value.lower()
+            val = table_schema[where.column](where.value).value .lower()
         else:
             col = row[where.column]
             val = table_schema[where.column](where.value)
@@ -108,13 +108,14 @@ def execute_insert_query(ast, database):
         if col_name in columns:
             idx = columns.index(col_name)
             val = values[idx]
+            print(val)
             new_row[col_name] = table_schema[col_name](val)
         elif col_name in table_auto:
             new_row[col_name] = table_auto[col_name].next()
         elif col_name in table_default:
             new_row[col_name] = table_default[col_name]
         else:
-            new_row[col_name] = None      
+            new_row[col_name] = NULLVALUE('NULL')      
     table_rows.append(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
     

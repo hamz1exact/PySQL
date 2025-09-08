@@ -15,6 +15,12 @@ class Lexer:
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT", "ALIAS", "AS")
+    AbsenceOfValue = {
+        "NONE", "NULL", "EMPTY"
+    }
+    nullchecks = {
+        "IS", "NOT"
+    }
     functions = {"COUNT", "SUM", "MAX", "MIN"}
     datatypes = {
         "INT": INT,
@@ -55,6 +61,17 @@ class Lexer:
                 upper_word = word.upper()
                 if upper_word in Lexer.keywords:
                     self.tokens.append((upper_word, upper_word))
+                elif upper_word in Lexer.AbsenceOfValue:
+                    self.tokens.append(("NONE", upper_word))
+                elif upper_word in Lexer.nullchecks:
+                    if upper_word == "IS":
+                        self.tokens.append(("OPT", "="))
+                    elif upper_word == "NOT":
+                        if self.tokens and  self.tokens[-1] == ("OPT", "="):
+                            self.tokens.pop()
+                            self.tokens.append(("OPT", "!="))
+                        else:
+                            self.tokens.append(("OPT", "!="))
                 elif upper_word in Lexer.MainOperators:
                     self.tokens.append(("MAINOPT", upper_word))
                 elif upper_word in Lexer.datatypes:
@@ -116,7 +133,7 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        # print(self.tokens)
+        print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -304,6 +321,8 @@ class Parser:
         # --- Determine the type of value ---
         token_type, token_value = self.current_token()
         if token_type in ("NUMBER", "STRING", "BOOLEAN"):
+            val = self.eat(token_type)[1]
+        elif token_type in Lexer.AbsenceOfValue:
             val = self.eat(token_type)[1]
         else:
             raise SyntaxError(f"Unexpected token type '{token_type}' in WHERE clause for value")

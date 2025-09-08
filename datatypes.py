@@ -176,8 +176,8 @@ class TEXT(SQLType):
     def validate(self, value):
         if not isinstance(value, str):
             raise ValueError(f"TEXT expects a string, got {value} ({type(value)})")
-    def Sqltype(self, value):
-        return type(value)
+    def Sqltype(self):
+        return type(self.value)
 
 from datetime import datetime, date
 
@@ -255,7 +255,7 @@ class NULLVALUE(SQLType):
         super().__init__(value)
     
     def parse(self, value):
-        if value is None or value.lower() in ("none", 'null'):
+        if value is None or value.lower() in ("none", 'null', 'empty'):
             value = str("NULL")
             return value
         else:
@@ -267,8 +267,6 @@ class NULLVALUE(SQLType):
     def Sqltype(self):
         return type(None)
         
-    
-
 datatypes = {
     "INT": INT,
     "INTEGER": INT,
