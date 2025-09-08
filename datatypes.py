@@ -256,7 +256,7 @@ class NULLVALUE(SQLType):
     
     def parse(self, value):
         if value is None or value.lower() in ("none", 'null', 'empty'):
-            value = str("NULL")
+            value = None
             return value
         else:
             raise ValueError('error from NONE class Type')

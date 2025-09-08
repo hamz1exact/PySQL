@@ -56,6 +56,19 @@ def execute_select_query(ast, database):
     return result
 
 def condition_evaluation(where, row, table_schema):
+    if isinstance(where, Membership):
+        value = row.get(where.col).value if issubclass(table_schema[where.col], SQLType) else row.get(where.col)
+        if type(value) == str: value = value.lower()
+        if where.IN:
+            return value in where.args
+        else:
+            return value not in where.args
+    if isinstance(where, CheckNullColumn):
+        value = row.get(where.column).value if issubclass(table_schema[where.column], SQLType) else row.get(where.column)
+        if where.isNull:
+            return value is None
+        else:
+            return value is not None
     if isinstance(where, Condition):
         if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
             col = row[where.column].value.lower()
@@ -115,7 +128,7 @@ def execute_insert_query(ast, database):
         elif col_name in table_default:
             new_row[col_name] = table_default[col_name]
         else:
-            new_row[col_name] = NULLVALUE('NULL')      
+            new_row[col_name] = None     
     table_rows.append(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
     

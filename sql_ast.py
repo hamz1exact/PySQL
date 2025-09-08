@@ -57,3 +57,14 @@ class FunctionCall:
         self.function_name = function_name
         self.alias = alias
         self.arg = arg
+        
+class CheckNullColumn:
+    def __init__(self, column, isNull = True):
+        self.column = column
+        self.isNull = isNull
+
+class Membership:
+    def __init__(self, col, args, IN = True):
+        self.col = col
+        self.IN = IN
+        self.args = args

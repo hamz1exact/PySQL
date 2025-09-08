@@ -19,7 +19,10 @@ class Lexer:
         "NONE", "NULL", "EMPTY"
     }
     nullchecks = {
-        "IS", "NOT"
+        "IS"
+    }
+    membership = {
+        "IN"
     }
     functions = {"COUNT", "SUM", "MAX", "MIN"}
     datatypes = {
@@ -54,24 +57,28 @@ class Lexer:
                 number = self.get_number()
                 self.tokens.append(("NUMBER", number))
                 continue
-
             # --- Identifiers, keywords, booleans, datatypes ---
             if char.isalpha():
                 word = self.getFullInput()
                 upper_word = word.upper()
                 if upper_word in Lexer.keywords:
                     self.tokens.append((upper_word, upper_word))
+                elif upper_word == "NOT":
+                    if self.tokens and self.tokens[-1][1] == "IS":
+                        self.tokens.append(("NULLCHECK", "NOT"))
+                    else:
+                        self.tokens.append(("NOT", "NOT"))
                 elif upper_word in Lexer.AbsenceOfValue:
-                    self.tokens.append(("NONE", upper_word))
+                    self.tokens.append(("NULL", None))
+                elif upper_word in Lexer.membership:
+                    if self.tokens and self.tokens[-1][1] == "NOT":
+                        self.tokens.pop()
+                        self.tokens.append(("MEMBERSHIP", "NOT"))
+                    self.tokens.append(("MEMBERSHIP", upper_word))
+
                 elif upper_word in Lexer.nullchecks:
-                    if upper_word == "IS":
-                        self.tokens.append(("OPT", "="))
-                    elif upper_word == "NOT":
-                        if self.tokens and  self.tokens[-1] == ("OPT", "="):
-                            self.tokens.pop()
-                            self.tokens.append(("OPT", "!="))
-                        else:
-                            self.tokens.append(("OPT", "!="))
+                    
+                    self.tokens.append(("NULLCHECK", upper_word))
                 elif upper_word in Lexer.MainOperators:
                     self.tokens.append(("MAINOPT", upper_word))
                 elif upper_word in Lexer.datatypes:
@@ -94,11 +101,14 @@ class Lexer:
 
             # --- Parentheses ---
             if char == '(':
-                self.tokens.append(("OPDBK", char))
+                if self.tokens and self.tokens[-1][1] == "NOT":
+                    self.tokens.pop()
+                    self.tokens.append(("LGN", "NOT"))
+                self.tokens.append(("OPEN_PAREN", char))
                 self.pos += 1
                 continue
             if char == ')':
-                self.tokens.append(("CLDBK", char))
+                self.tokens.append(("CLOSE_PAREN", char))
                 self.pos += 1
                 continue
 
@@ -133,7 +143,8 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        print(self.tokens)
+        # print(self.tokens)
+        
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -217,18 +228,18 @@ class Parser:
         columns = []
         alias = "?column?"
         opn = False
-        if self.current_token() and self.current_token()[0] == "OPDBK":
-            self.eat("OPDBK")
+        if self.current_token() and self.current_token()[0] == "OPEN_PAREN":
+            self.eat("OPEN_PAREN")
             opn = True
         while True:
             if self.current_token() and self.current_token()[0] == "FUNC":
                 func_name = self.eat("FUNC")[1]
-                self.eat("OPDBK")
+                self.eat("OPEN_PAREN")
                 if self.current_token() and self.current_token()[0] == "STAR":
                     arg = self.eat("STAR")[1]
                 else:
                     arg = self.eat("IDENTIFIER")[1]
-                self.eat("CLDBK")
+                self.eat("CLOSE_PAREN")
                 if self.current_token() and self.current_token()[0] == "AS":
                     self.eat("AS")
                     if self.current_token()[0] == "STRING": alias = self.eat("STRING")[1]
@@ -250,7 +261,7 @@ class Parser:
                 continue
             else:
                 if opn:
-                    self.eat("CLDBK")
+                    self.eat("CLOSE_PAREN")
                 break
 
         return columns
@@ -279,22 +290,22 @@ class Parser:
     
 
     def parse_insert_columns(self):
-        self.eat("OPDBK")
+        self.eat("OPEN_PAREN")
         columns = []
         while self.current_token() and  (self.current_token()[0] == "IDENTIFIER" or self.current_token()[0] == "COMMA"):
             if self.current_token()[0] != 'COMMA':
                 columns.append(self.eat("IDENTIFIER")[1])
             else:
                 self.eat("COMMA")
-        self.eat("CLDBK")
+        self.eat("CLOSE_PAREN")
         return columns
     
     
     def parse_insert_values(self):
-        self.eat("OPDBK")  # (
+        self.eat("OPEN_PAREN")  # (
         values = []
 
-        while self.current_token() and self.current_token()[0] != "CLDBK":
+        while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
             # Skip commas
             if self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
@@ -310,25 +321,90 @@ class Parser:
                 )
             values.append(val)
 
-        self.eat("CLDBK")  # )
+        self.eat("CLOSE_PAREN")  # )
         return values
 
     def parse_condition_tree(self):
         # --- Parse the left condition ---
         col = self.eat("IDENTIFIER")[1]      # Column name
-        op  = self.eat("OPT")[1]             # Operator (=, >, <, etc.)
-
-        # --- Determine the type of value ---
-        token_type, token_value = self.current_token()
-        if token_type in ("NUMBER", "STRING", "BOOLEAN"):
-            val = self.eat(token_type)[1]
-        elif token_type in Lexer.AbsenceOfValue:
-            val = self.eat(token_type)[1]
-        else:
-            raise SyntaxError(f"Unexpected token type '{token_type}' in WHERE clause for value")
-
-        left_node = Condition(col, op, val)
-
+        not_in_Membership = False
+        
+        
+        if self.current_token()[0] == "NULLCHECK":
+            
+            self.eat("NULLCHECK")
+            if self.current_token()[0] == "NULLCHECK":
+                if self.current_token()[1].upper() != "NOT":
+                    raise ValueError("Invalid Keyword for this Operation")
+                self.eat("NULLCHECK")
+                left_node = CheckNullColumn(col, isNull=False)
+            else:
+                left_node = CheckNullColumn(col, isNull=True)
+            self.eat("NULL")
+            
+                    
+        elif self.current_token()[0] == "MEMBERSHIP":
+            args = set()
+            not_in_membership = False  # Default to IN, not NOT IN
+            
+            self.eat("MEMBERSHIP")  # Consume first MEMBERSHIP token (likely "NOT" or "IN")
+            
+            # Check if this is a NOT IN scenario
+            if self.current_token() and self.current_token()[0] == "MEMBERSHIP":
+                if self.current_token()[1] == "IN":
+                    self.eat("MEMBERSHIP")  # Consume the "IN" token
+                    not_in_membership = True  # This was "NOT IN"
+                else:
+                    # Handle unexpected token after first MEMBERSHIP
+                    raise ValueError(f"Expected 'IN' after 'NOT', but got '{self.current_token()[1]}'")
+            # If no second MEMBERSHIP token, then this is just "IN"
+            
+            self.eat("OPEN_PAREN")  # Consume opening parenthesis
+            
+            # Parse the values inside parentheses
+            while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
+                token_type, token_value = self.current_token()
+                
+                if token_type in ("STRING", "BOOLEAN", "NUMBER"):
+                    self.eat(token_type)
+                    # Normalize string values to lowercase for consistency
+                    if isinstance(token_value, str):
+                        token_value = token_value.lower()
+                    args.add(token_value)
+                    
+                    # Check for comma (optional for last element)
+                    if self.current_token() and self.current_token()[0] == "COMMA":
+                        self.eat("COMMA")
+                    elif self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
+                        raise ValueError(f"Expected ',' or ')' after value, but got '{self.current_token()[1]}'")
+                        
+                elif token_type == "COMMA":
+                    # Handle case where there are consecutive commas or leading comma
+                    raise ValueError("Unexpected comma in membership list")
+                else:
+                    raise ValueError(f"Invalid token '{token_value}' in membership list")
+            
+            if not self.current_token() or self.current_token()[0] != "CLOSE_PAREN":
+                raise ValueError("Expected closing parenthesis ')' for membership list")
+            
+            self.eat("CLOSE_PAREN")  # Consume closing parenthesis
+            
+            if not args:
+                raise ValueError("Empty membership list is not allowed")
+            
+            # Create the membership node with correct IN/NOT IN logic
+            left_node = Membership(col, args, IN=not not_in_membership)
+                    
+            
+        elif self.current_token()[0] == "OPT":
+            op = self.eat("OPT")[1]
+            if self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):
+                token,  value = self.current_token()
+                self.eat(token)
+                val = value
+                left_node = Condition(col, op, val)
+            else:
+                raise ValueError (f"Expected Valid Datatype for Where Clause but got {self.current_token()[1]}")
         # --- Check for logical operator (AND/OR) ---
         if self.current_token() and self.current_token()[0] == "MAINOPT":
             operator = self.eat("MAINOPT")[1]
@@ -337,6 +413,7 @@ class Parser:
             return LogicalCondition(left_node, operator, right_node)
         else:
             return left_node
+        
         
         
     def parse_update_statement(self):
@@ -409,12 +486,12 @@ class Parser:
         self.eat("TABLE")
         table_name = self.eat("IDENTIFIER")[1]
         table_name = table_name.strip()
-        self.eat("OPDBK")  # (
+        self.eat("OPEN_PAREN")  # (
         schema = {}
         auto = {}
         defaults = {} 
         is_serial = False
-        while self.current_token() and self.current_token()[0] != "CLDBK":
+        while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
             # Column name
             col_name = self.eat("IDENTIFIER")[1]
             # Column type
@@ -448,7 +525,7 @@ class Parser:
                 self.eat("COMMA")
             print(col_name)
 
-        self.eat("CLDBK")  # )
+        self.eat("CLOSE_PAREN")  # )
         self.eat("SEMICOLON")
         return CreateTableStatement(table_name, schema, defaults, auto)
         

@@ -107,6 +107,3 @@ def data_validator(schema_col, schema_val, given_val):
     elif not DataType_evaluation(schema_val, given_val):
         raise ValueError(f"Column -> '{schema_col}' Expect 'class <{schema_val.lower()}>' DataType, But {type(given_val)} were given")
     return True
-    
-
-print(CheckDate("2024-09-01"))
