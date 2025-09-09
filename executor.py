@@ -64,8 +64,10 @@ def execute_select_query(ast, database):
     return result
 
 def condition_evaluation(where, row, table_schema):
+    
     if isinstance(where, NegationCondition):
         return not(execute_where_negation_condition(where, row, table_schema))
+    
     if isinstance(where, Membership):
         return execute_where_membership_condition(where, row, table_schema)
 
@@ -77,10 +79,17 @@ def condition_evaluation(where, row, table_schema):
 
     elif isinstance(where, LogicalCondition):
         return execute_where_logical_condition(where, row, table_schema)
+    
     elif isinstance(where, BetweenCondition):
         if where.NOT:
             return not execute_where_between_condition(where, row, table_schema)
         return execute_where_between_condition(where, row, table_schema)
+    
+    elif isinstance(where, LikeCondition):
+        if where.NOT:
+            return not execute_where_like_condition(where, row, table_schema)
+        return execute_where_like_condition(where, row, table_schema)
+    
 
 def execute_where_condition(where, row, table_schema):
     if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
@@ -146,6 +155,35 @@ def execute_where_between_condition(where, row, table_schema):
         arg1 = table_schema[where.col](arg1)
         arg2 = table_schema[where.col](arg2)
         return (arg1 <= col_val <= arg2)
+
+def execute_where_like_condition(where, row, table_schema):
+    val = where.arg
+    col_val = row[where.col]
+    if (
+        type(val) != str or
+         (
+            isinstance(table_schema[where.col], VARCHAR) or
+            isinstance(table_schema[where.col], TEXT) or
+            isinstance(table_schema[where.col], DATE) or
+            isinstance(table_schema[where.col], TIME)
+        )
+    ):
+        raise ValueError("LIKE condition only works with string values.")
+    val = table_schema[where.col](val).value
+    regex = ''
+    i = 0
+    while i < len(val):
+        c = val[i]
+        if c == '%':
+            regex += '.*'
+        elif c == '_':
+            regex += '.'
+        else:
+            regex += re.escape(c)
+        i += 1
+    regex = '^' + regex + '$'
+    return re.fullmatch(regex, col_val.value) is not None
+    
 
 def execute_insert_query(ast, database):
     table_name = ast.table

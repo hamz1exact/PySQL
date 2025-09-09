@@ -80,4 +80,9 @@ class BetweenCondition:
         self.arg1 = arg1
         self.arg2 = arg2
 
-         
+class LikeCondition:
+    def __init__(self, col, arg, NOT = False):
+        self.col = col
+        self.arg = arg
+        self.NOT = NOT
+        

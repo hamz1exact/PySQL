@@ -27,6 +27,9 @@ class Lexer:
     between = {
         "BETWEEN"
     }
+    like = {
+        "LIKE"
+    }
     functions = {"COUNT", "SUM", "MAX", "MIN"}
     datatypes = {
         "INT": INT,
@@ -66,6 +69,11 @@ class Lexer:
                 upper_word = word.upper()
                 if upper_word in Lexer.keywords:
                     self.tokens.append((upper_word, upper_word))
+                elif upper_word in Lexer.like:
+                    if self.tokens and self.tokens[-1][1] == "NOT":
+                        self.tokens.pop()
+                        self.tokens.append(("LIKE", "NOT"))
+                    self.tokens.append(("LIKE", upper_word))
                 elif upper_word in Lexer.between:
                     if self.tokens and self.tokens[-1][1] == "NOT":
                         self.tokens.pop()
@@ -339,6 +347,7 @@ class Parser:
             col = self.eat("IDENTIFIER")[1]  
         not_in_Membership = False
         not_in_between = False
+        not_in_like = False
         
         
         if self.current_token()[0] == "NULLCHECK":
@@ -444,7 +453,18 @@ class Parser:
                     left_node = BetweenCondition(col, arg1, arg2, NOT=not_in_between)
             else:
                 raise ValueError("Unsupported Data type for BETWEEN Comparison")
-                    
+      
+        elif self.current_token()[0] == "LIKE":
+            self.eat("LIKE")
+            if self.current_token()[0] == "LIKE":
+                if self.current_token()[1] != "LIKE":
+                    raise ValueError(f"Expected 'LIKE' after 'NOT', but got '{self.current_token()[1]}'")
+                else:
+                    self.eat("LIKE")
+                    not_in_like = True
+            arg = self.eat(self.current_token()[0])[1]
+            left_node = LikeCondition(col, arg, NOT = not_in_like)
+                     
         elif self.current_token()[0] == "OPT":
             op = self.eat("OPT")[1]
             if self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):
