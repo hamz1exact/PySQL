@@ -30,7 +30,7 @@ class Lexer:
     like = {
         "LIKE"
     }
-    functions = {"COUNT", "SUM", "MAX", "MIN"}
+    functions = {"COUNT", "SUM", "MAX", "MIN", "AVG"}
     datatypes = {
         "INT": INT,
         "INTEGER": INT,
@@ -159,7 +159,7 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        # print(self.tokens)
+        print(self.tokens)
         
         return self.tokens
 
@@ -341,8 +341,12 @@ class Parser:
         return values
 
     def parse_condition_tree(self):
-        # --- Parse the left condition ---
         
+        if self.current_token()[1] == "(":
+            self.eat("OPEN_PAREN")
+            left_node = self.parse_condition_tree()
+            self.eat("CLOSE_PAREN")
+            
         if self.current_token()[0] == "IDENTIFIER":
             col = self.eat("IDENTIFIER")[1]  
         not_in_Membership = False

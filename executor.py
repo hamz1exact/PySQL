@@ -39,15 +39,18 @@ def execute_select_query(ast, database):
     for row in table:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             filtered_rows.append(row)
+    
     if ast.columns == ["*"]:
         ast.columns = table[0].keys()
     else:
         for col in ast.columns:
             if isinstance(col, FunctionCall):
-                if not col.arg in table_schema:
+                if col.arg == "*":
+                    continue
+                elif not col.arg in table_schema:    
                     raise ColumnNotFoundError(col.arg, table_name)
             else:
-                if col not in table_schema:
+                if col not in table_schema:  
                     raise ColumnNotFoundError(col, table_name)
                     
     result = []
@@ -296,14 +299,38 @@ def execute_function(function, rows, table_schema):
         else:
             return len([row for row in rows if (row.get(arguments).value if isinstance(row.get(arguments), SQLType) else row.get(arguments)) is not None])
     elif func_name == "SUM":
+        if arguments == "*":
+            raise ValueError(f"'*' Not Supported in SUM Function")
         if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            for row in rows:
-                total += row[function.arg].value
+            total = sum(row[function.arg].value for row in rows)
         else:
             raise ValueError(f"SUM Function works Only with INT/FLOAT columns")
         return total
-        
-            
+    elif func_name == "MIN":
+        if arguments == "*":
+            raise ValueError(f"'*' Not Supported in MIN Function")
+        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
+            total = min(row[function.arg].value for row in rows)
+        else:
+            raise ValueError(f"MIN Function works Only with INT/FLOAT columns")
+        return total
+    elif func_name == "MAX":
+        if arguments == "*":
+            raise ValueError(f"'*' Not Supported in MAX Function")
+        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
+            total = max(row[function.arg].value for row in rows)
+        else:
+            raise ValueError(f"MAX Function works Only with INT/FLOAT columns")
+        return total
+    elif func_name == "AVG":
+        if arguments == "*":
+            raise ValueError(f"'*' Not Supported in AVG Function")
+        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
+            total = sum(row[function.arg].value for row in rows) / len(rows)
+        else:
+            raise ValueError(f"AVG Function works Only with INT/FLOAT columns")
+        return (f"{total:.2f}")
+                
         
             
         
