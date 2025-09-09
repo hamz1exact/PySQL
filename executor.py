@@ -57,63 +57,66 @@ def execute_select_query(ast, database):
 
 def condition_evaluation(where, row, table_schema):
     if isinstance(where, NegationCondition):
-        if isinstance(where.expression, Condition):
-            if (isinstance(row[where.expression.column], VARCHAR) and isinstance(table_schema[where.expression.column](where.expression.value), VARCHAR)) or (isinstance(row[where.expression.column], TEXT) and isinstance(table_schema[where.expression.column](where.expression.value), TEXT)):
-                col = row[where.expression.column].value.lower()
-                val = table_schema[where.expression.column](where.expression.value).value .lower()
-            else:
-                col = row[where.expression.column]
-                val = table_schema[where.expression.column](where.expression.value)
-            op  = where.expression.operator
-            if op == "=": return not(col == val)
-            if op == "!=": return not(col != val)
-            if op == "<": return not(col < val)
-            if op == "<=": return not(col <= val)
-            if op == ">": return not(col > val)
-            if op == ">=": return not(col >= val)
-            raise ValueError(f"Unknown operator {op}")
+        return not(execute_where_negation_condition(where, row, table_schema))
     if isinstance(where, Membership):
+        return execute_where_membership_condition(where, row, table_schema)
+
+    if isinstance(where, CheckNullColumn):
+        return execute_where_check_nulls(where, row, table_schema)
+        
+    if isinstance(where, Condition):
+       return execute_where_condition(where, row, table_schema)
+
+    elif isinstance(where, LogicalCondition):
+        return execute_where_logical_condition(where, row, table_schema)
+
+def execute_where_condition(where, row, table_schema):
+    if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
+            col = row[where.column].value.lower()
+            val = table_schema[where.column](where.value).value .lower()
+    else:
+        col = row[where.column]
+        val = table_schema[where.column](where.value)
+    op  = where.operator
+    
+    if op == "=": return col == val
+    if op == "!=": return col != val
+    if op == "<": return col < val
+    if op == "<=": return col <= val
+    if op == ">": return col > val
+    if op == ">=": return col >= val
+    raise ValueError(f"Unknown operator {op}") 
+
+def execute_where_logical_condition(where, row, table_schema):
+    MainOperator = where.MainOperator.upper()
+    left_result = condition_evaluation(where.left, row, table_schema)
+    right_result = condition_evaluation(where.right, row, table_schema)
+    
+    if MainOperator == "AND":
+        return left_result and right_result
+    elif MainOperator == "OR":
+        return left_result or right_result
+    else:
+        raise ValueError(f"Unknown logical operator: {MainOperator}")
+    
+def execute_where_check_nulls(where, row, table_schema):
+    value = row.get(where.column).value if issubclass(table_schema[where.column], SQLType) else row.get(where.column)
+    if where.isNull:
+        return value is None
+    else:
+        return value is not None
+
+def execute_where_membership_condition(where, row, table_schema):
         value = row.get(where.col).value if issubclass(table_schema[where.col], SQLType) else row.get(where.col)
         if type(value) == str: value = value.lower()
         if where.IN:
             return value in where.args
         else:
             return value not in where.args
-    if isinstance(where, CheckNullColumn):
-        value = row.get(where.column).value if issubclass(table_schema[where.column], SQLType) else row.get(where.column)
-        if where.isNull:
-            return value is None
-        else:
-            return value is not None
-    if isinstance(where, Condition):
-        if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
-            col = row[where.column].value.lower()
-            val = table_schema[where.column](where.value).value .lower()
-        else:
-            col = row[where.column]
-            val = table_schema[where.column](where.value)
-        op  = where.operator
-        
-        if op == "=": return col == val
-        if op == "!=": return col != val
-        if op == "<": return col < val
-        if op == "<=": return col <= val
-        if op == ">": return col > val
-        if op == ">=": return col >= val
-        raise ValueError(f"Unknown operator {op}")
 
-    elif isinstance(where, LogicalCondition):
-
-        MainOperator = where.MainOperator.upper()
-        left_result = condition_evaluation(where.left, row, table_schema)
-        right_result = condition_evaluation(where.right, row, table_schema)
-        
-        if MainOperator == "AND":
-            return left_result and right_result
-        elif MainOperator == "OR":
-            return left_result or right_result
-        else:
-            raise ValueError(f"Unknown logical operator: {MainOperator}")
+def execute_where_negation_condition(where, row, table_schema):
+    if isinstance(where.expression, Condition):
+        return execute_where_condition(where.expression, row, table_schema)
 
 def execute_insert_query(ast, database):
     table_name = ast.table
