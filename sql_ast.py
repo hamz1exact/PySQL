@@ -73,3 +73,11 @@ class NegationCondition:
     def __init__(self, expression):
         self.expression = expression
         
+class BetweenCondition:
+    def __init__(self, col, arg1, arg2, NOT = False):
+        self.col = col
+        self.NOT = NOT
+        self.arg1 = arg1
+        self.arg2 = arg2
+
+         

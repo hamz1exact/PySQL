@@ -24,6 +24,9 @@ class Lexer:
     membership = {
         "IN"
     }
+    between = {
+        "BETWEEN"
+    }
     functions = {"COUNT", "SUM", "MAX", "MIN"}
     datatypes = {
         "INT": INT,
@@ -63,6 +66,11 @@ class Lexer:
                 upper_word = word.upper()
                 if upper_word in Lexer.keywords:
                     self.tokens.append((upper_word, upper_word))
+                elif upper_word in Lexer.between:
+                    if self.tokens and self.tokens[-1][1] == "NOT":
+                        self.tokens.pop()
+                        self.tokens.append(("BETWEEN", "NOT"))
+                    self.tokens.append(("BETWEEN", upper_word))
                 elif upper_word == "NOT":
                     if self.tokens and self.tokens[-1][1] == "IS":
                         self.tokens.append(("NULLCHECK", "NOT"))
@@ -143,7 +151,7 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        # print(self.tokens)
+        print(self.tokens)
         
         return self.tokens
 
@@ -328,8 +336,9 @@ class Parser:
         # --- Parse the left condition ---
         
         if self.current_token()[0] == "IDENTIFIER":
-            col = self.eat("IDENTIFIER")[1]      # Column name
+            col = self.eat("IDENTIFIER")[1]  
         not_in_Membership = False
+        not_in_between = False
         
         
         if self.current_token()[0] == "NULLCHECK":
@@ -410,7 +419,32 @@ class Parser:
                 left_node = NegationCondition(Condition(col, op, val))
             self.eat("CLOSE_PAREN")
 
-
+        elif self.current_token()[0] == "BETWEEN":
+            arg1 = None
+            arg2 = None
+            self.eat("BETWEEN")
+            if self.current_token()[0] == "BETWEEN":
+                if self.current_token()[1] != "BETWEEN":
+                    raise ValueError(f"Expected 'BETWEEN' after 'NOT', but got '{self.current_token()[1]}'")
+                else:
+                    self.eat("BETWEEN")
+                    not_in_between = True
+            if self.current_token()[0] in ("STRING", "NUMBER"):
+                print('TRUE')
+                arg1 = self.eat(self.current_token()[0])[1]
+                if self.current_token()[1] != "AND":
+                    raise ValueError("Missed 'AND' Operator in BETWEEN Comparison")
+                self.eat("MAINOPT")
+                arg2 = self.eat(self.current_token()[0])[1]
+                if type(arg1) != type(arg2):
+                    raise ValueError(
+                    f"Type mismatch: '{arg1}' (type {type(arg1).__name__}) cannot be compared with '{arg2}' (type {type(arg2).__name__}). Please use values of the same data type for BETWEEN."
+                        )
+                else:
+                    left_node = BetweenCondition(col, arg1, arg2, NOT=not_in_between)
+            else:
+                raise ValueError("Unsupported Data type for BETWEEN Comparison")
+                    
         elif self.current_token()[0] == "OPT":
             op = self.eat("OPT")[1]
             if self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):
@@ -551,6 +585,3 @@ class Parser:
         db_name = self.eat("IDENTIFIER")[1]
         self.eat("SEMICOLON")
         return UseStatement(db_name)
-
-        
-        

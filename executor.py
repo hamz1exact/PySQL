@@ -4,20 +4,28 @@ from checker import *
 from datatypes import *
 from errors import *
 def execute(ast, database):
+    
     if isinstance(ast, SelectStatement):
         return execute_select_query(ast, database)
+    
     elif isinstance(ast, InsertStatement):
         execute_insert_query(ast, database)
+        
     elif isinstance(ast, UpdateStatement):
         execute_update_query(ast, database)
+        
     elif isinstance(ast, DeleteStatement):
         execute_delete_query(ast, database)
+        
     elif isinstance(ast, CreateDatabseStatement):
         execute_create_database_statement(ast, database)
+        
     elif isinstance(ast, CreateTableStatement):
         execute_create_table_statement(ast, database)
+        
     elif isinstance(ast, UseStatement):
         execute_use_statement(ast, database)
+    
     
 
 def execute_select_query(ast, database):
@@ -69,11 +77,15 @@ def condition_evaluation(where, row, table_schema):
 
     elif isinstance(where, LogicalCondition):
         return execute_where_logical_condition(where, row, table_schema)
+    elif isinstance(where, BetweenCondition):
+        if where.NOT:
+            return not execute_where_between_condition(where, row, table_schema)
+        return execute_where_between_condition(where, row, table_schema)
 
 def execute_where_condition(where, row, table_schema):
     if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
             col = row[where.column].value.lower()
-            val = table_schema[where.column](where.value).value .lower()
+            val = table_schema[where.column](where.value).value.lower()
     else:
         col = row[where.column]
         val = table_schema[where.column](where.value)
@@ -117,6 +129,24 @@ def execute_where_membership_condition(where, row, table_schema):
 def execute_where_negation_condition(where, row, table_schema):
     if isinstance(where.expression, Condition):
         return execute_where_condition(where.expression, row, table_schema)
+
+def execute_where_between_condition(where, row, table_schema):
+    col_val = row[where.col]
+    arg1 = where.arg1
+    arg2 = where.arg2
+    if isinstance(col_val, DATE) and isinstance(table_schema[where.col](arg1), DATE)and isinstance(table_schema[where.col](arg2), DATE):
+        arg1 = table_schema[where.col](arg1)
+        arg2 = table_schema[where.col](arg2)
+        return not(arg1 <= col_val <= arg2)
+    elif (isinstance(col_val, VARCHAR) or isinstance(col_val, TEXT)) and (isinstance(table_schema[where.col](arg1), VARCHAR) or isinstance(table_schema[where.col](arg1), TEXT)) and (isinstance(table_schema[where.col](arg2), VARCHAR) or isinstance(table_schema[where.col](arg2), TEXT)):
+        arg1 = table_schema[where.col](arg1)
+        arg2 = table_schema[where.col](arg2)
+        
+        return (arg1.value.lower() <= col_val.value[:len(arg1.value)].lower() <= arg2.value.lower())
+    elif (isinstance(col_val, INT) or isinstance(col_val, FLOAT)) and (isinstance(table_schema[where.col](arg1), INT) or isinstance(table_schema[where.col](arg1), FLOAT)) and (isinstance(table_schema[where.col](arg2), INT) or isinstance(table_schema[where.col](arg2), FLOAT)):   
+        arg1 = table_schema[where.col](arg1)
+        arg2 = table_schema[where.col](arg2)
+        return (arg1 <= col_val <= arg2)
 
 def execute_insert_query(ast, database):
     table_name = ast.table
