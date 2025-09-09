@@ -141,8 +141,7 @@ def execute_where_between_condition(where, row, table_schema):
     elif (isinstance(col_val, VARCHAR) or isinstance(col_val, TEXT)) and (isinstance(table_schema[where.col](arg1), VARCHAR) or isinstance(table_schema[where.col](arg1), TEXT)) and (isinstance(table_schema[where.col](arg2), VARCHAR) or isinstance(table_schema[where.col](arg2), TEXT)):
         arg1 = table_schema[where.col](arg1)
         arg2 = table_schema[where.col](arg2)
-        
-        return (arg1.value.lower() <= col_val.value[:len(arg1.value)].lower() <= arg2.value.lower())
+        return (arg1.value.lower() <= col_val.value.lower() <= arg2.value.lower())
     elif (isinstance(col_val, INT) or isinstance(col_val, FLOAT)) and (isinstance(table_schema[where.col](arg1), INT) or isinstance(table_schema[where.col](arg1), FLOAT)) and (isinstance(table_schema[where.col](arg2), INT) or isinstance(table_schema[where.col](arg2), FLOAT)):   
         arg1 = table_schema[where.col](arg1)
         arg2 = table_schema[where.col](arg2)
