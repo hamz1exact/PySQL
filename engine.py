@@ -159,7 +159,7 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        print(self.tokens)
+        # print(self.tokens)
         
         return self.tokens
 
@@ -439,7 +439,6 @@ class Parser:
                     self.eat("BETWEEN")
                     not_in_between = True
             if self.current_token()[0] in ("STRING", "NUMBER"):
-                print('TRUE')
                 arg1 = self.eat(self.current_token()[0])[1]
                 if self.current_token()[1] != "AND":
                     raise ValueError("Missed 'AND' Operator in BETWEEN Comparison")

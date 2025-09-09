@@ -141,12 +141,13 @@ def execute_where_negation_condition(where, row, table_schema):
 
 def execute_where_between_condition(where, row, table_schema):
     col_val = row[where.col]
+    if col_val.value == None: return False
     arg1 = where.arg1
     arg2 = where.arg2
-    if isinstance(col_val, DATE) and isinstance(table_schema[where.col](arg1), DATE)and isinstance(table_schema[where.col](arg2), DATE):
+    if isinstance(col_val, DATE) and isinstance(table_schema[where.col](arg1), DATE) and isinstance(table_schema[where.col](arg2), DATE):
         arg1 = table_schema[where.col](arg1)
         arg2 = table_schema[where.col](arg2)
-        return not(arg1 <= col_val <= arg2)
+        return (arg1 <= col_val <= arg2)
     elif (isinstance(col_val, VARCHAR) or isinstance(col_val, TEXT)) and (isinstance(table_schema[where.col](arg1), VARCHAR) or isinstance(table_schema[where.col](arg1), TEXT)) and (isinstance(table_schema[where.col](arg2), VARCHAR) or isinstance(table_schema[where.col](arg2), TEXT)):
         arg1 = table_schema[where.col](arg1)
         arg2 = table_schema[where.col](arg2)
@@ -155,10 +156,17 @@ def execute_where_between_condition(where, row, table_schema):
         arg1 = table_schema[where.col](arg1)
         arg2 = table_schema[where.col](arg2)
         return (arg1 <= col_val <= arg2)
+    elif isinstance(col_val, TIME) and isinstance(table_schema[where.col](arg1), TIME) and isinstance(table_schema[where.col](arg2), TIME):
+        arg1 = table_schema[where.col](arg1)
+        arg2 = table_schema[where.col](arg2)
+        return (arg1 <= col_val <= arg2)
+    else:
+        return False
 
 def execute_where_like_condition(where, row, table_schema):
     val = where.arg
     col_val = row[where.col]
+    if col_val.value == None: return False
     if (
         type(val) != str or
          (
