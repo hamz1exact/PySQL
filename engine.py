@@ -30,6 +30,12 @@ class Lexer:
     like = {
         "LIKE"
     }
+    order_by_keys ={
+        "ORDER"
+    }
+    order_by_drc = {
+        "ASC", "DESC"
+    }
     functions = {"COUNT", "SUM", "MAX", "MIN", "AVG"}
     datatypes = {
         "INT": INT,
@@ -79,6 +85,13 @@ class Lexer:
                         self.tokens.pop()
                         self.tokens.append(("BETWEEN", "NOT"))
                     self.tokens.append(("BETWEEN", upper_word))
+                elif upper_word == "BY":
+                    if self.tokens[-1][0] == "ORDER_BY_KEY":
+                        self.tokens.append(("ORDER_BY_KEY", upper_word))
+                elif upper_word in Lexer.order_by_keys:
+                    self.tokens.append(("ORDER_BY_KEY", upper_word))
+                elif upper_word in Lexer.order_by_drc:
+                    self.tokens.append(("ORDER_BY_DRC", upper_word))
                 elif upper_word == "NOT":
                     if self.tokens and self.tokens[-1][1] == "IS":
                         self.tokens.append(("NULLCHECK", "NOT"))
@@ -160,7 +173,7 @@ class Lexer:
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         
-        # print(self.tokens)
+        
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -223,6 +236,8 @@ class Parser:
     def parse_select_statement(self):
         where = None
         unique = False
+        order_out = None
+        order_in = []
         self.eat("SELECT")
         if self.current_token() and self.current_token()[0] == "DISTINCT":
             self.eat("DISTINCT")
@@ -234,9 +249,12 @@ class Parser:
         if token and token[0] == "WHERE":
             self.eat("WHERE")
             where = self.parse_condition_tree()
+        if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
+                self.eat("ORDER_BY_KEY")
+                self.eat("ORDER_BY_KEY")
+                self.order_by(order_in)
         self.eat("SEMICOLON")
-
-        return SelectStatement(columns, table, where, distinct = unique)
+        return SelectStatement(columns, table, where, distinct = unique, order_by = order_in)
 
 
               
@@ -291,7 +309,20 @@ class Parser:
         return columns
                 
 
+    def order_by(self, order):
+        order_col = self.eat("IDENTIFIER")[1]
+        if self.current_token() and self.current_token()[0] != "ORDER_BY_DRC":
+            order_direction = "ASC"
+        else:
+            order_direction = self.eat("ORDER_BY_DRC")[1]
+        order.append((order_col, order_direction))
+        if self.current_token() and self.current_token()[0] == "COMMA":
+            self.eat("COMMA")
+            self.order_by(order)
+            return order
 
+
+        
 
     def parse_table(self):
         return self.eat("IDENTIFIER")[1]

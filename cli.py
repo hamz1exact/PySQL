@@ -116,9 +116,9 @@ class Colors:
     RED = '\033[31m'
     GREEN = '\033[32m'
     YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    MAGENTA = '\033[35m'
-    CYAN = '\033[36m'
+    BLUE = '\033[97m'
+    MAGENTA = '\033[97m'
+    CYAN = '\033[97m'
     WHITE = '\033[37m'
     
     # Bright colors
@@ -126,9 +126,9 @@ class Colors:
     BRIGHT_RED = '\033[91m'
     BRIGHT_GREEN = '\033[92m'
     BRIGHT_YELLOW = '\033[93m'
-    BRIGHT_BLUE = '\033[94m'
-    BRIGHT_MAGENTA = '\033[95m'
-    BRIGHT_CYAN = '\033[96m'
+    BRIGHT_BLUE = '\033[97m'
+    BRIGHT_MAGENTA = '\033[97m'
+    BRIGHT_CYAN = '\033[97m'
     BRIGHT_WHITE = '\033[97m'
 
 
@@ -151,6 +151,9 @@ class Config:
         self.last_columns = None
         self.auto_reload = True  # Enable auto-reload on file changes
         self.reload_on_error = False  # Reload modules on execution error
+        self.auto_detect_wide = False   # ADD THIS LINE
+        self.wide_table_threshold = 10  # ADD THIS LINE - columns threshold
+
         
         # Load config from file if exists
         self.config_file = Path.home() / '.myshell_config.json'
@@ -245,14 +248,188 @@ class TableFormatter:
         elif self.config.table_format == 'markdown':
             return self._format_markdown(rows, columns)
         else:
-            return self._format_ascii_enhanced(rows, columns)
+            return self._format_ascii(rows, columns)
+    def _format_vertical(self, rows, columns):
+        """Format as vertical records (like MySQL \\G command)"""
+        lines = []
+        
+        for i, row in enumerate(rows, 1):
+            lines.append(f"{Colors.BOLD}*************************** {i}. row ***************************{Colors.RESET}")
+            
+            # Find the maximum column name length for alignment
+            max_col_len = max(len(col) for col in columns) if columns else 0
+            
+            for col in columns:
+                value = self._format_value_simple(row.get(col))
+                col_name = col.rjust(max_col_len)
+                
+                if self.config.colorize_output:
+                    col_name = f"{Colors.BRIGHT_CYAN}{col_name}{Colors.RESET}"
+                    if row.get(col) is None:
+                        value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
+                    elif isinstance(row.get(col), (int, float)):
+                        value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
+                
+                lines.append(f"{col_name}: {value}")
+            
+            if i < len(rows):  # Add separator between records
+                lines.append("")
+        
+        return '\n'.join(lines)
+
+    def _format_value_simple(self, value):
+        """Simple value formatter (since we can't access formatter._format_value)"""
+        if value is None:
+            return self.config.null_display
+        elif isinstance(value, bool):
+            return 'TRUE' if value else 'FALSE'
+        elif isinstance(value, (int, float)):
+            return str(value)
+        else:
+            return str(value)
     
-    def _format_ascii_enhanced(self, rows: List[Dict], columns: List[str]) -> str:
-        """Enhanced ASCII table with better borders and colors"""
+    def _format_wrapped_columns(self, rows, columns):
+        """Format with wrapped columns - show in chunks"""
+        try:
+            import shutil
+            terminal_width = shutil.get_terminal_size().columns
+        except:
+            terminal_width = 80
+        
+        chunk_size = max(3, terminal_width // 25)  # Roughly 25 chars per column
+        
+        lines = []
+        
+        # Split columns into chunks
+        for chunk_start in range(0, len(columns), chunk_size):
+            chunk_end = min(chunk_start + chunk_size, len(columns))
+            chunk_columns = columns[chunk_start:chunk_end]
+            
+            lines.append(f"\n{Colors.BOLD}Columns {chunk_start + 1}-{chunk_end}:{Colors.RESET}")
+            lines.append("=" * 50)
+            
+            # Format this chunk as a simple table
+            # Header
+            header_parts = []
+            for col in chunk_columns:
+                col_display = col[:15] if len(col) <= 15 else col[:12] + "..."
+                header_parts.append(col_display.ljust(15))
+            
+            if self.config.colorize_output:
+                header = " | ".join(f"{Colors.BRIGHT_CYAN}{part}{Colors.RESET}" for part in header_parts)
+            else:
+                header = " | ".join(header_parts)
+            
+            lines.append(header)
+            lines.append("-" * (len(chunk_columns) * 17))
+            
+            # Data rows (show first 10 rows to avoid overwhelming)
+            display_rows = rows[:10] if len(rows) > 10 else rows
+            for row in display_rows:
+                row_data = []
+                for col in chunk_columns:
+                    value = self._format_value_simple(row.get(col))
+                    if len(value) > 15:
+                        value = value[:12] + "..."
+                    
+                    # Add colors
+                    if self.config.colorize_output:
+                        if row.get(col) is None:
+                            value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
+                        elif isinstance(row.get(col), (int, float)):
+                            value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
+                    
+                    row_data.append(value.ljust(15))
+                lines.append(" | ".join(row_data))
+            
+            if len(rows) > 10:
+                lines.append(f"{Colors.BRIGHT_BLACK}... and {len(rows) - 10} more rows{Colors.RESET}")
+        
+        return '\n'.join(lines)
+    
+    def _format_vertical(self, rows, columns):
+        """Format as vertical records (like MySQL \\G command)"""
+        lines = []
+        
+        for i, row in enumerate(rows, 1):
+            lines.append(f"{Colors.BOLD}*************************** {i}. row ***************************{Colors.RESET}")
+            
+            # Find the maximum column name length for alignment
+            max_col_len = max(len(col) for col in columns) if columns else 0
+            
+            for col in columns:
+                value = self._format_value(row.get(col))
+                col_name = col.rjust(max_col_len)
+                
+                if self.config.colorize_output:
+                    col_name = f"{Colors.BRIGHT_CYAN}{col_name}{Colors.RESET}"
+                    if row.get(col) is None:
+                        value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
+                    elif isinstance(row.get(col), (int, float)):
+                        value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
+                
+                lines.append(f"{col_name}: {value}")
+            
+            if i < len(rows):  # Add separator between records
+                lines.append("")
+        
+        return '\n'.join(lines)
+
+    def _format_wrapped_columns(self, rows, columns):
+        """Format with wrapped columns - show in chunks"""
+        try:
+            import shutil
+            terminal_width = shutil.get_terminal_size().columns
+        except:
+            terminal_width = 80
+        
+        chunk_size = max(3, terminal_width // 25)  # Roughly 25 chars per column
+        
+        lines = []
+        
+        # Split columns into chunks
+        for chunk_start in range(0, len(columns), chunk_size):
+            chunk_end = min(chunk_start + chunk_size, len(columns))
+            chunk_columns = columns[chunk_start:chunk_end]
+            
+            lines.append(f"\n{Colors.BOLD}Columns {chunk_start + 1}-{chunk_end}:{Colors.RESET}")
+            lines.append("=" * 50)
+            
+            # Format this chunk as a simple table
+            # Header
+            header = " | ".join(col[:15] for col in chunk_columns)
+            lines.append(header)
+            lines.append("-" * len(header))
+            
+            # Data rows (show first 10 rows to avoid overwhelming)
+            display_rows = rows[:10] if len(rows) > 10 else rows
+            for row in display_rows:
+                row_data = []
+                for col in chunk_columns:
+                    value = self._format_value(row.get(col))
+                    if len(value) > 15:
+                        value = value[:12] + "..."
+                    row_data.append(value.ljust(15))
+                lines.append(" | ".join(row_data))
+            
+            if len(rows) > 10:
+                lines.append(f"... and {len(rows) - 10} more rows")
+        
+        return '\n'.join(lines)
+        
+    def _format_ascii(self, rows: List[Dict], columns: List[str]) -> str:
+        """Enhanced ASCII table with wide table support"""
         if not rows:
             return self._colorize("Empty result set", Colors.BRIGHT_BLACK)
         
-        # Calculate column widths
+        # NEW: Check if table is too wide for terminal
+        terminal_width = self._get_terminal_width()
+        total_estimated_width = len(columns) * 15  # Rough estimate
+        
+        if len(columns) > 10 or total_estimated_width > terminal_width:
+            return self._format_wide_table(rows, columns)
+        
+        # Original table formatting code for narrow tables
         col_widths = {}
         for col in columns:
             col_widths[col] = min(len(col), self.config.max_column_width)
@@ -264,30 +441,26 @@ class TableFormatter:
         
         lines = []
         
-        # Enhanced borders with double lines for header
-        def make_border(char='─'):
-            parts = []
-            for col in columns:
-                parts.append(char * (col_widths[col] + 2))
-            return '┌' + '┬'.join(parts) + '┐' if char == '─' else '├' + '┼'.join(parts) + '┤'
-        
         # Top border
-        lines.append(make_border())
+        border_parts = []
+        for col in columns:
+            border_parts.append('-' * (col_widths[col] + 2))
+        lines.append('+' + '+'.join(border_parts) + '+')
         
-        # Header with enhanced styling
+        # Header
         header_parts = []
         for col in columns:
             header_text = col[:col_widths[col]].ljust(col_widths[col])
             if self.config.colorize_output:
-                header_text = self._colorize(header_text, Colors.BOLD + Colors.BRIGHT_CYAN)
+                header_text = self._colorize(header_text, Colors.BOLD + Colors.CYAN)
             header_parts.append(f' {header_text} ')
-        lines.append('│' + '│'.join(header_parts) + '│')
+        lines.append('|' + '|'.join(header_parts) + '|')
         
         # Header separator
-        lines.append(make_border('─'))
+        lines.append('+' + '+'.join(border_parts) + '+')
         
-        # Data rows with alternating colors
-        for i, row in enumerate(rows):
+        # Data rows
+        for row in rows:
             row_parts = []
             for col in columns:
                 value = row.get(col)
@@ -299,20 +472,195 @@ class TableFormatter:
                 value_str = value_str.ljust(col_widths[col])
                 
                 if self.config.colorize_output:
-                    # Alternating row colors for better readability
-                    if i % 2 == 0:
-                        value_str = self._colorize_value(value_str, value)
-                    else:
-                        value_str = self._colorize_value(value_str, value, dim=True)
+                    value_str = self._colorize_value(value_str, value)
                 
                 row_parts.append(f' {value_str} ')
-            lines.append('│' + '│'.join(row_parts) + '│')
+            lines.append('|' + '|'.join(row_parts) + '|')
         
         # Bottom border
-        bottom_parts = []
+        lines.append('+' + '+'.join(border_parts) + '+')
+        
+        return '\n'.join(lines)
+
+    def _get_terminal_width(self):
+        """Get terminal width or return default"""
+        try:
+            import shutil
+            return shutil.get_terminal_size().columns
+        except:
+            return 80
+        
+    def _format_wide_table(self, rows: List[Dict], columns: List[str]) -> str:
+        """Format wide tables in a more readable way"""
+        if not rows:
+            return self._colorize("Empty result set", Colors.BRIGHT_BLACK)
+        
+        # Option 1: Vertical format (like MySQL's \G)
+        if len(columns) > 20:
+            return self._format_vertical(rows, columns)
+        
+        # Option 2: Wrapped columns
+        elif len(columns) > 10:
+            return self._format_wrapped_columns(rows, columns)
+        
+        # Option 3: Scrollable format with column groups
+        else:
+            return self._format_column_groups(rows, columns)
+        
+    def _format_column_groups(self, rows: List[Dict], columns: List[str]) -> str:
+            """Show a summary first, then let user choose columns to view"""
+            lines = []
+            
+            # Show summary
+            lines.append(f"{Colors.BOLD}Wide table detected: {len(columns)} columns, {len(rows)} rows{Colors.RESET}")
+            lines.append(f"{Colors.YELLOW}Columns:{Colors.RESET}")
+            
+            # Show columns in a compact list
+            for i, col in enumerate(columns, 1):
+                if i % 6 == 1:  # New line every 6 columns
+                    lines.append("")
+                lines.append(f"{i:2}. {col:15}", end="")
+            
+            lines.append(f"\n\n{Colors.CYAN}💡 Tip: Use these commands to view specific columns:{Colors.RESET}")
+            lines.append(f"   \\set table_format vertical  # Show as vertical records")
+            lines.append(f"   \\set max_column_width 15    # Make columns narrower") 
+            lines.append(f"   \\export csv mydata.csv      # Export to CSV for Excel")
+            
+            # Show first few columns as preview
+            preview_cols = columns[:5]
+            lines.append(f"\n{Colors.BRIGHT_BLACK}Preview (first 5 columns):{Colors.RESET}")
+            preview_table = self._format_regular_chunk(rows, preview_cols)
+            lines.extend(preview_table.split('\n'))
+            
+            return '\n'.join(lines)
+        
+    def _cmd_wide(self, args):
+        """Show wide table in different formats"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        if not args:
+            print(f"{Colors.YELLOW}Usage: \\wide [vertical|wrapped]{Colors.RESET}")
+            return
+        
+        format_type = args[0].lower()
+        columns = list(self.config.last_result[0].keys()) if self.config.last_result else []
+        
+        if format_type == 'vertical':
+            result = self._format_vertical(self.config.last_result, columns)
+        elif format_type == 'wrapped':
+            result = self._format_wrapped_columns(self.config.last_result, columns)
+        else:
+            print(f"{Colors.RED}Unknown format: {format_type}. Use 'vertical' or 'wrapped'{Colors.RESET}")
+            return
+        
+        print(result)
+
+        
+    def _cmd_cols(self, args):
+        """Show specific columns from last result"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        if not args:
+            # Show available columns
+            columns = list(self.config.last_result[0].keys())
+            print(f"{Colors.BOLD}Available columns ({len(columns)} total):{Colors.RESET}")
+            for i, col in enumerate(columns, 1):
+                print(f"{i:3}. {col}")
+            print(f"\n{Colors.CYAN}Usage: \\cols 1,3,5  or  \\cols name,age,email{Colors.RESET}")
+            return
+        
+        # Parse column specification
+        col_spec = ' '.join(args)
+        all_columns = list(self.config.last_result[0].keys())
+        
+        selected_columns = []
+        for spec in col_spec.split(','):
+            spec = spec.strip()
+            if spec.isdigit():
+                # Column number
+                idx = int(spec) - 1
+                if 0 <= idx < len(all_columns):
+                    selected_columns.append(all_columns[idx])
+            elif spec in all_columns:
+                # Column name
+                selected_columns.append(spec)
+        
+        if not selected_columns:
+            print(f"{Colors.RED}No valid columns specified{Colors.RESET}")
+            return
+        
+        # Show selected columns
+        formatted_table = self.formatter.format_table(self.config.last_result, selected_columns)
+        print(formatted_table)
+    
+    def _format_regular_chunk(self, rows: List[Dict], columns: List[str]) -> str:
+        """Format a chunk of columns as a regular table"""
+        col_widths = {}
         for col in columns:
-            bottom_parts.append('─' * (col_widths[col] + 2))
-        lines.append('└' + '┴'.join(bottom_parts) + '┘')
+            col_widths[col] = min(len(col), 20)  # Smaller width for chunks
+            
+        for row in rows:
+            for col in columns:
+                value_str = self._format_value(row.get(col))
+                col_widths[col] = max(col_widths[col], min(len(value_str), 20))
+        
+        lines = []
+        
+        # Header
+        header_parts = []
+        for col in columns:
+            header_text = col[:col_widths[col]].ljust(col_widths[col])
+            if self.config.colorize_output:
+                header_text = self._colorize(header_text, Colors.BOLD + Colors.CYAN)
+            header_parts.append(header_text)
+        lines.append(' | '.join(header_parts))
+        
+        # Separator
+        sep_parts = ['-' * col_widths[col] for col in columns]
+        lines.append('-+-'.join(sep_parts))
+        
+        # Data rows
+        for row in rows:
+            row_parts = []
+            for col in columns:
+                value = row.get(col)
+                value_str = self._format_value(value)
+                
+                if len(value_str) > col_widths[col]:
+                    value_str = value_str[:col_widths[col]-3] + '...'
+                
+                value_str = value_str.ljust(col_widths[col])
+                
+                if self.config.colorize_output:
+                    value_str = self._colorize_value(value_str, value)
+                
+                row_parts.append(value_str)
+            lines.append(' | '.join(row_parts))
+        
+        return '\n'.join(lines)
+    
+    def _format_wrapped_columns(self, rows: List[Dict], columns: List[str]) -> str:
+        """Format with wrapped columns - show in chunks"""
+        terminal_width = self._get_terminal_width()
+        chunk_size = max(3, terminal_width // 25)  # Roughly 25 chars per column
+        
+        lines = []
+        
+        # Split columns into chunks
+        for chunk_start in range(0, len(columns), chunk_size):
+            chunk_end = min(chunk_start + chunk_size, len(columns))
+            chunk_columns = columns[chunk_start:chunk_end]
+            
+            lines.append(f"\n{Colors.BOLD}Columns {chunk_start + 1}-{chunk_end}:{Colors.RESET}")
+            lines.append("=" * 50)
+            
+            # Format this chunk as a regular table
+            chunk_lines = self._format_regular_chunk(rows, chunk_columns)
+            lines.extend(chunk_lines.split('\n'))
         
         return '\n'.join(lines)
     
@@ -403,6 +751,8 @@ class EnhancedSQLShell:
         self.formatter = TableFormatter(self.config)
         self.query_count = 0
         self.start_time = datetime.now()
+        self.auto_detect_wide = False   # ADD THIS LINE
+        self.wide_table_threshold = 30  # ADD THIS LINE - columns threshold
         
         # SQL keywords for completion
         self.sql_keywords = [
@@ -457,12 +807,124 @@ class EnhancedSQLShell:
             '\\refresh': self._cmd_reload,
             '\\modules': self._cmd_list_modules,
             '\\debug': self._cmd_debug_mode,
+            '\\wide' : self._cmd_wide,
+            '\\cols': self._cmd_cols,
+            '\\normal':self._cmd_show_normal,
+            '\\force':self._cmd_show_normal,
+            '\\wide_force':self._cmd_show_wide_forced,
+            '\\csv': self._cmd_show_csv_style,
+            '\\columns': self._cmd_show_columns_only,
+            '\\schema':  self._cmd_show_columns_only
         }
     
 
         
+    # ADD THESE METHODS TO YOUR EXISTING SQLShell CLASS in shell.py
+
+    def _cmd_wide(self, args):
+        """Show wide table in different formats"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        if not args:
+            print(f"{Colors.YELLOW}Usage: \\wide [vertical|wrapped]{Colors.RESET}")
+            return
+        
+        format_type = args[0].lower()
+        columns = list(self.config.last_result[0].keys()) if self.config.last_result else []
+        
+        if format_type == 'vertical':
+            result = self._format_vertical(self.config.last_result, columns)
+        elif format_type == 'wrapped':
+            result = self._format_wrapped_columns(self.config.last_result, columns)
+        else:
+            print(f"{Colors.RED}Unknown format: {format_type}. Use 'vertical' or 'wrapped'{Colors.RESET}")
+            return
+        
+        print(result)
+
+    def _format_value_simple(self, value):
+        """Simple value formatter (since we can't access formatter._format_value)"""
+        if value is None:
+            return self.config.null_display
+        elif isinstance(value, bool):
+            return 'TRUE' if value else 'FALSE'
+        elif isinstance(value, (int, float)):
+            return str(value)
+        else:
+            return str(value)
+    def _format_vertical(self, rows, columns):
+            """Format as vertical records (like MySQL \\G command)"""
+            lines = []
+            
+            for i, row in enumerate(rows, 1):
+                lines.append(f"{Colors.BOLD}*************************** {i}. row ***************************{Colors.RESET}")
+                
+                # Find the maximum column name length for alignment
+                max_col_len = max(len(col) for col in columns) if columns else 0
+                
+                for col in columns:
+                    value = self._format_value_simple(row.get(col))
+                    col_name = col.rjust(max_col_len)
+                    
+                    if self.config.colorize_output:
+                        col_name = f"{Colors.BRIGHT_CYAN}{col_name}{Colors.RESET}"
+                        if row.get(col) is None:
+                            value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
+                        elif isinstance(row.get(col), (int, float)):
+                            value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
+                    
+                    lines.append(f"{col_name}: {value}")
+                
+                if i < len(rows):  # Add separator between records
+                    lines.append("")
+            
+            return '\n'.join(lines)
+    def _cmd_cols(self, args):
+        """Show specific columns from last result"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        if not args:
+            # Show available columns
+            columns = list(self.config.last_result[0].keys())
+            print(f"{Colors.BOLD}Available columns ({len(columns)} total):{Colors.RESET}")
+            for i, col in enumerate(columns, 1):
+                print(f"{i:3}. {col}")
+            print(f"\n{Colors.CYAN}Usage: \\cols 1,3,5  or  \\cols name,age,email{Colors.RESET}")
+            return
+        
+        # Parse column specification
+        col_spec = ' '.join(args)
+        all_columns = list(self.config.last_result[0].keys())
+        
+        selected_columns = []
+        for spec in col_spec.split(','):
+            spec = spec.strip()
+            if spec.isdigit():
+                # Column number
+                idx = int(spec) - 1
+                if 0 <= idx < len(all_columns):
+                    selected_columns.append(all_columns[idx])
+            elif spec in all_columns:
+                # Column name
+                selected_columns.append(spec)
+        
+        if not selected_columns:
+            print(f"{Colors.RED}No valid columns specified{Colors.RESET}")
+            return
+        
+        # Show selected columns
+        formatted_table = self.formatter.format_table(self.config.last_result, selected_columns)
+        print(formatted_table)
 
     
+
+    # MODIFY YOUR EXISTING _handle_select_result method to store the result:
+
+        
     def _get_connection_info(self) -> str:
         """Get current connection information"""
         try:
@@ -727,37 +1189,47 @@ class EnhancedSQLShell:
         print()  # Empty line for readability
     
     def _handle_select_result(self, result, start_time):
-        """Handle SELECT query results with enhanced display"""
+        """Handle SELECT query results"""
         execution_time = time.time() - start_time
         
-        # Store result for export functionality
+        # STORE THE RESULT
         self.config.last_result = result
         
-        if result:
-            # Format and display table
-            formatted_table = self.formatter.format_table(result)
-            print(formatted_table)
+        if result:  # Assuming result is a list of dictionaries for SELECT
+            num_columns = len(result[0]) if result else 0
             
-            # Enhanced summary
+            # Check if table is wide AND auto-detection is enabled
+            if (self.config.auto_detect_wide and 
+                num_columns > self.config.wide_table_threshold):
+                
+                print(f"\n{Colors.YELLOW}📊 Wide table detected: {num_columns} columns, {len(result)} rows{Colors.RESET}")
+                print(f"{Colors.CYAN}💡 Wide table mode is ON. Use these commands:{Colors.RESET}")
+                print(f"   {Colors.BOLD}\\wide vertical{Colors.RESET}  - Show as vertical records")
+                print(f"   {Colors.BOLD}\\cols 1,2,3{Colors.RESET}    - Show specific columns")
+                print(f"   {Colors.BOLD}\\cols{Colors.RESET}          - List all columns")
+                print(f"   {Colors.BOLD}\\show normal{Colors.RESET}   - Force show normal table")
+                print(f"   {Colors.BOLD}\\set auto_detect_wide false{Colors.RESET} - Disable auto-detection")
+                print()
+                
+                # Don't show the table automatically, let user choose
+                print(f"{Colors.BRIGHT_BLACK}Table too wide for automatic display.{Colors.RESET}")
+                print(f"{Colors.BRIGHT_BLACK}Use the commands above to view your data.{Colors.RESET}")
+            else:
+                # Normal table display
+                formatted_table = self.formatter.format_table(result)
+                print(formatted_table)
+            
+            # Show summary
             if self.config.show_row_count:
                 row_count = len(result)
                 plural = 's' if row_count != 1 else ''
-                summary = f"({row_count} row{plural} returned)"
-                if self.config.colorize_output:
-                    print(f"\n{Colors.BRIGHT_BLACK}{summary}{Colors.RESET}")
-                else:
-                    print(f"\n{summary}")
+                print(f"\n{Colors.BRIGHT_BLACK}({row_count} row{plural}){Colors.RESET}")
         else:
-            self._print_info("Query returned no results")
-            self.config.last_result = None
+            print(f"{Colors.BRIGHT_BLACK}Empty result set{Colors.RESET}")
         
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
-            timing_msg = f"Execution time: {time_str}"
-            if self.config.colorize_output:
-                print(f"{Colors.BRIGHT_BLACK}{timing_msg}{Colors.RESET}")
-            else:
-                print(timing_msg)
+            print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
     
     def _handle_modify_result(self, operation, start_time):
         """Handle INSERT/UPDATE/DELETE results"""
@@ -1102,32 +1574,236 @@ class EnhancedSQLShell:
         except ValueError as e:
             self._print_error(f"Invalid value: {e}")
     
+    
+    def _cmd_show_normal(self, args):
+        """Force show table in normal format, bypassing all wide table logic"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        print(f"{Colors.CYAN}Forcing normal table display (ignoring all wide table settings)...{Colors.RESET}")
+        
+        # Use the original format_table method directly, not any enhanced version
+        result = self._format_basic_table(self.config.last_result)
+        print(result)
+
+    def _format_basic_table(self, rows):
+        """Basic table formatter that ignores wide table logic - always shows everything"""
+        if not rows:
+            return f"{Colors.BRIGHT_BLACK}Empty result set{Colors.RESET}"
+        
+        columns = list(rows[0].keys())
+        
+        # Calculate column widths (using original logic)
+        col_widths = {}
+        for col in columns:
+            col_widths[col] = len(col)  # Start with column name length
+            
+        # Check all row values for max width
+        for row in rows:
+            for col in columns:
+                value_str = self._format_value_simple(row.get(col))
+                # Use original max_column_width from config, but allow override
+                max_width = self.config.max_column_width
+                col_widths[col] = max(col_widths[col], min(len(value_str), max_width))
+        
+        lines = []
+        
+        # Top border
+        border_parts = []
+        for col in columns:
+            border_parts.append('-' * (col_widths[col] + 2))
+        lines.append('+' + '+'.join(border_parts) + '+')
+        
+        # Header row
+        header_parts = []
+        for col in columns:
+            header_text = col[:col_widths[col]].ljust(col_widths[col])
+            if self.config.colorize_output:
+                header_text = f"{Colors.BOLD}{Colors.CYAN}{header_text}{Colors.RESET}"
+            header_parts.append(f' {header_text} ')
+        lines.append('|' + '|'.join(header_parts) + '|')
+        
+        # Header separator
+        lines.append('+' + '+'.join(border_parts) + '+')
+        
+        # Data rows
+        for row in rows:
+            row_parts = []
+            for col in columns:
+                value = row.get(col)
+                value_str = self._format_value_simple(value)
+                
+                # Truncate if too long
+                if len(value_str) > col_widths[col]:
+                    value_str = value_str[:col_widths[col]-3] + '...'
+                
+                value_str = value_str.ljust(col_widths[col])
+                
+                # Add colors
+                if self.config.colorize_output:
+                    if value is None:
+                        value_str = f"{Colors.BRIGHT_BLACK}{value_str}{Colors.RESET}"
+                    elif isinstance(value, (int, float)):
+                        value_str = f"{Colors.BRIGHT_GREEN}{value_str}{Colors.RESET}"
+                    elif isinstance(value, bool):
+                        value_str = f"{Colors.BRIGHT_MAGENTA}{value_str}{Colors.RESET}"
+                
+                row_parts.append(f' {value_str} ')
+            lines.append('|' + '|'.join(row_parts) + '|')
+        
+        # Bottom border
+        lines.append('+' + '+'.join(border_parts) + '+')
+        
+        return '\n'.join(lines)
+# MODIFY your existing _cmd_set_config method to handle the new settings:
+    def _cmd_show_wide_forced(self, args):
+        """Show table with temporarily increased column width"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        # Temporarily increase max_column_width
+        original_width = self.config.max_column_width
+        original_format = self.config.table_format
+        
+        # Set wider settings temporarily
+        self.config.max_column_width = 30  # Wider columns
+        self.config.table_format = 'ascii'
+        
+        print(f"{Colors.CYAN}Showing with wider columns (temporarily set to 30 chars)...{Colors.RESET}")
+        
+        try:
+            # Use basic formatter
+            result = self._format_basic_table(self.config.last_result)
+            print(result)
+        finally:
+            # Restore original settings
+            self.config.max_column_width = original_width
+            self.config.table_format = original_format
+            
+    def _cmd_show_csv_style(self, args):
+        """Show table in CSV format for easy viewing"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        print(f"{Colors.CYAN}CSV-style display:{Colors.RESET}")
+        
+        columns = list(self.config.last_result[0].keys())
+        
+        # Header
+        if self.config.colorize_output:
+            header = f"{Colors.BOLD}{Colors.CYAN}" + ",".join(columns) + f"{Colors.RESET}"
+        else:
+            header = ",".join(columns)
+        print(header)
+        
+        # Data rows
+        for row in self.config.last_result:
+            row_data = []
+            for col in columns:
+                value = self._format_value_simple(row.get(col))
+                # Escape commas and quotes for CSV
+                if ',' in value or '"' in value:
+                    value = f'"{value.replace('"', '""')}"'
+                row_data.append(value)
+            print(",".join(row_data))
+            
+    # You can also add a command to show just column headers:
+    def _cmd_show_columns_only(self, args):
+        """Show only the column names and types"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
+            return
+        
+        columns = list(self.config.last_result[0].keys())
+        print(f"{Colors.BOLD}Column Names ({len(columns)} total):{Colors.RESET}")
+        
+        for i, col in enumerate(columns, 1):
+            # Try to determine type from first non-null value
+            col_type = "UNKNOWN"
+            for row in self.config.last_result:
+                if row.get(col) is not None:
+                    value = row.get(col)
+                    if isinstance(value, int):
+                        col_type = "INTEGER"
+                    elif isinstance(value, float):
+                        col_type = "REAL"
+                    elif isinstance(value, bool):
+                        col_type = "BOOLEAN"
+                    elif isinstance(value, str):
+                        col_type = "TEXT"
+                    break
+            
+            if self.config.colorize_output:
+                print(f"{Colors.BRIGHT_CYAN}{i:3}.{Colors.RESET} {col:30} {Colors.BRIGHT_BLACK}({col_type}){Colors.RESET}")
+            else:        
+                print(f"{i:3}. {col:30} ({col_type})")
+    def _cmd_set_config(self, args):
+        """Set configuration option"""
+        if len(args) < 2:
+            print(f"{Colors.RED}Usage: \\set <option> <value>{Colors.RESET}")
+            print(f"{Colors.YELLOW}Wide table options:{Colors.RESET}")
+            print(f"  auto_detect_wide true/false    - Enable/disable wide table auto-detection")  
+            print(f"  wide_table_threshold <number>  - Set column threshold for wide tables")
+            print(f"{Colors.YELLOW}Other options: table_format, max_column_width, null_display, colorize_output{Colors.RESET}")
+            return
+        
+        option, value = args[0], args[1]
+        
+        try:
+            if option == 'table_format' and value in ['ascii', 'markdown', 'csv']:
+                self.config.table_format = value
+                print(f"Set {option} = {value}")
+            elif option == 'max_column_width':
+                self.config.max_column_width = int(value)
+                print(f"Set {option} = {value}")
+            elif option == 'null_display':
+                self.config.null_display = value
+                print(f"Set {option} = {value}")
+            elif option == 'colorize_output':
+                self.config.colorize_output = value.lower() == 'true'
+                print(f"Set {option} = {value}")
+            elif option == 'auto_detect_wide':  # NEW OPTION
+                self.config.auto_detect_wide = value.lower() == 'true'
+                status = "enabled" if self.config.auto_detect_wide else "disabled"
+                print(f"{Colors.GREEN}Wide table auto-detection {status}{Colors.RESET}")
+            elif option == 'wide_table_threshold':  # NEW OPTION
+                self.config.wide_table_threshold = int(value)
+                print(f"{Colors.GREEN}Wide table threshold set to {value} columns{Colors.RESET}")
+            else:
+                print(f"{Colors.RED}Unknown option: {option}{Colors.RESET}")
+                return
+            
+            self.config.save_config()
+        
+        except ValueError as e:
+            print(f"{Colors.RED}Invalid value: {e}{Colors.RESET}")
+
+    # UPDATE your _cmd_show_config method to show the new settings:
     def _cmd_show_config(self, args):
-        """Show configuration with enhanced display"""
+        """Show configuration"""
         if args:
             option = args[0]
             if hasattr(self.config, option):
                 value = getattr(self.config, option)
-                print(f"{Colors.BRIGHT_CYAN}{option}{Colors.RESET} = {Colors.BRIGHT_WHITE}{value}{Colors.RESET}")
+                print(f"{option} = {value}")
             else:
-                self._print_error(f"Unknown option: {option}")
+                print(f"{Colors.RED}Unknown option: {option}{Colors.RESET}")
         else:
-            print(f"{Colors.BOLD}⚙️  Current Configuration:{Colors.RESET}\n")
+            print(f"{Colors.BOLD}Current Configuration:{Colors.RESET}")
+            print(f"table_format = {self.config.table_format}")
+            print(f"max_column_width = {self.config.max_column_width}")
+            print(f"null_display = {self.config.null_display}")
+            print(f"colorize_output = {self.config.colorize_output}")
+            print(f"timing = {self.config.timing}")
+            print(f"echo_queries = {self.config.echo_queries}")
             
-            config_items = [
-                ('table_format', self.config.table_format),
-                ('max_column_width', self.config.max_column_width),
-                ('null_display', f"'{self.config.null_display}'"),
-                ('colorize_output', self.config.colorize_output),
-                ('timing', self.config.timing),
-                ('echo_queries', self.config.echo_queries),
-                ('auto_reload', getattr(self.config, 'auto_reload', True)),
-                ('reload_on_error', getattr(self.config, 'reload_on_error', False)),
-            ]
-            
-            config_data = [{'Option': opt, 'Value': str(val)} for opt, val in config_items]
-            formatted_table = self.formatter.format_table(config_data, ['Option', 'Value'])
-            print(formatted_table)
+            # ADD THESE LINES for wide table settings
+            print(f"{Colors.CYAN}Wide Table Settings:{Colors.RESET}")
+            print(f"auto_detect_wide = {getattr(self.config, 'auto_detect_wide', True)}")
+            print(f"wide_table_threshold = {getattr(self.config, 'wide_table_threshold', 10)}")
     
     def _cmd_show_history(self, args):
         """Show command history with enhanced display"""

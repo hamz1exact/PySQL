@@ -73,6 +73,12 @@ def execute_select_query(ast, database):
         for row in filtered_rows:
             selected_row = {col: row.get(col) for col in ast.columns}
             result.append(serialize_row(selected_row))
+    if ast.order_by:
+        
+        for col, direction in ast.order_by:
+            if col not in set(ast.columns):
+                raise ValueError(f"ORDER BY column '{col}' is either not presented in SELECT columns or found in table '{table_name}'")
+            result = sorted(result, key=lambda row:row[col], reverse=(direction == "DESC"))
     return result
 
 def condition_evaluation(where, row, table_schema):
