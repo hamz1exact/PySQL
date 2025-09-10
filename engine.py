@@ -14,7 +14,7 @@ class Lexer:
     keywords = (
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
-        "USE", "DEFAULT", "ALIAS", "AS")
+        "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT")
     AbsenceOfValue = {
         "NONE", "NULL", "EMPTY"
     }
@@ -159,8 +159,8 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        print(self.tokens)
         
+        # print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -221,18 +221,22 @@ class Parser:
             raise SyntaxError(f"Expected token type '{token_type}', got '{actual_type}' at position {self.pos}")
 
     def parse_select_statement(self):
+        where = None
+        unique = False
         self.eat("SELECT")
+        if self.current_token() and self.current_token()[0] == "DISTINCT":
+            self.eat("DISTINCT")
+            unique = True
         columns = self.parse_columns()
         self.eat("FROM")
         table = self.parse_table()
-        where = None
         token = self.current_token()
         if token and token[0] == "WHERE":
             self.eat("WHERE")
             where = self.parse_condition_tree()
         self.eat("SEMICOLON")
 
-        return SelectStatement(columns, table, where)
+        return SelectStatement(columns, table, where, distinct = unique)
 
 
               
@@ -242,8 +246,9 @@ class Parser:
             self.eat("STAR")
             return ["*"]
         columns = []
-        alias = "?column?"
+        col_alias = "?column?"
         opn = False
+        is_unique = False
         if self.current_token() and self.current_token()[0] == "OPEN_PAREN":
             self.eat("OPEN_PAREN")
             opn = True
@@ -251,6 +256,9 @@ class Parser:
             if self.current_token() and self.current_token()[0] == "FUNC":
                 func_name = self.eat("FUNC")[1]
                 self.eat("OPEN_PAREN")
+                if self.current_token() and self.current_token()[0] == "DISTINCT":
+                    self.eat("DISTINCT")
+                    is_unique = True
                 if self.current_token() and self.current_token()[0] == "STAR":
                     arg = self.eat("STAR")[1]
                 else:
@@ -258,11 +266,11 @@ class Parser:
                 self.eat("CLOSE_PAREN")
                 if self.current_token() and self.current_token()[0] == "AS":
                     self.eat("AS")
-                    if self.current_token()[0] == "STRING": alias = self.eat("STRING")[1]
-                    elif self.current_token()[0] == "IDENTIFIER": alias = self.eat("IDENTIFIER")[1]
+                    if self.current_token()[0] == "STRING": col_alias = self.eat("STRING")[1]
+                    elif self.current_token()[0] == "IDENTIFIER": col_alias = self.eat("IDENTIFIER")[1]
                     else:
                         raise ValueError(f"Couldn't use {self.current_token()[1]} as an Alias, please use your alias inside -> ''")
-                columns.append(FunctionCall(func_name, arg, alias))
+                columns.append(FunctionCall(func_name, arg, alias=col_alias, distinct=is_unique))
                 break
                 
             elif self.current_token() and self.current_token()[0] == "IDENTIFIER":

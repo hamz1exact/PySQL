@@ -39,7 +39,7 @@ def execute_select_query(ast, database):
     for row in table:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             filtered_rows.append(row)
-    
+            
     if ast.columns == ["*"]:
         ast.columns = table[0].keys()
     else:
@@ -52,6 +52,15 @@ def execute_select_query(ast, database):
             else:
                 if col not in table_schema:  
                     raise ColumnNotFoundError(col, table_name)
+    if isinstance(ast, SelectStatement) and ast.distinct:
+        seen = set()
+        unique_rows = []
+        for row in filtered_rows:
+            row_tup = tuple(row[col].value for col in ast.columns if not isinstance(row[col], SERIAL))
+            if row_tup not in seen:
+                seen.add(row_tup)
+                unique_rows.append(row)
+        filtered_rows = unique_rows
                     
     result = []
     if any(isinstance(col, FunctionCall) for col in ast.columns):
@@ -91,8 +100,7 @@ def condition_evaluation(where, row, table_schema):
     elif isinstance(where, LikeCondition):
         if where.NOT:
             return not execute_where_like_condition(where, row, table_schema)
-        return execute_where_like_condition(where, row, table_schema)
-    
+        return execute_where_like_condition(where, row, table_schema)    
 
 def execute_where_condition(where, row, table_schema):
     if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
@@ -292,17 +300,19 @@ def execute_use_statement(ast, database):
 def execute_function(function, rows, table_schema):
     func_name = function.function_name
     arguments = function.arg
+    values = None
+    if function.arg != '*':
+        values = [row[function.arg].value for row in rows]
     total = 0
+    if function.distinct:
+            values = set(list(values))
     if func_name == "COUNT":
-        if arguments == "*":
-            return len(rows)
-        else:
-            return len([row for row in rows if (row.get(arguments).value if isinstance(row.get(arguments), SQLType) else row.get(arguments)) is not None])
+            return len(values) if values else len(rows)
     elif func_name == "SUM":
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in SUM Function")
         if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = sum(row[function.arg].value for row in rows)
+            total = sum(values)
         else:
             raise ValueError(f"SUM Function works Only with INT/FLOAT columns")
         return total
@@ -310,7 +320,7 @@ def execute_function(function, rows, table_schema):
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in MIN Function")
         if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = min(row[function.arg].value for row in rows)
+            total = min(values)
         else:
             raise ValueError(f"MIN Function works Only with INT/FLOAT columns")
         return total
@@ -318,7 +328,7 @@ def execute_function(function, rows, table_schema):
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in MAX Function")
         if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = max(row[function.arg].value for row in rows)
+            total = max(values)
         else:
             raise ValueError(f"MAX Function works Only with INT/FLOAT columns")
         return total
@@ -326,7 +336,7 @@ def execute_function(function, rows, table_schema):
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in AVG Function")
         if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = sum(row[function.arg].value for row in rows) / len(rows)
+            total = sum(values) / len(rows)
         else:
             raise ValueError(f"AVG Function works Only with INT/FLOAT columns")
         return (f"{total:.2f}")

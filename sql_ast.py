@@ -1,8 +1,9 @@
 class SelectStatement:
-    def __init__(self, columns = None, table = None, where = None):
+    def __init__(self, columns = None, table = None, where = None, distinct = False):
         self.columns = columns
         self.table = table
         self.where = where        
+        self.distinct = distinct
         
 
 class Condition:
@@ -53,10 +54,11 @@ class UseStatement:
         
         
 class FunctionCall:
-    def __init__(self, function_name, arg, alias = "?column?"):
+    def __init__(self, function_name, arg, distinct = False, alias = "?column?"):
         self.function_name = function_name
         self.alias = alias
         self.arg = arg
+        self.distinct = distinct
         
 class CheckNullColumn:
     def __init__(self, column, isNull = True):
