@@ -1,6 +1,6 @@
 from sql_ast import *
 from database_manager import Table
-from checker import *
+import re
 from datatypes import *
 from errors import *
 def execute(ast, database):
@@ -59,7 +59,7 @@ def execute_select_query(ast, database):
     # Filter rows based on WHERE clause
     filtered_rows = []
     for row in table:
-        if ast.where is None or condition_evaluation(ast.where, row, table_schema):
+        if ast.where is None or where_condition_evaluation(ast.where, row, table_schema):
             filtered_rows.append(row)
     
     result = []
@@ -70,11 +70,22 @@ def execute_select_query(ast, database):
         for row in filtered_rows:
             # Create tuple key from GROUP BY column values
             bucket_key = tuple(row[col].value for col in ast.group_by)
-            
             if bucket_key not in groups:
                 groups[bucket_key] = []
             groups[bucket_key].append(row)
+            
+
         
+        if ast.having:
+            
+            results = {}
+            for bucket_key, group_rows in groups.items():
+                if having_condition_evaluation(ast.having, ast.group_by ,group_rows, table_schema):
+                    results[bucket_key] = group_rows
+            groups = results
+        
+            
+        ()
         # Build result rows for each group
         for bucket_key, group_rows in groups.items():
             result_row = {}
@@ -151,7 +162,64 @@ def execute_select_query(ast, database):
     
     return result
 
-def condition_evaluation(where, row, table_schema):
+
+def having_condition_evaluation(having, group, row, table_schema):
+    
+    if isinstance(having, HavingCondition):
+        return execute_having_condition(having, group, row, table_schema)
+
+    elif isinstance(having, HavingLogicalCondition):
+        return execute_having_logical_condition(having, group, row, table_schema)
+    
+    
+def execute_having_condition(having, group, row, table_schema):
+        if having.left.type == "FUNC":
+            left = execute_function(having.left.content, row, table_schema)
+        elif having.left.type == "VALUE":
+            left = having.left.content
+        elif having.left.type == "ID":
+            left = execute_having_col_condition(having.left.content, group, row)
+        
+        if having.right.type == "FUNC":
+            right = execute_function(having.right.content, row, table_schema)
+        elif having.right.type == "VALUE":
+            right = having.right.content
+        elif having.right.type == "ID":
+            right = execute_having_col_condition(having.right.content, group, row)
+        
+        if having.left.type == "VALUE":
+            if type(having.left.content) == str:
+                left = str(left).lower()
+        if having.right.type == "VALUE":
+            if type(having.right.content) == str:
+                right = str(right).lower()
+        if having.low_operator == "=": return left == right
+        if having.low_operator == "!=": return left != right
+        if having.low_operator == "<": return left < right
+        if having.low_operator == "<=": return left <= right
+        if having.low_operator == ">": return left > right
+        if having.low_operator == ">=": return left >= right
+        
+def execute_having_logical_condition(having, group, row, table_schema):
+    high_operator = having.high_operator
+    left_expression_result = having_condition_evaluation(having.left_expression ,group, row, table_schema)
+    right_expression_result = having_condition_evaluation(having.right_expression ,group, row, table_schema)
+    
+    if high_operator == "AND":
+        return left_expression_result and right_expression_result
+    else:
+        return left_expression_result or right_expression_result
+
+def execute_having_col_condition(col, group, row):
+    if col not in set(group):
+        raise ValueError(f"column {col} must appear in the GROUP BY clause or be used in an aggregate function")
+    row = row[0]
+    if type(row[col].value) == str:
+        return row[col].value.lower()
+    return row[col].value
+
+
+def where_condition_evaluation(where, row, table_schema):
     
     if isinstance(where, NegationCondition):
         return not(execute_where_negation_condition(where, row, table_schema))
@@ -179,6 +247,7 @@ def condition_evaluation(where, row, table_schema):
         return execute_where_like_condition(where, row, table_schema)    
 
 def execute_where_condition(where, row, table_schema):
+            
     if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
             col = row[where.column].value.lower()
             val = table_schema[where.column](where.value).value.lower()
@@ -197,8 +266,8 @@ def execute_where_condition(where, row, table_schema):
 
 def execute_where_logical_condition(where, row, table_schema):
     MainOperator = where.MainOperator.upper()
-    left_result = condition_evaluation(where.left, row, table_schema)
-    right_result = condition_evaluation(where.right, row, table_schema)
+    left_result = where_condition_evaluation(where.left, row, table_schema)
+    right_result = where_condition_evaluation(where.right, row, table_schema)
     
     if MainOperator == "AND":
         return left_result and right_result
@@ -327,7 +396,7 @@ def execute_update_query(ast, database):
 
     # Loop through rows
     for row in table_rows:
-        if ast.where is None or condition_evaluation(ast.where, row, table_schema):
+        if ast.where is None or where_condition_evaluation(ast.where, row, table_schema):
             for col, new_val in ast.columns.items():
                 # Wrap raw Python value in correct SQLType
                 row[col] = table_schema[col](new_val)
@@ -348,7 +417,7 @@ def execute_delete_query(ast, database):
     n = 0
     for i in range(len(table_rows) - 1, -1, -1):  # start from last data row
         row = table_rows[i]
-        if condition_evaluation(ast.where, row, table_schema):
+        if where_condition_evaluation(ast.where, row, table_schema):
             del table_rows[i]
             n += 1
     print(f"{n} rows deleted")
@@ -391,7 +460,7 @@ def execute_function(function, rows, table_schema):
             total = sum(values)
         else:
             raise ValueError(f"SUM Function works Only with INT/FLOAT columns")
-        return f"{total:.2f}"
+        return float(f"{total:.2f}")
     elif func_name == "MIN":
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in MIN Function")
@@ -415,13 +484,7 @@ def execute_function(function, rows, table_schema):
             if not values:  # Handle empty case
                 return 0.0
             total = sum(values) / len(values)  # Fixed: use len(values)
-            return f"{total:.2f}"  # Add return statement and consistent formatting
+            return float(f"{total:.2f}")  # Add return statement and consistent formatting
         else:
             raise ValueError(f"AVG Function works Only with INT/FLOAT columns")
                     
-            
-                
-        
-        
-    
-    

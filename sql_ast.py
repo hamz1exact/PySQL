@@ -1,5 +1,5 @@
 class SelectStatement:
-    def __init__(self, columns = None, special_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None):
+    def __init__(self, columns = None, special_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None):
         self.columns = columns
         self.special_columns = special_columns
         self.table = table
@@ -7,6 +7,7 @@ class SelectStatement:
         self.distinct = distinct
         self.order_by = order_by
         self.group_by = group_by
+        self.having = having
         
 
 
@@ -92,15 +93,21 @@ class LikeCondition:
         self.arg = arg
         self.NOT = NOT
         
-class Having_Condition:
-    def __init__(self, arg, low_operator, val):
-        self.arg = arg
-        self.low_operator = low_operator
-        self.val = val
-class Having_Logical_condition:
-    def __init__(self, left, high_operator, right):
+class HavingCondition:
+    def __init__(self, left, low_operator, right):
         self.left = left
-        self.operator = high_operator
+        self.low_operator = low_operator
         self.right = right
+        
+class HavingLogicalCondition:
+    def __init__(self, left_expression, high_operator, right_expression):
+        self.left_expression = left_expression
+        self.high_operator = high_operator
+        self.right_expression = right_expression
+        
+class InpType:
+    def __init__(self, type, content):
+        self.type = type
+        self.content = content
         
         

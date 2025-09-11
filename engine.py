@@ -2,8 +2,6 @@ from sql_ast import *
 from executor import execute 
 from datetime import datetime
 from database_manager import DatabaseManager, Table
-import re
-from checker import *
 from datatypes import *
 
 
@@ -268,6 +266,7 @@ class Parser:
         unique = False
         order_in = []
         group_in = []
+        having_in = None
         self.eat("SELECT")
         if self.current_token() and self.current_token()[0] == "DISTINCT":
             self.eat("DISTINCT")
@@ -281,10 +280,13 @@ class Parser:
             where = self.parse_condition_tree()
         if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
             group_in = self.group_by()
+            if self.current_token() and self.current_token()[0] == "HAVING":
+                self.eat("HAVING")
+                having_in = self.parse_having()
         if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
             order_in = self.order_by()
         self.eat("SEMICOLON")
-        return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in)
+        return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in)
 
 
               
@@ -354,7 +356,6 @@ class Parser:
         return group
             
         
-            
 
     def order_by(self):
         self.eat("ORDER_BY_KEY")
@@ -372,9 +373,45 @@ class Parser:
             else:
                 break
         return order
-
-
+    
+    def parse_having_expression(self):
         
+        if self.current_token() and self.current_token()[0] == "FUNC":
+            node = InpType(type="FUNC", content = self.parse_special_columns())
+            
+        elif self.current_token() and self.current_token()[0] == "IDENTIFIER":
+            col = self.eat("IDENTIFIER")[1]
+            node = InpType(type="ID", content=col)
+            
+        elif self.current_token() and self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):
+            val = self.eat(self.current_token()[0])[1]
+            node = InpType(type = "VALUE", content = val)
+            
+        else:
+            raise ValueError("Second argument must be an aggregate function, a value, or a column from the GROUP BY clause.")
+        
+        return node
+            
+        
+        
+    def parse_having(self):
+        if self.current_token()[1] == "(":
+            self.eat("OPEN_PAREN")
+            left_node = self.parse_having()
+            self.eat("CLOSE_PAREN")
+        else:
+            left = self.parse_having_expression()
+            low_operator = self.eat("LOW_PRIORITY_OPERATOR")[1]
+            right = self.parse_having_expression()
+            left_node = HavingCondition(left, low_operator, right)
+                
+        if self.current_token() and self.current_token()[0] == "HIGH_PRIORITY_OPERATOR":
+            high_operator = self.eat("HIGH_PRIORITY_OPERATOR")[1]
+            right_node = self.parse_having()
+            return HavingLogicalCondition(left_node, high_operator, right_node)
+        else:
+            return left_node
+
 
     def parse_table(self):
         return self.eat("IDENTIFIER")[1]
@@ -568,6 +605,7 @@ class Parser:
                 left_node = Condition(col, op, val)
             else:
                 raise ValueError (f"Expected Valid Datatype for Where Clause but got {self.current_token()[1]}")
+        
         # --- Check for logical operator (AND/OR) ---
         if self.current_token() and self.current_token()[0] == "HIGH_PRIORITY_OPERATOR":
             operator = self.eat("HIGH_PRIORITY_OPERATOR")[1]
