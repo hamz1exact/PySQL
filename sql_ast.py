@@ -1,5 +1,6 @@
 class SelectStatement:
-    def __init__(self, columns = None, special_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None):
+    def __init__(self, columns = None, special_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None, offset = None, limit = None):
+        
         self.columns = columns
         self.special_columns = special_columns
         self.table = table
@@ -8,6 +9,8 @@ class SelectStatement:
         self.order_by = order_by
         self.group_by = group_by
         self.having = having
+        self.offset = offset
+        self.limit = limit
         
 
 

@@ -37,9 +37,16 @@ class Lexer:
     group_by_keys = {
             "GROUP"
             }
-    having_keys ={
+    having_keys = {
         "HAVING"
     }
+    offset_keys = {
+        "OFFSET"
+    }
+    limit_keys = {
+        "LIMIT"
+    }
+    
     functions = {"COUNT", "SUM", "MAX", "MIN", "AVG"}
     datatypes = {
         "INT": INT,
@@ -71,7 +78,14 @@ class Lexer:
             # --- Numbers ---
             if char.isdigit():
                 number = self.get_number()
-                self.tokens.append(("NUMBER", number))
+                if self.tokens[-1][0] == "LIMIT":
+                    self.tokens.pop()
+                    self.tokens.append(("LIMIT", number))
+                elif self.tokens[-1][0] == "OFFSET":
+                    self.tokens.pop()
+                    self.tokens.append(("OFFSET", number))
+                else:
+                    self.tokens.append(("NUMBER", number))
                 continue
             # --- Identifiers, keywords, booleans, datatypes ---
             if char.isalpha():
@@ -79,7 +93,13 @@ class Lexer:
                 upper_word = word.upper()
                 if upper_word in Lexer.keywords:
                     self.tokens.append((upper_word, upper_word))
-
+                    
+                elif upper_word in Lexer.limit_keys:
+                    self.tokens.append(("LIMIT", "LIMIT"))
+                
+                elif upper_word in Lexer.offset_keys:
+                    self.tokens.append(("OFFSET", "OFFSET"))
+                
                 elif upper_word in Lexer.like:
                     if self.tokens and self.tokens[-1][1] == "NOT":
                         self.tokens.pop()
@@ -267,6 +287,7 @@ class Parser:
         order_in = []
         group_in = []
         having_in = None
+        limit, offset = None, None
         self.eat("SELECT")
         if self.current_token() and self.current_token()[0] == "DISTINCT":
             self.eat("DISTINCT")
@@ -285,8 +306,14 @@ class Parser:
                 having_in = self.parse_having()
         if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
             order_in = self.order_by()
+        if self.current_token() and self.current_token()[0] == "OFFSET":
+            raise ValueError("The OFFSET clause must be used with a LIMIT clause.")
+        if self.current_token() and self.current_token()[0] == "LIMIT":
+            limit = self.eat("LIMIT")[1]
+            if self.current_token() and self.current_token()[0] == "OFFSET":
+                offset = self.eat("OFFSET")[1]
         self.eat("SEMICOLON")
-        return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in)
+        return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
 
 
               

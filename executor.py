@@ -159,6 +159,10 @@ def execute_select_query(ast, database):
             
             # Sort by this column
             result = sorted(result, key=lambda row: row.get(col), reverse=(direction == "DESC"))
+    if ast.limit:
+        if ast.offset:
+            result = result[int(ast.offset):]
+        result = result[:int(ast.limit)]
     
     return result
 
