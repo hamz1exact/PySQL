@@ -1,10 +1,13 @@
 class SelectStatement:
-    def __init__(self, columns = None, table = None, where = None, distinct = False, order_by = None):
+    def __init__(self, columns = None, special_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None):
         self.columns = columns
+        self.special_columns = special_columns
         self.table = table
         self.where = where        
         self.distinct = distinct
         self.order_by = order_by
+        self.group_by = group_by
+        
 
 
 class Condition:

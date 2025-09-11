@@ -36,6 +36,9 @@ class Lexer:
     order_by_drc = {
         "ASC", "DESC"
     }
+    group_by_keys = {
+            "GROUP"
+            }
     functions = {"COUNT", "SUM", "MAX", "MIN", "AVG"}
     datatypes = {
         "INT": INT,
@@ -80,6 +83,8 @@ class Lexer:
                         self.tokens.pop()
                         self.tokens.append(("LIKE", "NOT"))
                     self.tokens.append(("LIKE", upper_word))
+                elif upper_word in Lexer.group_by_keys:
+                    self.tokens.append(("GROUP_BY_KEY", upper_word))
                 elif upper_word in Lexer.between:
                     if self.tokens and self.tokens[-1][1] == "NOT":
                         self.tokens.pop()
@@ -88,6 +93,10 @@ class Lexer:
                 elif upper_word == "BY":
                     if self.tokens[-1][0] == "ORDER_BY_KEY":
                         self.tokens.append(("ORDER_BY_KEY", upper_word))
+                    elif self.tokens[-1][0] == "GROUP_BY_KEY":
+                        self.tokens.append(("GROUP_BY_KEY", upper_word))
+                    else:
+                        raise ValueError ("'BY' keyword Should be Followed by either GROUP or ORDER")
                 elif upper_word in Lexer.order_by_keys:
                     self.tokens.append(("ORDER_BY_KEY", upper_word))
                 elif upper_word in Lexer.order_by_drc:
@@ -236,90 +245,112 @@ class Parser:
     def parse_select_statement(self):
         where = None
         unique = False
-        order_out = None
         order_in = []
+        group_in = []
         self.eat("SELECT")
         if self.current_token() and self.current_token()[0] == "DISTINCT":
             self.eat("DISTINCT")
             unique = True
-        columns = self.parse_columns()
+        columns, function_columns = self.parse_columns()
         self.eat("FROM")
         table = self.parse_table()
         token = self.current_token()
         if token and token[0] == "WHERE":
             self.eat("WHERE")
             where = self.parse_condition_tree()
+        if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
+            group_in = self.group_by(columns)
         if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
-                self.eat("ORDER_BY_KEY")
-                self.eat("ORDER_BY_KEY")
-                self.order_by(order_in)
+            order_in = self.order_by()
         self.eat("SEMICOLON")
-        return SelectStatement(columns, table, where, distinct = unique, order_by = order_in)
+        return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in)
 
 
               
     def parse_columns(self):
-        token = self.current_token()
-        if token[0] == "STAR":
-            self.eat("STAR")
-            return ["*"]
         columns = []
-        col_alias = "?column?"
-        opn = False
-        is_unique = False
-        if self.current_token() and self.current_token()[0] == "OPEN_PAREN":
-            self.eat("OPEN_PAREN")
-            opn = True
+        function_columns = []
+        
+        if self.current_token() and self.current_token()[0] == "STAR":
+            self.eat("STAR")
+            return ["*"], []
+        
         while True:
-            if self.current_token() and self.current_token()[0] == "FUNC":
-                func_name = self.eat("FUNC")[1]
-                self.eat("OPEN_PAREN")
-                if self.current_token() and self.current_token()[0] == "DISTINCT":
-                    self.eat("DISTINCT")
-                    is_unique = True
-                if self.current_token() and self.current_token()[0] == "STAR":
-                    arg = self.eat("STAR")[1]
-                else:
-                    arg = self.eat("IDENTIFIER")[1]
-                self.eat("CLOSE_PAREN")
-                if self.current_token() and self.current_token()[0] == "AS":
-                    self.eat("AS")
-                    if self.current_token()[0] == "STRING": col_alias = self.eat("STRING")[1]
-                    elif self.current_token()[0] == "IDENTIFIER": col_alias = self.eat("IDENTIFIER")[1]
-                    else:
-                        raise ValueError(f"Couldn't use {self.current_token()[1]} as an Alias, please use your alias inside -> ''")
-                columns.append(FunctionCall(func_name, arg, alias=col_alias, distinct=is_unique))
-                break
-                
-            elif self.current_token() and self.current_token()[0] == "IDENTIFIER":
+            if self.current_token()[0] == "IDENTIFIER":
                 var = self.eat("IDENTIFIER")[1]
                 columns.append(var)
-            
+            elif self.current_token()[0] == "FUNC":
+                func = self.parse_special_columns()
+                function_columns.append(func)
             else:
                 raise SyntaxError(f"Expected column name or function, got {self.current_token()[0]}")
+
+            if self.current_token() and self.current_token()[0] == "COMMA":
+                self.eat("COMMA")
+            else:
+                break
+        return columns, function_columns
+
+    def parse_special_columns(self):
+        is_unique = False
+        if self.current_token() and self.current_token()[0] == "FUNC":
+            func_name = self.eat("FUNC")[1]
+            self.eat("OPEN_PAREN")
+            if self.current_token() and self.current_token()[0] == "DISTINCT":
+                self.eat("DISTINCT")
+                is_unique = True
+            if self.current_token() and self.current_token()[0] == "STAR":
+                arg = self.eat("STAR")[1]
+            else:
+                arg = self.eat("IDENTIFIER")[1]
+            self.eat("CLOSE_PAREN")
+            if self.current_token() and self.current_token()[0] == "AS":
+                self.eat("AS")
+                if self.current_token()[0] == "STRING": col_alias = self.eat("STRING")[1]
+                elif self.current_token()[0] == "IDENTIFIER": col_alias = self.eat("IDENTIFIER")[1]
+                else:
+                    raise SyntaxError(f"Invalid alias '{self.current_token()[1]}'. Aliases must be identifiers or strings.")
+            else:
+                col_alias = f"{func_name}({arg})"
+            return FunctionCall(func_name, arg, alias=col_alias, distinct=is_unique)
             
+
+    def group_by(self, columns):
+        self.eat("GROUP_BY_KEY")
+        self.eat("GROUP_BY_KEY")
+        group = []
+        while True:
+            if self.current_token() and self.current_token()[0] == "IDENTIFIER":
+                arg = self.eat("IDENTIFIER")[1]
+                group.append(arg)
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
                 continue
             else:
-                if opn:
-                    self.eat("CLOSE_PAREN")
                 break
+        # if not set(columns).issubset(group):
+        #     raise ValueError(f"all selected columns must appear in the GROUP BY clause or be used in an aggregate function")
+        return group
+            
+        
+            
 
-        return columns
-                
-
-    def order_by(self, order):
-        order_col = self.eat("IDENTIFIER")[1]
-        if self.current_token() and self.current_token()[0] != "ORDER_BY_DRC":
-            order_direction = "ASC"
-        else:
-            order_direction = self.eat("ORDER_BY_DRC")[1]
-        order.append((order_col, order_direction))
-        if self.current_token() and self.current_token()[0] == "COMMA":
-            self.eat("COMMA")
-            self.order_by(order)
-            return order
+    def order_by(self):
+        self.eat("ORDER_BY_KEY")
+        self.eat("ORDER_BY_KEY")
+        order = []
+        while True:
+            order_col = self.eat("IDENTIFIER")[1]
+            if self.current_token() and self.current_token()[0] != "ORDER_BY_DRC":
+                order_direction = "ASC"
+            else:
+                order_direction = self.eat("ORDER_BY_DRC")[1]
+            order.append((order_col, order_direction))
+            if self.current_token() and self.current_token()[0] == "COMMA":
+                self.eat("COMMA")
+            else:
+                break
+        return order
 
 
         

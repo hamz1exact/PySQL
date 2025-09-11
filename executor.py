@@ -32,53 +32,123 @@ def execute_select_query(ast, database):
     table_name = ast.table
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
+    
     table = database[table_name].rows
     table_schema = database[table_name].schema
-    # Filter where rows
+    
+    # Handle wildcard columns - use schema instead of first row
+    if ast.columns == ["*"]:
+        ast.columns = list(table_schema.keys())
+    
+    # Validate columns exist in schema
+    for col in ast.columns:
+        if col not in table_schema:
+            raise ColumnNotFoundError(col, table_name)
+    
+    # Validate special columns (aggregate functions)
+    for col in ast.special_columns:
+        if col.arg != "*" and col.arg not in table_schema:
+            raise ColumnNotFoundError(col.arg, table_name)
+    
+    # Check GROUP BY constraint: selected columns must appear in GROUP BY or be aggregates
+    if ast.group_by and ast.columns and ast.special_columns:
+        for col in ast.columns:
+            if col not in ast.group_by:
+                raise ValueError(f"Column '{col}' must appear in the GROUP BY clause or be used in an aggregate function")
+    
+    # Filter rows based on WHERE clause
     filtered_rows = []
     for row in table:
         if ast.where is None or condition_evaluation(ast.where, row, table_schema):
             filtered_rows.append(row)
-            
-    if ast.columns == ["*"]:
-        ast.columns = table[0].keys()
-    else:
-        for col in ast.columns:
-            if isinstance(col, FunctionCall):
-                if col.arg == "*":
-                    continue
-                elif not col.arg in table_schema:    
-                    raise ColumnNotFoundError(col.arg, table_name)
-            else:
-                if col not in table_schema:  
-                    raise ColumnNotFoundError(col, table_name)
-    if isinstance(ast, SelectStatement) and ast.distinct:
-        seen = set()
-        unique_rows = []
-        for row in filtered_rows:
-            row_tup = tuple(row[col].value for col in ast.columns if not isinstance(row[col], SERIAL))
-            if row_tup not in seen:
-                seen.add(row_tup)
-                unique_rows.append(row)
-        filtered_rows = unique_rows
-                    
+    
     result = []
-    if any(isinstance(col, FunctionCall) for col in ast.columns):
+    
+    # Handle GROUP BY queries
+    if ast.group_by:
+        groups = {}
+        for row in filtered_rows:
+            # Create tuple key from GROUP BY column values
+            bucket_key = tuple(row[col].value for col in ast.group_by)
+            
+            if bucket_key not in groups:
+                groups[bucket_key] = []
+            groups[bucket_key].append(row)
+        
+        # Build result rows for each group
+        for bucket_key, group_rows in groups.items():
+            result_row = {}
+            
+            # Add GROUP BY columns
+            for i, col in enumerate(ast.group_by):
+                result_row[col] = bucket_key[i]
+            
+            # Add regular SELECT columns (must be in GROUP BY)
+            for col in ast.columns:
+                if col not in result_row:
+                    result_row[col] = group_rows[0][col].value if group_rows else None
+                if col in ast.group_by:
+                    # Already added above
+                    pass
+                else:
+                    # This should have been caught by validation above
+                    result_row[col] = group_rows[0][col].value if group_rows else None
+            
+            # Add aggregate function results
+            for func in ast.special_columns:
+                result_row[func.alias] = execute_function(func, group_rows, table_schema)
+            
+            result.append(serialize_row(result_row))
+    
+    # Handle queries with only aggregate functions (no GROUP BY)
+    elif ast.special_columns and not ast.columns:
         result_row = {}
-        for col in ast.columns:
-            if isinstance(col, FunctionCall):
-                result_row[col.alias] = execute_function(col, filtered_rows, table_schema)
-            result = [result_row]   
+        # Add all aggregate function results to the same row
+        for func in ast.special_columns:
+            result_row[func.alias] = execute_function(func, filtered_rows, table_schema)
+        result.append(serialize_row(result_row))
+    
+    # Handle mixed aggregate and regular columns without GROUP BY
+    elif ast.special_columns and ast.columns:
+        raise ValueError("Selected columns must appear in the GROUP BY clause or be used in an aggregate function")
+    
+    # Handle regular SELECT queries (no aggregates, no GROUP BY)
     else:
         for row in filtered_rows:
             selected_row = {col: row.get(col) for col in ast.columns}
             result.append(serialize_row(selected_row))
+    
+    # Apply DISTINCT if specified
+    if ast.distinct:
+        seen = set()
+        unique_rows = []
+        for row in result:
+            # Create tuple from all values in the row for comparison
+            if ast.columns:
+                row_tuple = tuple(row.get(col) for col in ast.columns)
+            else:
+                # For aggregate-only queries, use all values
+                row_tuple = tuple(row.values())
+            
+            if row_tuple not in seen:
+                seen.add(row_tuple)
+                unique_rows.append(row)
+        result = unique_rows
+    
+    # Apply ORDER BY if specified
     if ast.order_by:
+        # Build set of available columns in result
+        available_columns = set()
+        if result:
+            available_columns = set(result[0].keys())
         
         for col, direction in ast.order_by:
-            if col not in set(ast.columns):
-                raise ValueError(f"ORDER BY column '{col}' is either not presented in SELECT columns or found in table '{table_name}'")
-            result = sorted(result, key=lambda row:row[col], reverse=(direction == "DESC"))
+            if col not in available_columns:
+                raise ValueError(f"ORDER BY column '{col}' is not available in the result set")
+            
+            # Sort by this column
+            result = sorted(result, key=lambda row: row.get(col), reverse=(direction == "DESC"))
+    
     return result
 
 def condition_evaluation(where, row, table_schema):
@@ -321,7 +391,7 @@ def execute_function(function, rows, table_schema):
             total = sum(values)
         else:
             raise ValueError(f"SUM Function works Only with INT/FLOAT columns")
-        return total
+        return f"{total:.2f}"
     elif func_name == "MIN":
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in MIN Function")
@@ -342,13 +412,15 @@ def execute_function(function, rows, table_schema):
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in AVG Function")
         if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = sum(values) / len(rows)
+            if not values:  # Handle empty case
+                return 0.0
+            total = sum(values) / len(values)  # Fixed: use len(values)
+            return f"{total:.2f}"  # Add return statement and consistent formatting
         else:
             raise ValueError(f"AVG Function works Only with INT/FLOAT columns")
-        return (f"{total:.2f}")
-                
-        
+                    
             
+                
         
         
     
