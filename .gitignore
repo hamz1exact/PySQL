@@ -27,6 +27,7 @@ venv/
 env/
 ENV/
 shellv2.py
+checker.py
 
 
 # IDE / editor settings

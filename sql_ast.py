@@ -92,3 +92,15 @@ class LikeCondition:
         self.arg = arg
         self.NOT = NOT
         
+class Having_Condition:
+    def __init__(self, arg, low_operator, val):
+        self.arg = arg
+        self.low_operator = low_operator
+        self.val = val
+class Having_Logical_condition:
+    def __init__(self, left, high_operator, right):
+        self.left = left
+        self.operator = high_operator
+        self.right = right
+        
+        

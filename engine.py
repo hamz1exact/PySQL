@@ -39,6 +39,9 @@ class Lexer:
     group_by_keys = {
             "GROUP"
             }
+    having_keys ={
+        "HAVING"
+    }
     functions = {"COUNT", "SUM", "MAX", "MIN", "AVG"}
     datatypes = {
         "INT": INT,
@@ -78,18 +81,25 @@ class Lexer:
                 upper_word = word.upper()
                 if upper_word in Lexer.keywords:
                     self.tokens.append((upper_word, upper_word))
+
                 elif upper_word in Lexer.like:
                     if self.tokens and self.tokens[-1][1] == "NOT":
                         self.tokens.pop()
                         self.tokens.append(("LIKE", "NOT"))
                     self.tokens.append(("LIKE", upper_word))
+                    
                 elif upper_word in Lexer.group_by_keys:
                     self.tokens.append(("GROUP_BY_KEY", upper_word))
+                    
                 elif upper_word in Lexer.between:
                     if self.tokens and self.tokens[-1][1] == "NOT":
                         self.tokens.pop()
                         self.tokens.append(("BETWEEN", "NOT"))
                     self.tokens.append(("BETWEEN", upper_word))
+                    
+                elif upper_word in Lexer.having_keys:
+                    self.tokens.append(("HAVING", upper_word))
+                    
                 elif upper_word == "BY":
                     if self.tokens[-1][0] == "ORDER_BY_KEY":
                         self.tokens.append(("ORDER_BY_KEY", upper_word))
@@ -97,17 +107,22 @@ class Lexer:
                         self.tokens.append(("GROUP_BY_KEY", upper_word))
                     else:
                         raise ValueError ("'BY' keyword Should be Followed by either GROUP or ORDER")
+                    
                 elif upper_word in Lexer.order_by_keys:
                     self.tokens.append(("ORDER_BY_KEY", upper_word))
+                    
                 elif upper_word in Lexer.order_by_drc:
                     self.tokens.append(("ORDER_BY_DRC", upper_word))
+                    
                 elif upper_word == "NOT":
                     if self.tokens and self.tokens[-1][1] == "IS":
                         self.tokens.append(("NULLCHECK", "NOT"))
                     else:
                         self.tokens.append(("NOT", "NOT"))
+                        
                 elif upper_word in Lexer.AbsenceOfValue:
                     self.tokens.append(("NULL", None))
+                    
                 elif upper_word in Lexer.membership:
                     if self.tokens and self.tokens[-1][1] == "NOT":
                         self.tokens.pop()
@@ -117,16 +132,22 @@ class Lexer:
                 elif upper_word in Lexer.nullchecks:
                     
                     self.tokens.append(("NULLCHECK", upper_word))
+                    
                 elif upper_word in Lexer.MainOperators:
-                    self.tokens.append(("MAINOPT", upper_word))
+                    self.tokens.append(("HIGH_PRIORITY_OPERATOR", upper_word))
+                    
                 elif upper_word in Lexer.datatypes:
                     self.tokens.append(("DATATYPE", upper_word))
+                    
                 elif word.lower() == "true":
                     self.tokens.append(("BOOLEAN", True))
+                    
                 elif word.lower() == "false":
                     self.tokens.append(("BOOLEAN", False))
+                    
                 elif upper_word in Lexer.functions:
                     self.tokens.append(("FUNC", upper_word))
+                    
                 else:
                     self.tokens.append(("IDENTIFIER", word))
                 continue
@@ -169,8 +190,8 @@ class Lexer:
 
             # --- Operators ---
             if char in Lexer.Comparison_Operators:
-                opt = self.get_operator()
-                self.tokens.append(("OPT", opt))
+                LOW_PRIORITY_OPERATOR = self.get_operator()
+                self.tokens.append(("LOW_PRIORITY_OPERATOR", LOW_PRIORITY_OPERATOR))
                 continue
 
             # --- Asterisk (SELECT *) ---
@@ -213,11 +234,11 @@ class Lexer:
         return string_val
 
     def get_operator(self):
-        opt = ""
+        LOW_PRIORITY_OPERATOR = ""
         while self.pos < len(self.query) and self.query[self.pos] in Lexer.Comparison_Operators:
-            opt += self.query[self.pos]
+            LOW_PRIORITY_OPERATOR += self.query[self.pos]
             self.pos += 1
-        return opt
+        return LOW_PRIORITY_OPERATOR
     
  
 class Parser:
@@ -259,7 +280,7 @@ class Parser:
             self.eat("WHERE")
             where = self.parse_condition_tree()
         if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
-            group_in = self.group_by(columns)
+            group_in = self.group_by()
         if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
             order_in = self.order_by()
         self.eat("SEMICOLON")
@@ -315,7 +336,7 @@ class Parser:
             return FunctionCall(func_name, arg, alias=col_alias, distinct=is_unique)
             
 
-    def group_by(self, columns):
+    def group_by(self):
         self.eat("GROUP_BY_KEY")
         self.eat("GROUP_BY_KEY")
         group = []
@@ -466,7 +487,7 @@ class Parser:
                         token_value = token_value.lower()
                     args.add(token_value)
                     
-                    # Check for comma (optional for last element)
+                    # Check for comma (LOW_PRIORITY_OPERATORional for last element)
                     if self.current_token() and self.current_token()[0] == "COMMA":
                         self.eat("COMMA")
                     elif self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
@@ -494,7 +515,7 @@ class Parser:
             self.eat("NegationCondition")
             self.eat("OPEN_PAREN")
             col = self.eat("IDENTIFIER")[1]
-            op = self.eat("OPT")[1]
+            op = self.eat("LOW_PRIORITY_OPERATOR")[1]
             if self.current_token()[0] in ("STRING", "BOOLEAN", "NUMBER"):
                 token, token_val = self.current_token()
                 val = token_val
@@ -516,7 +537,7 @@ class Parser:
                 arg1 = self.eat(self.current_token()[0])[1]
                 if self.current_token()[1] != "AND":
                     raise ValueError("Missed 'AND' Operator in BETWEEN Comparison")
-                self.eat("MAINOPT")
+                self.eat("HIGH_PRIORITY_OPERATOR")
                 arg2 = self.eat(self.current_token()[0])[1]
                 if type(arg1) != type(arg2):
                     raise ValueError(
@@ -538,8 +559,8 @@ class Parser:
             arg = self.eat(self.current_token()[0])[1]
             left_node = LikeCondition(col, arg, NOT = not_in_like)
                      
-        elif self.current_token()[0] == "OPT":
-            op = self.eat("OPT")[1]
+        elif self.current_token()[0] == "LOW_PRIORITY_OPERATOR":
+            op = self.eat("LOW_PRIORITY_OPERATOR")[1]
             if self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):
                 token,  value = self.current_token()
                 self.eat(token)
@@ -548,8 +569,8 @@ class Parser:
             else:
                 raise ValueError (f"Expected Valid Datatype for Where Clause but got {self.current_token()[1]}")
         # --- Check for logical operator (AND/OR) ---
-        if self.current_token() and self.current_token()[0] == "MAINOPT":
-            operator = self.eat("MAINOPT")[1]
+        if self.current_token() and self.current_token()[0] == "HIGH_PRIORITY_OPERATOR":
+            operator = self.eat("HIGH_PRIORITY_OPERATOR")[1]
             # Recursively parse the right side of the condition
             right_node = self.parse_condition_tree()
             return LogicalCondition(left_node, operator, right_node)
@@ -584,9 +605,9 @@ class Parser:
             col = self.eat("IDENTIFIER")[1]
 
             # Assignment operator
-            opt = self.eat("OPT")[1]
-            if opt not in ("=", "=="):
-                raise SyntaxError(f"Invalid assignment operator '{opt}' for column '{col}'. Use '=' or '=='.")
+            LOW_PRIORITY_OPERATOR = self.eat("LOW_PRIORITY_OPERATOR")[1]
+            if LOW_PRIORITY_OPERATOR not in ("=", "=="):
+                raise SyntaxError(f"Invalid assignment operator '{LOW_PRIORITY_OPERATOR}' for column '{col}'. Use '=' or '=='.")
 
             # Value token (type-aware)
             token_type, token_value = self.current_token()
@@ -655,8 +676,8 @@ class Parser:
                     raise ValueError(f"Invalid DEFAULT for column '{col_name}', SERIAL columns cannot have explicit default values.")
                 
                 self.eat("DEFAULT")
-                opt = self.eat("OPT")[1]
-                if opt not in ("=", "=="):
+                LOW_PRIORITY_OPERATOR = self.eat("LOW_PRIORITY_OPERATOR")[1]
+                if LOW_PRIORITY_OPERATOR not in ("=", "=="):
                     raise ValueError("Syntax error in DEFAULT clause: expected '=' or '==' after DEFAULT keyword")
                 token_type, token_value = self.current_token()
                 if token_type:
