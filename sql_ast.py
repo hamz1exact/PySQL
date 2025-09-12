@@ -1,4 +1,8 @@
 class SelectStatement:
+    
+    __slots__ = ['columns', 'special_columns', 'table', 'where', 'distinct', 
+                 'order_by', 'group_by', 'having', 'offset', 'limit']
+    
     def __init__(self, columns = None, special_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None, offset = None, limit = None):
         
         self.columns = columns
@@ -12,7 +16,11 @@ class SelectStatement:
         self.offset = offset
         self.limit = limit
         
-
+class Columns:
+    def __init__(self, col, alias = None):
+        self.col_name = col
+        self.alias = alias
+        
 
 class Condition:
     def __init__(self, column, operator, value):
@@ -112,5 +120,6 @@ class InpType:
     def __init__(self, type, content):
         self.type = type
         self.content = content
-        
+
+      
         

@@ -320,6 +320,7 @@ class Parser:
     def parse_columns(self):
         columns = []
         function_columns = []
+        alias = None
         
         if self.current_token() and self.current_token()[0] == "STAR":
             self.eat("STAR")
@@ -327,8 +328,14 @@ class Parser:
         
         while True:
             if self.current_token()[0] == "IDENTIFIER":
-                var = self.eat("IDENTIFIER")[1]
-                columns.append(var)
+                col = self.eat("IDENTIFIER")[1]
+                alias = col
+                if self.current_token() and self.current_token()[0] == "AS":
+                    self.eat("AS")
+                    alias = self.eat(self.current_token()[0])[1]
+                columns.append(Columns(col, alias))
+                
+                
             elif self.current_token()[0] == "FUNC":
                 func = self.parse_special_columns()
                 function_columns.append(func)
@@ -339,6 +346,7 @@ class Parser:
                 self.eat("COMMA")
             else:
                 break
+        # print(columns, function_columns)
         return columns, function_columns
 
     def parse_special_columns(self):

@@ -42,8 +42,8 @@ def execute_select_query(ast, database):
     
     # Validate columns exist in schema
     for col in ast.columns:
-        if col not in table_schema:
-            raise ColumnNotFoundError(col, table_name)
+        if col.col_name not in table_schema:
+            raise ColumnNotFoundError(col.col_name, table_name)
     
     # Validate special columns (aggregate functions)
     for col in ast.special_columns:
@@ -53,8 +53,8 @@ def execute_select_query(ast, database):
     # Check GROUP BY constraint: selected columns must appear in GROUP BY or be aggregates
     if ast.group_by and ast.columns and ast.special_columns:
         for col in ast.columns:
-            if col not in ast.group_by:
-                raise ValueError(f"Column '{col}' must appear in the GROUP BY clause or be used in an aggregate function")
+            if col.col_name not in ast.group_by:
+                raise ValueError(f"Column '{col.col_name}' must appear in the GROUP BY clause or be used in an aggregate function")
     
     # Filter rows based on WHERE clause
     filtered_rows = []
@@ -96,14 +96,14 @@ def execute_select_query(ast, database):
             
             # Add regular SELECT columns (must be in GROUP BY)
             for col in ast.columns:
-                if col not in result_row:
-                    result_row[col] = group_rows[0][col].value if group_rows else None
-                if col in ast.group_by:
+                if col.col_name not in result_row:
+                    result_row[col.alias] = group_rows[0][col.col_name].value if group_rows else None
+                if col.col_name in ast.group_by:
                     # Already added above
                     pass
                 else:
                     # This should have been caught by validation above
-                    result_row[col] = group_rows[0][col].value if group_rows else None
+                    result_row[col.alias] = group_rows[0][col.col_name].value if group_rows else None
             
             # Add aggregate function results
             for func in ast.special_columns:
@@ -123,10 +123,10 @@ def execute_select_query(ast, database):
     elif ast.special_columns and ast.columns:
         raise ValueError("Selected columns must appear in the GROUP BY clause or be used in an aggregate function")
     
-    # Handle regular SELECT queries (no aggregates, no GROUP BY)
+    # Handle regular SELECT queries (no aggregates, no GROUP BY)    
     else:
         for row in filtered_rows:
-            selected_row = {col: row.get(col) for col in ast.columns}
+            selected_row = {col.alias if col.alias else col.col_name: row.get(col.col_name) for col in ast.columns}
             result.append(serialize_row(selected_row))
     
     # Apply DISTINCT if specified
