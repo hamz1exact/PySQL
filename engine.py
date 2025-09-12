@@ -322,20 +322,33 @@ class Parser:
         function_columns = []
         alias = None
         
-        if self.current_token() and self.current_token()[0] == "STAR":
-            self.eat("STAR")
-            return ["*"], []
+        # if self.current_token() and self.current_token()[0] == "STAR":
+        #     self.eat("STAR")
+        #     if self.current_token() and self.current_token()[0] == "AS":
+        #         raise ValueError ("'*' select all take no alias")
+        #     columns.append(Columns("*", None))
+        #     if self.current_token() and self.current_token()[0] != "COMMA":
+        #         return columns, function_columns
+        #     if self.current_token() and self.current_token()[0] == "COMMA":
+        #         self.eat("COMMA")
+            
+            
         
         while True:
-            if self.current_token()[0] == "IDENTIFIER":
+            if self.current_token()[0] == "STAR":
+                self.eat("STAR")
+                if self.current_token() and self.current_token()[0] == "AS":
+                    raise ValueError ("'*' select all take no alias")
+                columns.append(Columns("*", None))
+                
+            elif self.current_token()[0] == "IDENTIFIER":
                 col = self.eat("IDENTIFIER")[1]
                 alias = col
                 if self.current_token() and self.current_token()[0] == "AS":
                     self.eat("AS")
                     alias = self.eat(self.current_token()[0])[1]
                 columns.append(Columns(col, alias))
-                
-                
+                                
             elif self.current_token()[0] == "FUNC":
                 func = self.parse_special_columns()
                 function_columns.append(func)

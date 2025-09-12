@@ -1,12 +1,12 @@
 class SelectStatement:
     
-    __slots__ = ['columns', 'special_columns', 'table', 'where', 'distinct', 
+    __slots__ = ['columns', 'function_columns', 'table', 'where', 'distinct', 
                  'order_by', 'group_by', 'having', 'offset', 'limit']
     
-    def __init__(self, columns = None, special_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None, offset = None, limit = None):
+    def __init__(self, columns = None, function_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None, offset = None, limit = None):
         
         self.columns = columns
-        self.special_columns = special_columns
+        self.function_columns = function_columns
         self.table = table
         self.where = where        
         self.distinct = distinct
@@ -122,4 +122,57 @@ class InpType:
         self.content = content
 
       
+class Expression:
+
+    def evaluate(self, row, schema):
+        raise NotImplementedError
+    
+    def get_referenced_columns(self):
+
+        raise NotImplementedError
+
+class ColumnExpression(Expression):
+    def __init__(self, column_name):
+        self.column_name = column_name
+    
+    def evaluate(self, row, schema):
+        return row[self.column_name].value  # Your datatype's value
+    
+    def get_referenced_columns(self):
+        return {self.column_name}
+
+class LiteralExpression(Expression):
+    def __init__(self, value):
+        self.value = value
+    
+    def evaluate(self, row, schema):
+        return self.value
+    
+    def get_referenced_columns(self):
+        return set()
+
+class BinaryOperation(Expression):
+    def __init__(self, left, operator, right):
+        self.left = left        
+        self.operator = operator 
+        self.right = right      
+    
+    def evaluate(self, row, schema):
+        left_val = self.left.evaluate(row, schema)
+        right_val = self.right.evaluate(row, schema)
         
+        if self.operator == '+':
+            return left_val + right_val
+        elif self.operator == '-':
+            return left_val - right_val
+        elif self.operator == '*':
+            return left_val * right_val
+        elif self.operator == '/':
+            return left_val / right_val
+        else:
+            raise ValueError(f"Unknown operator: {self.operator}")
+    
+    def get_referenced_columns(self):
+        return self.left.get_referenced_columns() | self.right.get_referenced_columns()
+    
+
