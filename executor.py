@@ -65,7 +65,7 @@ def execute_select_query(ast, database):
     result = []
     
     # Handle GROUP BY queries
-    if ast.group_by:
+    if ast.group_by and ast.special_columns and ast.columns:
         groups = {}
         for row in filtered_rows:
             # Create tuple key from GROUP BY column values
@@ -92,7 +92,17 @@ def execute_select_query(ast, database):
             
             # Add GROUP BY columns
             for i, col in enumerate(ast.group_by):
-                result_row[col] = bucket_key[i]
+                ok = False
+                for object in ast.columns:
+                    if object.col_name == col:
+                        ok = True
+                if ok:
+                    result_row[object.alias] = bucket_key[i]
+                else:
+                    result_row[col] = bucket_key[i]
+                
+                    
+                    
             
             # Add regular SELECT columns (must be in GROUP BY)
             for col in ast.columns:
