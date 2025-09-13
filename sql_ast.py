@@ -131,12 +131,15 @@ class Expression:
 
         raise NotImplementedError
 
+
+
+        
 class ColumnExpression(Expression):
     def __init__(self, column_name):
         self.column_name = column_name
     
     def evaluate(self, row, schema):
-        return row[self.column_name].value  # Your datatype's value
+        return row[self.column_name].value  
     
     def get_referenced_columns(self):
         return {self.column_name}

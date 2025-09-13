@@ -37,7 +37,7 @@ def execute_select_query(ast, database):
     table_schema = database[table_name].schema
     
     
-    table_has_asterisk = any(obj.col_name == "*" for obj in ast.columns)   
+    table_has_asterisk = any(obj.col_name == "*" for obj in ast.columns)
     normalized_columns = []
     for col_obj in ast.columns:
         if col_obj.col_name == "*":
@@ -145,6 +145,7 @@ def execute_select_query(ast, database):
     
     # Handle regular SELECT queries (no aggregates, no GROUP BY)    
     else:
+        
         for row in filtered_rows:
             selected_row = {col.alias if col.alias else col.col_name: row.get(col.col_name) for col in ast.columns}
             result.append(serialize_row(selected_row))
