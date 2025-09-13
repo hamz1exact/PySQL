@@ -47,8 +47,25 @@ class Lexer:
         "LIMIT"
     }
     
-    functions = {"COUNT", "SUM", "MAX", "MIN", "AVG"}
+    math_operations = {
+        
+        "*",
+        "/",
+        "+",
+        "-"
+            }
+    
+    functions = {
+        
+        "COUNT",
+        "SUM",
+        "MAX",
+        "MIN",
+        "AVG"
+        
+        }
     datatypes = {
+        
         "INT": INT,
         "INTEGER": INT,
         "STRING":VARCHAR,
@@ -60,6 +77,7 @@ class Lexer:
         "SERIAL": SERIAL,
         "DATE": DATE,
         "TIME": TIME,
+        
     }
     Comparison_Operators = ("=", "!", "<", ">")
     MainOperators = ("AND", "OR")
@@ -217,11 +235,15 @@ class Lexer:
                 self.tokens.append(("STAR", char))
                 self.pos += 1
                 continue
+            if char in Lexer.math_operations:
+                self.tokens.append(("MATH_OPERATOR", char))
+                self.pos += 1
+                continue
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         
-        
+        # print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -321,21 +343,21 @@ class Parser:
         columns = []
         function_columns = []
         alias = None
-        
-        if self.current_token() and self.current_token()[0] == "STAR":
-            self.eat("STAR")
-            return ["*"], []
-        
         while True:
-            if self.current_token()[0] == "IDENTIFIER":
+            if self.current_token()[0] == "STAR":
+                self.eat("STAR")
+                if self.current_token() and self.current_token()[0] == "AS":
+                    raise ValueError ("'*' select all take no alias")
+                columns.append(Columns("*", None))
+                
+            elif self.current_token()[0] == "IDENTIFIER":
                 col = self.eat("IDENTIFIER")[1]
                 alias = col
                 if self.current_token() and self.current_token()[0] == "AS":
                     self.eat("AS")
                     alias = self.eat(self.current_token()[0])[1]
                 columns.append(Columns(col, alias))
-                
-                
+                                
             elif self.current_token()[0] == "FUNC":
                 func = self.parse_special_columns()
                 function_columns.append(func)
@@ -773,3 +795,51 @@ class Parser:
         db_name = self.eat("IDENTIFIER")[1]
         self.eat("SEMICOLON")
         return UseStatement(db_name)
+
+
+    def parse_expression(self):
+        """Parse mathematical expressions with operator precedence"""
+        return self.parse_addition()
+
+
+
+    def parse_addition(self):
+        left = self.parse_multiplication()
+        
+        while self.current_token() and self.current_token()[1] in ['+', '-']:
+            operator = self.current_token()[1]
+            self.eat('MATH_OPERATOR')  # or whatever token type
+            right = self.parse_multiplication()
+            left = BinaryOperation(left, operator, right)
+        
+        return left
+
+
+    def parse_multiplication(self):
+        left = self.parse_factor()
+        
+        while self.current_token() and self.current_token()[1] in ['*', '/']:
+            operator = self.current_token()[1]
+            self.eat('MATH_OPERATOR')
+            right = self.parse_factor()
+            left = BinaryOperation(left, operator, right)
+        
+        return left
+
+
+    def parse_factor(self):
+        token = self.current_token()
+        
+        if token[0] == 'LPAREN':  # (
+            self.eat('LPAREN')
+            expr = self.parse_expression()  # Recursively parse inside parentheses
+            self.eat('RPAREN')
+            return expr
+        elif token[0] == 'IDENTIFIER':
+            self.eat('IDENTIFIER')
+            return ColumnExpression(token[1])
+        elif token[0] == 'NUMBER':
+            self.eat('NUMBER')
+            return LiteralExpression(token[1])
+        else:
+            raise ValueError(f"Unexpected token in expression: {token}")

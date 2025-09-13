@@ -36,22 +36,32 @@ def execute_select_query(ast, database):
     table = database[table_name].rows
     table_schema = database[table_name].schema
     
-    # Handle wildcard columns - use schema instead of first row
-    if ast.columns == ["*"]:
-        ast.columns = list(table_schema.keys())
     
-    # Validate columns exist in schema
-    for col in ast.columns:
-        if col.col_name not in table_schema:
-            raise ColumnNotFoundError(col.col_name, table_name)
+    table_has_asterisk = any(obj.col_name == "*" for obj in ast.columns)
+    normalized_columns = []
+    for col_obj in ast.columns:
+        if col_obj.col_name == "*":
+            for key in table_schema.keys():
+                normalized_columns.append(Columns(key, None))
+        elif col_obj.col_name not in table_schema:
+            raise ColumnNotFoundError(col_obj.col_name, table_name)
+        else:
+            alias = f"{table_name}.{col_obj.col_name}" if table_has_asterisk else col_obj.alias
+            normalized_columns.append(Columns(col_obj.col_name, alias))
+
+    ast.columns = normalized_columns
     
+    
+    if table_has_asterisk and ast.function_columns:
+        raise ValueError ("Aggregation over all grouped columns is redundant. The result will return the same value as the original rows. Remove unnecessary aggregates or reduce the GROUP BY columns.")
+            
     # Validate special columns (aggregate functions)
-    for col in ast.special_columns:
+    for col in ast.function_columns:
         if col.arg != "*" and col.arg not in table_schema:
             raise ColumnNotFoundError(col.arg, table_name)
     
     # Check GROUP BY constraint: selected columns must appear in GROUP BY or be aggregates
-    if ast.group_by and ast.columns and ast.special_columns:
+    if ast.group_by and ast.columns and ast.function_columns:
         for col in ast.columns:
             if col.col_name not in ast.group_by:
                 raise ValueError(f"Column '{col.col_name}' must appear in the GROUP BY clause or be used in an aggregate function")
@@ -65,15 +75,16 @@ def execute_select_query(ast, database):
     result = []
     
     # Handle GROUP BY queries
-    if ast.group_by and ast.special_columns and ast.columns:
+    if ast.group_by and ast.function_columns and ast.columns:
+        
         groups = {}
         for row in filtered_rows:
             # Create tuple key from GROUP BY column values
-            bucket_key = tuple(row[col].value for col in ast.group_by)
+            bucket_key = tuple(getattr(row[col], 'value', None) for col in ast.group_by)
             if bucket_key not in groups:
                 groups[bucket_key] = []
             groups[bucket_key].append(row)
-            
+        
 
         
         if ast.having:
@@ -101,8 +112,7 @@ def execute_select_query(ast, database):
                 else:
                     result_row[col] = bucket_key[i]
                 
-                    
-                    
+        
             
             # Add regular SELECT columns (must be in GROUP BY)
             for col in ast.columns:
@@ -116,31 +126,34 @@ def execute_select_query(ast, database):
                     result_row[col.alias] = group_rows[0][col.col_name].value if group_rows else None
             
             # Add aggregate function results
-            for func in ast.special_columns:
+            for func in ast.function_columns:
                 result_row[func.alias] = execute_function(func, group_rows, table_schema)
             
             result.append(serialize_row(result_row))
     
     # Handle queries with only aggregate functions (no GROUP BY)
-    elif ast.special_columns and not ast.columns:
+    elif ast.function_columns and not ast.columns:
         result_row = {}
         # Add all aggregate function results to the same row
-        for func in ast.special_columns:
+        for func in ast.function_columns:
             result_row[func.alias] = execute_function(func, filtered_rows, table_schema)
         result.append(serialize_row(result_row))
     
     # Handle mixed aggregate and regular columns without GROUP BY
-    elif ast.special_columns and ast.columns:
+    elif ast.function_columns and ast.columns:
         raise ValueError("Selected columns must appear in the GROUP BY clause or be used in an aggregate function")
     
     # Handle regular SELECT queries (no aggregates, no GROUP BY)    
     else:
+        
         for row in filtered_rows:
             selected_row = {col.alias if col.alias else col.col_name: row.get(col.col_name) for col in ast.columns}
             result.append(serialize_row(selected_row))
     
     # Apply DISTINCT if specified
+    
     if ast.distinct:
+        
         seen = set()
         unique_rows = []
         for row in result:
@@ -158,6 +171,7 @@ def execute_select_query(ast, database):
     
     # Apply ORDER BY if specified
     if ast.order_by:
+        
         # Build set of available columns in result
         available_columns = set()
         if result:
@@ -170,6 +184,7 @@ def execute_select_query(ast, database):
             # Sort by this column
             result = sorted(result, key=lambda row: row.get(col), reverse=(direction == "DESC"))
     if ast.limit:
+        
         if ast.offset:
             result = result[int(ast.offset):]
         result = result[:int(ast.limit)]
@@ -460,13 +475,20 @@ def execute_function(function, rows, table_schema):
     func_name = function.function_name
     arguments = function.arg
     values = None
-    if function.arg != '*':
-        values = [row[function.arg].value for row in rows]
+    if function.arg == '*':
+        
+        values = rows
+    else:
+            # Extract column values, skip None rows safely
+            values = [row[function.arg].value for row in rows if row[function.arg] is not None]
     total = 0
     if function.distinct:
-            values = set(list(values))
+        values = list(set(values))
+
+    # Execute function
     if func_name == "COUNT":
-            return len(values) if values else len(rows)
+
+        return len(values)
     elif func_name == "SUM":
         if arguments == "*":
             raise ValueError(f"'*' Not Supported in SUM Function")
