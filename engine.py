@@ -525,6 +525,7 @@ class Parser:
         self.eat("CLOSE_PAREN")  # )
         return values
 
+
     def parse_condition_tree(self):
         
         if self.current_token()[1] == "(":
