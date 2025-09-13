@@ -17,7 +17,7 @@ class SelectStatement:
         self.limit = limit
         
 class Columns:
-    def __init__(self, col, alias = None, self.expression = None):
+    def __init__(self, col, alias = None, expression = None):
         self.col_name = col
         self.alias = alias
         self.expression = expression
