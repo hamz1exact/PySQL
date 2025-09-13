@@ -17,9 +17,10 @@ class SelectStatement:
         self.limit = limit
         
 class Columns:
-    def __init__(self, col, alias = None):
+    def __init__(self, col, alias = None, self.expression = None):
         self.col_name = col
         self.alias = alias
+        self.expression = expression
         
 
 class Condition:
