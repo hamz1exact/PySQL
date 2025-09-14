@@ -125,6 +125,7 @@ class BOOLEAN(SQLType):
                 raise ValueError(f"Cannot convert integer '{value}' to BOOLEAN")
         
         # String values → common SQL mappings
+        
         if isinstance(value, str):
             v = value.strip().lower()
             if v in ("true", "t", "1"):

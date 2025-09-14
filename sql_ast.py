@@ -155,7 +155,10 @@ class LiteralExpression(Expression):
     def __init__(self, value):
         self.value = value
     
-    def evaluate(self, row, schema):
+    def evaluate(self, row, schema, expected_type = None):
+        if expected_type:
+            self.value = expected_type(self.value).value
+            
         return self.value
     
     def get_referenced_columns(self):
@@ -233,9 +236,24 @@ class WhereClause(Expression):
         self.right = right
 
     def evaluate(self, row, schema):
-        left = self.left.evaluate(row, schema)
-        right = self.right.evaluate(row, schema)
+        # If left is a column and right is literal → coerce literal
+        if isinstance(self.left, ColumnExpression) and isinstance(self.right, LiteralExpression):
+            col_type = schema[self.left.column_name]  # e.g. AGE, DATE
+            left = self.left.evaluate(row, schema)
+            right = self.right.evaluate(row, schema, expected_type=col_type)
 
+        # If right is column and left is literal → coerce literal
+        elif isinstance(self.right, ColumnExpression) and isinstance(self.left, LiteralExpression):
+            col_type = schema[self.right.column_name]
+            left = self.left.evaluate(row, schema, expected_type=col_type)
+            right = self.right.evaluate(row, schema)
+
+        else:
+            left = self.left.evaluate(row, schema)
+            right = self.right.evaluate(row, schema)
+        if type(right)  == str and type(left) == str:
+            left = left.lower()
+            right = right.lower()
         if self.operator == '=': return left == right
         elif self.operator == ">": return left  > right
         elif self.operator == "<": return left < right
@@ -244,3 +262,8 @@ class WhereClause(Expression):
         elif self.operator == "!=": return left != right
         elif self.operator == "AND": return left and right
         elif self.operator == "OR": return left or  right
+        
+
+class Between(Expression):
+    def __init__(self):
+        pass
