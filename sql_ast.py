@@ -23,7 +23,6 @@ class Columns:
         self.col_object = col_object
         self.alias = alias
         
-        
 
 class Condition:
     def __init__(self, column, operator, value):
@@ -157,8 +156,9 @@ class LiteralExpression(Expression):
     
     def evaluate(self, row, schema, expected_type = None):
         if expected_type:
-            self.value = expected_type(self.value).value
+            converted_value = expected_type(self.value).value
             
+            return converted_value
         return self.value
     
     def get_referenced_columns(self):
@@ -265,5 +265,20 @@ class WhereClause(Expression):
         
 
 class Between(Expression):
-    def __init__(self):
-        pass
+    def __init__(self, expression, lower, upper, is_not = False):
+        self.expression = expression
+        self.lower = lower
+        self.upper = upper
+        self.is_not = is_not
+
+    def evaluate(self, row, schema):
+        
+        expected_type = schema[self.expression.column_name]
+        expr_value = self.expression.evaluate(row, schema)
+        lower_value = self.lower.evaluate(row, schema, expected_type)
+        upper_value = self.upper.evaluate(row, schema, expected_type)
+        if expr_value is None or lower_value is None or upper_value is None:
+            return False
+        if not self.is_not:
+            return self.lower.evaluate(row, schema, expected_type = expected_type)<=self.expression.evaluate(row, schema)<=self.upper.evaluate(row, schema, expected_type = expected_type)
+        return not self.lower.evaluate(row, schema, expected_type = expected_type)<=self.expression.evaluate(row, schema)<=self.upper.evaluate(row, schema, expected_type = expected_type)

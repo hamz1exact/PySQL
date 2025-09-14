@@ -322,6 +322,7 @@ class Parser:
             self.eat("WHERE")
             where = self.parse_expression()
             
+            
         if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
             group_in = self.group_by()
             if self.current_token() and self.current_token()[0] == "HAVING":
@@ -793,7 +794,22 @@ class Parser:
     def parse_expression(self):
         """Parse mathematical expressions with operator precedence"""
         
-        return self.parse_where_logical_condition()
+        return self.parse_where_engine()
+
+    def parse_where_engine(self):
+        left = self.parse_where_logical_condition()
+
+        while self.current_token() and self.current_token()[0] == "BETWEEN":
+            is_nott = False
+            self.eat("BETWEEN")
+            if self.current_token()[0] == "BETWEEN":
+                self.eat("BETWEEN")
+                is_nott = True
+            lower = self.parse_factor()
+            self.eat("HIGH_PRIORITY_OPERATOR")
+            upper = self.parse_factor()
+            left = Between(left, lower, upper, is_not = is_nott)
+        return left
 
     def parse_where_logical_condition(self):
         left = self.parse_where_condition()
@@ -860,7 +876,6 @@ class Parser:
             expression = self.parse_expression()
             self.eat("CLOSE_PAREN")
             return Function(name, expression, distinct=distinct)
-            
         elif token[0] == 'NUMBER' or token[0] == "BOOLEAN" or token[0] == "STRING":
             self.eat(self.current_token()[0])
             return LiteralExpression(token[1])
