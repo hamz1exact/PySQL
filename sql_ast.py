@@ -1,3 +1,5 @@
+import errors
+
 class SelectStatement:
     
     __slots__ = ['columns', 'function_columns', 'table', 'where', 'distinct', 
@@ -17,10 +19,10 @@ class SelectStatement:
         self.limit = limit
         
 class Columns:
-    def __init__(self, col, alias = None, expression = None):
-        self.col_name = col
+    def __init__(self, col_object, alias = None):
+        self.col_object = col_object
         self.alias = alias
-        self.expression = expression
+        
         
 
 class Condition:
@@ -137,12 +139,15 @@ class Expression:
 
         
 class ColumnExpression(Expression):
-    def __init__(self, column_name):
+    def __init__(self, column_name, alias = None):
         self.column_name = column_name
+        self.alias = alias
     
     def evaluate(self, row, schema):
-        return row[self.column_name].value  
-    
+        if self.column_name == "*":
+            return len(row)
+        return row[self.column_name].value
+
     def get_referenced_columns(self):
         return {self.column_name}
 
@@ -157,10 +162,11 @@ class LiteralExpression(Expression):
         return set()
 
 class BinaryOperation(Expression):
-    def __init__(self, left, operator, right):
+    def __init__(self, left, operator, right, alias = None):
         self.left = left        
         self.operator = operator 
         self.right = right      
+        self.alias = alias
     
     def evaluate(self, row, schema):
         left_val = self.left.evaluate(row, schema)
@@ -181,3 +187,26 @@ class BinaryOperation(Expression):
         return self.left.get_referenced_columns() | self.right.get_referenced_columns()
     
 
+class Function:
+    def __init__(self, name, expression, alias = None, distinct=False):
+        self.name = name        # "SUM", "COUNT", etc.
+        self.expression = expression  # ColumnExpression, BinaryOperator, Literal
+        self.alias = alias
+        self.distinct = distinct
+
+    def evaluate(self, rows, table_schema):
+        # 1. Evaluate the expression for each row
+        values = [self.expression.evaluate(row, table_schema) for row in rows]
+
+        # 2. Handle DISTINCT
+        if self.distinct:
+            values = list(set(values))
+
+        # 3. Execute function
+        if self.name == "COUNT":
+            return len(values)
+        elif self.name == "SUM":
+            if not all(isinstance(v, (int, float)) for v in values):
+                raise ValueError("SUM works only with numeric values")
+            return sum(values)
+        # You can extend: AVG, MIN, MAX, etc.

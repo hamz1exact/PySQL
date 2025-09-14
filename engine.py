@@ -342,28 +342,20 @@ class Parser:
     def parse_columns(self):
         columns = []
         function_columns = []
-        alias = None
+        alias_name = None
         while True:
-            if self.current_token()[0] == "STAR":
-                self.eat("STAR")
-                if self.current_token() and self.current_token()[0] == "AS":
-                    raise ValueError ("'*' select all take no alias")
-                columns.append(Columns("*", None))
-                
-            elif self.current_token()[0] == "IDENTIFIER":
-                col = self.eat("IDENTIFIER")[1]
-                alias = col
-                if self.current_token() and self.current_token()[0] == "AS":
-                    self.eat("AS")
-                    alias = self.eat(self.current_token()[0])[1]
-                columns.append(Columns(col, alias))
-                                
-            elif self.current_token()[0] == "FUNC":
-                func = self.parse_special_columns()
-                function_columns.append(func)
+            expr = self.parse_expression()
+            if self.current_token() and self.current_token()[0] == "AS":
+                self.eat("AS")
+                alias_name = self.eat("IDENTIFIER")[1]
+                # Attach alias to expr
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function):
+                    expr.alias = alias_name
+            if self._contains_aggregates(expr):
+                function_columns.append(expr)
             else:
-                raise SyntaxError(f"Expected column name or function, got {self.current_token()[0]}")
-
+                columns.append(expr)
+            
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
             else:
@@ -820,26 +812,57 @@ class Parser:
         
         while self.current_token() and self.current_token()[1] in ['*', '/']:
             operator = self.current_token()[1]
-            self.eat('MATH_OPERATOR')
+            self.eat(self.current_token()[0])
             right = self.parse_factor()
             left = BinaryOperation(left, operator, right)
         
         return left
 
 
+
     def parse_factor(self):
         token = self.current_token()
-        
-        if token[0] == 'LPAREN':  # (
-            self.eat('LPAREN')
+        if token[0] == 'OPEN_PAREN':  # (
+            self.eat('OPEN_PAREN')
             expr = self.parse_expression()  # Recursively parse inside parentheses
-            self.eat('RPAREN')
+            self.eat('CLOSE_PAREN')
             return expr
         elif token[0] == 'IDENTIFIER':
             self.eat('IDENTIFIER')
             return ColumnExpression(token[1])
+        elif token[0] == "FUNC":
+            distinct = False
+            name = self.eat("FUNC")[1]
+            self.eat("OPEN_PAREN")
+            if self.current_token() and self.current_token()[0] == "DISTINCT":
+                self.eat("DISTINCT")
+                distinct = True
+            expression = self.parse_expression()
+            self.eat("CLOSE_PAREN")
+            return Function(name, expression, distinct=distinct)
+            
         elif token[0] == 'NUMBER':
             self.eat('NUMBER')
             return LiteralExpression(token[1])
+        elif token[0] == "STAR":
+            self.eat("STAR")
+            return ColumnExpression(token[1])
         else:
             raise ValueError(f"Unexpected token in expression: {token}")
+        
+        
+    def _contains_aggregates(self, expr):
+        """Check if an expression contains aggregate functions"""
+        if isinstance(expr, Function):  # or whatever your aggregate class is called
+            return True
+        elif isinstance(expr, BinaryOperation):
+            # Check both sides of the operation
+            return (self._contains_aggregates(expr.left) or 
+                    self._contains_aggregates(expr.right))
+        elif isinstance(expr, ColumnExpression):
+            return False
+        elif isinstance(expr, LiteralExpression):
+            return False
+        else:
+            # Handle other expression types as you add them
+            return False

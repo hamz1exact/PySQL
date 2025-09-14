@@ -36,35 +36,54 @@ def execute_select_query(ast, database):
     table = database[table_name].rows
     table_schema = database[table_name].schema
     
-    
-    table_has_asterisk = any(obj.col_name == "*" for obj in ast.columns)
+    all_ids = []
+    for col in ast.columns:
+        all_ids.extend(extract_identifiers(col))
+
+    table_has_asterisk = "*" in all_ids
     normalized_columns = []
-    for col_obj in ast.columns:
-        if col_obj.col_name == "*":
+
+    for col in ast.columns:
+        if isinstance(col, ColumnExpression) and col.column_name == "*":
+            # Expand *
             for key in table_schema.keys():
-                normalized_columns.append(Columns(key, None))
-        elif col_obj.col_name not in table_schema:
-            raise ColumnNotFoundError(col_obj.col_name, table_name)
+                normalized_columns.append(ColumnExpression(key, key))
+        elif isinstance(col, ColumnExpression):
+            # Validate normal columns
+            if col.column_name not in table_schema:
+                raise ColumnNotFoundError(col.column_name, table_name)
+
+            alias = f"{table_name}.{col.column_name}" if table_has_asterisk else col.alias
+            normalized_columns.append(ColumnExpression(col.column_name, alias))
         else:
-            alias = f"{table_name}.{col_obj.col_name}" if table_has_asterisk else col_obj.alias
-            normalized_columns.append(Columns(col_obj.col_name, alias))
+            # This is an expression (BinaryOp, FunctionCall, etc.)
+            normalized_columns.append(col)
 
     ast.columns = normalized_columns
     
+    all_ids = []
+    
+    for col in ast.columns:
+        all_ids.extend(extract_identifiers(col))
+
     
     if table_has_asterisk and ast.function_columns:
         raise ValueError ("Aggregation over all grouped columns is redundant. The result will return the same value as the original rows. Remove unnecessary aggregates or reduce the GROUP BY columns.")
-            
+    
     # Validate special columns (aggregate functions)
+    function_args = []
     for col in ast.function_columns:
-        if col.arg != "*" and col.arg not in table_schema:
-            raise ColumnNotFoundError(col.arg, table_name)
+        function_args.extend(extract_identifiers(col))
+    
+    for col in function_args:
+        if col != "*" and col not in table_schema:
+            raise ColumnNotFoundError(col, table_name)
     
     # Check GROUP BY constraint: selected columns must appear in GROUP BY or be aggregates
     if ast.group_by and ast.columns and ast.function_columns:
-        for col in ast.columns:
-            if col.col_name not in ast.group_by:
-                raise ValueError(f"Column '{col.col_name}' must appear in the GROUP BY clause or be used in an aggregate function")
+        for col in all_ids:
+            if col not in set(ast.group_by):
+                raise ValueError(f"Column '{col}' must appear in the GROUP BY clause or be used in an aggregate function")
     
     # Filter rows based on WHERE clause
     filtered_rows = []
@@ -88,7 +107,6 @@ def execute_select_query(ast, database):
 
         
         if ast.having:
-            
             results = {}
             for bucket_key, group_rows in groups.items():
                 if having_condition_evaluation(ast.having, ast.group_by ,group_rows, table_schema):
@@ -105,10 +123,11 @@ def execute_select_query(ast, database):
             for i, col in enumerate(ast.group_by):
                 ok = False
                 for object in ast.columns:
-                    if object.col_name == col:
+                    custom_columns = "".join(extract_identifiers(object))
+                    if custom_columns == col:
                         ok = True
                 if ok:
-                    result_row[object.alias] = bucket_key[i]
+                    result_row[object.alias if alias else get_expr_name(object)] = bucket_key[i]
                 else:
                     result_row[col] = bucket_key[i]
                 
@@ -116,18 +135,21 @@ def execute_select_query(ast, database):
             
             # Add regular SELECT columns (must be in GROUP BY)
             for col in ast.columns:
-                if col.col_name not in result_row:
-                    result_row[col.alias] = group_rows[0][col.col_name].value if group_rows else None
-                if col.col_name in ast.group_by:
-                    # Already added above
+                column_name = "".join(extract_identifiers(col))
+                if column_name not in result_row:
+                    # Evaluate the expression for the first row in the group, or None if empty
+                    result_row[col.alias or get_expr_name(col)] = col.evaluate(group_rows[0], table_schema) if group_rows else None
+
+                if ast.group_by and col in ast.group_by.expressions:
+                    # Already included via GROUP BY
                     pass
                 else:
-                    # This should have been caught by validation above
-                    result_row[col.alias] = group_rows[0][col.col_name].value if group_rows else None
-            
+                    # If not in GROUP BY, include it anyway (validation ensures this is safe)
+                    result_row[col.alias or get_expr_name(col)] = col.evaluate(group_rows[0], table_schema) if group_rows else None
             # Add aggregate function results
             for func in ast.function_columns:
-                result_row[func.alias] = execute_function(func, group_rows, table_schema)
+                
+                result_row[func.alias or get_expr_name(func)] = func.evaluate(group_rows, table_schema)
             
             result.append(serialize_row(result_row))
     
@@ -136,7 +158,7 @@ def execute_select_query(ast, database):
         result_row = {}
         # Add all aggregate function results to the same row
         for func in ast.function_columns:
-            result_row[func.alias] = execute_function(func, filtered_rows, table_schema)
+            result_row[func.alias or get_expr_name(func)] = func.evaluate(filtered_rows, table_schema)
         result.append(serialize_row(result_row))
     
     # Handle mixed aggregate and regular columns without GROUP BY
@@ -147,23 +169,26 @@ def execute_select_query(ast, database):
     else:
         
         for row in filtered_rows:
-            selected_row = {col.alias if col.alias else col.col_name: row.get(col.col_name) for col in ast.columns}
+            selected_row = {}
+            # selected_row = {col.alias if col.alias else col.col_object: row.get(col.col_object) for col in ast.columns}
+            for col in ast.columns:
+                selected_row[col.alias or get_expr_name(col)] = col.evaluate(row, table_schema) 
             result.append(serialize_row(selected_row))
     
     # Apply DISTINCT if specified
     
     if ast.distinct:
         
+        if ast.columns:
+            column_names = [get_expr_name(col) for col in ast.columns]
+        else:
+            column_names = list(result[0].keys())  
+
+        # Then build the row tuples using actual evaluated values
         seen = set()
         unique_rows = []
         for row in result:
-            # Create tuple from all values in the row for comparison
-            if ast.columns:
-                row_tuple = tuple(row.get(col) for col in ast.columns)
-            else:
-                # For aggregate-only queries, use all values
-                row_tuple = tuple(row.values())
-            
+            row_tuple = tuple(row[name] for name in column_names)
             if row_tuple not in seen:
                 seen.add(row_tuple)
                 unique_rows.append(row)
@@ -396,18 +421,18 @@ def execute_insert_query(ast, database):
             f"Columns: {columns}, Values: {values}"
         )
     new_row = {}
-    for col_name, col_val in table_schema.items():
-        if col_name in columns:
-            idx = columns.index(col_name)
+    for col_object, col_val in table_schema.items():
+        if col_object in columns:
+            idx = columns.index(col_object)
             val = values[idx]
             print(val)
-            new_row[col_name] = table_schema[col_name](val)
-        elif col_name in table_auto:
-            new_row[col_name] = table_auto[col_name].next()
-        elif col_name in table_default:
-            new_row[col_name] = table_default[col_name]
+            new_row[col_object] = table_schema[col_object](val)
+        elif col_object in table_auto:
+            new_row[col_object] = table_auto[col_object].next()
+        elif col_object in table_default:
+            new_row[col_object] = table_default[col_object]
         else:
-            new_row[col_name] = None     
+            new_row[col_object] = None     
     table_rows.append(new_row)
     print(f"Row successfully inserted into table '{table_name}'")
     
@@ -476,7 +501,6 @@ def execute_function(function, rows, table_schema):
     arguments = function.arg
     values = None
     if function.arg == '*':
-        
         values = rows
     else:
             # Extract column values, skip None rows safely
@@ -524,3 +548,50 @@ def execute_function(function, rows, table_schema):
         else:
             raise ValueError(f"AVG Function works Only with INT/FLOAT columns")
                     
+def extract_identifiers(expr):
+    """Recursively extract all column identifiers from an expression object."""
+    
+    if isinstance(expr, ColumnExpression):
+        return [expr.column_name]
+
+    elif isinstance(expr, BinaryOperation):
+        return extract_identifiers(expr.left) + extract_identifiers(expr.right)
+
+    elif isinstance(expr, Function):
+        ids = []
+        ids.extend(extract_identifiers(expr.expression))
+        return ids
+
+    elif isinstance(expr, Columns):  
+        # in case you want to pass a Columns wrapper
+        return extract_identifiers(expr.col_object)
+
+    return []  # literals, constants, etc.
+
+
+def get_output_name(col: Columns):
+    if col.alias:
+        return col.alias
+    obj = col.col_object
+    if isinstance(obj, ColumnExpression):
+        return obj.column_name
+    elif isinstance(obj, LiteralExpression):
+        return str(obj.value)
+    elif isinstance(obj, BinaryOperation):
+        # recursively stringify left and right
+        left = get_expr_name(obj.left)
+        right = get_expr_name(obj.right)
+        return f"{left}{obj.operator}{right}"
+
+def get_expr_name(expr):
+    if isinstance(expr, ColumnExpression):
+        return expr.column_name
+    elif isinstance(expr, LiteralExpression):
+        return str(expr.value)
+    elif isinstance(expr, BinaryOperation):
+        left = get_expr_name(expr.left)
+        right = get_expr_name(expr.right)
+        return f"{left}{expr.operator}{right}"
+    elif isinstance(expr, Function):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
