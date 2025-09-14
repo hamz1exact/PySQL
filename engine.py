@@ -394,7 +394,7 @@ class Parser:
         while True:
             if self.current_token() and self.current_token()[0] == "IDENTIFIER":
                 arg = self.eat("IDENTIFIER")[1]
-                group.append(arg)
+                group.append(ColumnExpression(arg))
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
                 continue
@@ -866,3 +866,4 @@ class Parser:
         else:
             # Handle other expression types as you add them
             return False
+

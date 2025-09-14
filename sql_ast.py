@@ -145,7 +145,8 @@ class ColumnExpression(Expression):
     
     def evaluate(self, row, schema):
         if self.column_name == "*":
-            return len(row)
+            return row
+
         return row[self.column_name].value
 
     def get_referenced_columns(self):
@@ -187,7 +188,7 @@ class BinaryOperation(Expression):
         return self.left.get_referenced_columns() | self.right.get_referenced_columns()
     
 
-class Function:
+class Function(Expression):
     def __init__(self, name, expression, alias = None, distinct=False):
         self.name = name        # "SUM", "COUNT", etc.
         self.expression = expression  # ColumnExpression, BinaryOperator, Literal
@@ -196,9 +197,13 @@ class Function:
 
     def evaluate(self, rows, table_schema):
         # 1. Evaluate the expression for each row
-        values = [self.expression.evaluate(row, table_schema) for row in rows]
 
+        values = [self.expression.evaluate(row, table_schema) for row in rows]
+        
         # 2. Handle DISTINCT
+        
+        if self.distinct and type(values[0]) == dict:
+            raise ValueError("'*' Not Supported In This Expression")
         if self.distinct:
             values = list(set(values))
 
@@ -209,4 +214,14 @@ class Function:
             if not all(isinstance(v, (int, float)) for v in values):
                 raise ValueError("SUM works only with numeric values")
             return sum(values)
+        elif self.name == "AVG":
+            return sum(values) / len(values)
+        elif self.name == "MAX":
+            return max(values)
+        elif self.name == "MIN":
+            return min(values)
         # You can extend: AVG, MIN, MAX, etc.
+
+class GroupBy(Expression):
+    def __init__(self, expressions):
+        self.expressions = expressions

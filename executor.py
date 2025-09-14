@@ -80,9 +80,14 @@ def execute_select_query(ast, database):
             raise ColumnNotFoundError(col, table_name)
     
     # Check GROUP BY constraint: selected columns must appear in GROUP BY or be aggregates
+    group_by_cols  = []
+
+    for col in ast.group_by:
+        group_by_cols.extend(extract_identifiers(col))
+    
     if ast.group_by and ast.columns and ast.function_columns:
         for col in all_ids:
-            if col not in set(ast.group_by):
+            if col not in group_by_cols:
                 raise ValueError(f"Column '{col}' must appear in the GROUP BY clause or be used in an aggregate function")
     
     # Filter rows based on WHERE clause
@@ -94,70 +99,74 @@ def execute_select_query(ast, database):
     result = []
     
     # Handle GROUP BY queries
-    if ast.group_by and ast.function_columns and ast.columns:
+    if ast.group_by and ast.function_columns:
+
         
         groups = {}
         for row in filtered_rows:
-            # Create tuple key from GROUP BY column values
-            bucket_key = tuple(getattr(row[col], 'value', None) for col in ast.group_by)
+            bucket_key = tuple(expr.evaluate(row, table_schema) for expr in ast.group_by)
+            
             if bucket_key not in groups:
                 groups[bucket_key] = []
             groups[bucket_key].append(row)
-        
 
-        
-        if ast.having:
-            results = {}
-            for bucket_key, group_rows in groups.items():
-                if having_condition_evaluation(ast.having, ast.group_by ,group_rows, table_schema):
-                    results[bucket_key] = group_rows
-            groups = results
+        # if ast.having:
+        #     results = {}
+        #     for bucket_key, group_rows in groups.items():
+        #         if having_condition_evaluation(ast.having, ast.group_by ,group_rows, table_schema):
+        #             results[bucket_key] = group_rows
+        #     groups = results
         
             
-        ()
         # Build result rows for each group
         for bucket_key, group_rows in groups.items():
             result_row = {}
             
-            # Add GROUP BY columns
-            for i, col in enumerate(ast.group_by):
-                ok = False
-                for object in ast.columns:
-                    custom_columns = "".join(extract_identifiers(object))
-                    if custom_columns == col:
-                        ok = True
-                if ok:
-                    result_row[object.alias if alias else get_expr_name(object)] = bucket_key[i]
-                else:
-                    result_row[col] = bucket_key[i]
+            # Add GROUP BY columns first
+            for col_expr in ast.columns:
+                if isinstance(col_expr, Function):
+                    continue  # Skip functions, handle below
                 
-        
-            
-            # Add regular SELECT columns (must be in GROUP BY)
-            for col in ast.columns:
-                column_name = "".join(extract_identifiers(col))
-                if column_name not in result_row:
-                    # Evaluate the expression for the first row in the group, or None if empty
-                    result_row[col.alias or get_expr_name(col)] = col.evaluate(group_rows[0], table_schema) if group_rows else None
+                output_name = col_expr.alias or get_expr_name(col_expr)
 
-                if ast.group_by and col in ast.group_by.expressions:
-                    # Already included via GROUP BY
-                    pass
-                else:
-                    # If not in GROUP BY, include it anyway (validation ensures this is safe)
-                    result_row[col.alias or get_expr_name(col)] = col.evaluate(group_rows[0], table_schema) if group_rows else None
-            # Add aggregate function results
-            for func in ast.function_columns:
+                result_row[output_name] = col_expr.evaluate(group_rows[0], table_schema)
                 
-                result_row[func.alias or get_expr_name(func)] = func.evaluate(group_rows, table_schema)
+            group_expressions = ast.group_by.expressions if hasattr(ast.group_by, 'expressions') else ast.group_by
+            
+            for i, group_expr in enumerate(group_expressions):
+                group_output_name = group_expr.alias if hasattr(group_expr, "alias") and group_expr.alias else get_expr_name(group_expr)
+                already_covered = False
+                for col_expr in ast.columns:
+                    if isinstance(col_expr, Function):
+                        continue
+                    if are_same_column(col_expr, group_expr):
+                        already_covered = True
+                        break
+                
+                # Only add if not already covered by SELECT
+                if not already_covered:
+                    result_row[group_output_name] = bucket_key[i]
+                
+                    
+                
+                    
+            
+            # Third: Add aggregate functions
+            for func in ast.function_columns:
+                output_name = func.alias or get_expr_name(func)
+                result_row[output_name] = func.evaluate(group_rows, table_schema)
             
             result.append(serialize_row(result_row))
+            
+            # Add regular SELECT columns (must be in GROUP BY)
+         
     
     # Handle queries with only aggregate functions (no GROUP BY)
     elif ast.function_columns and not ast.columns:
         result_row = {}
         # Add all aggregate function results to the same row
         for func in ast.function_columns:
+
             result_row[func.alias or get_expr_name(func)] = func.evaluate(filtered_rows, table_schema)
         result.append(serialize_row(result_row))
     
@@ -595,3 +604,10 @@ def get_expr_name(expr):
     elif isinstance(expr, Function):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
+    
+def are_same_column(expr1, expr2):
+    """Check if two expressions refer to the same column"""
+    if isinstance(expr1, ColumnExpression) and isinstance(expr2, ColumnExpression):
+        return expr1.column_name == expr2.column_name
+    # Add more cases for other expression types if needed
+    return False
