@@ -38,7 +38,6 @@ class LogicalCondition:
         self.MainOperator = MainOperator
         self.right = right
 
-
 class InsertStatement:
     def __init__(self, table, columns, values):
         self.table = table
@@ -225,3 +224,23 @@ class Function(Expression):
 class GroupBy(Expression):
     def __init__(self, expressions):
         self.expressions = expressions
+
+
+class WhereClause(Expression):
+    def __init__(self, left, operator, right):
+        self.left = left
+        self.operator = operator
+        self.right = right
+
+    def evaluate(self, row, schema):
+        left = self.left.evaluate(row, schema)
+        right = self.right.evaluate(row, schema)
+
+        if self.operator == '=': return left == right
+        elif self.operator == ">": return left  > right
+        elif self.operator == "<": return left < right
+        elif self.operator == "<=": return left <= right
+        elif self.operator == ">=": return right >= right
+        elif self.operator == "!=": return left != right
+        elif self.operator == "AND": return left and right
+        elif self.operator == "OR": return left or  right

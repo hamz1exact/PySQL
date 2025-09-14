@@ -320,7 +320,8 @@ class Parser:
         token = self.current_token()
         if token and token[0] == "WHERE":
             self.eat("WHERE")
-            where = self.parse_condition_tree()
+            where = self.parse_expression()
+            
         if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
             group_in = self.group_by()
             if self.current_token() and self.current_token()[0] == "HAVING":
@@ -345,6 +346,7 @@ class Parser:
         alias_name = None
         while True:
             expr = self.parse_expression()
+            
             if self.current_token() and self.current_token()[0] == "AS":
                 self.eat("AS")
                 alias_name = self.eat("IDENTIFIER")[1]
@@ -360,7 +362,7 @@ class Parser:
                 self.eat("COMMA")
             else:
                 break
-        # print(columns, function_columns)
+        
         return columns, function_columns
 
     def parse_special_columns(self):
@@ -788,17 +790,33 @@ class Parser:
         self.eat("SEMICOLON")
         return UseStatement(db_name)
 
-
     def parse_expression(self):
         """Parse mathematical expressions with operator precedence"""
-        return self.parse_addition()
+        
+        return self.parse_where_logical_condition()
 
+    def parse_where_logical_condition(self):
+        left = self.parse_where_condition()
+        while self.current_token() and self.current_token()[1] in ["AND", "OR"]:
+            operator = self.eat(self.current_token()[0])[1]
+            right = self.parse_where_condition()
+            left = WhereClause(left, operator, right)
+        return left
 
+    def parse_where_condition(self):
+        left = self.parse_addition()
+
+        while self.current_token() and self.current_token()[1] in ["=", "!=", ">", "<", ">=", "<="]:
+            operator = self.eat(self.current_token()[0])[1]
+            right = self.parse_addition()
+            left = WhereClause(left, operator, right)
+        return left
 
     def parse_addition(self):
         left = self.parse_multiplication()
         
         while self.current_token() and self.current_token()[1] in ['+', '-']:
+            
             operator = self.current_token()[1]
             self.eat('MATH_OPERATOR')  # or whatever token type
             right = self.parse_multiplication()
@@ -808,18 +826,19 @@ class Parser:
 
 
     def parse_multiplication(self):
+        
         left = self.parse_factor()
         
         while self.current_token() and self.current_token()[1] in ['*', '/']:
+            
             operator = self.current_token()[1]
             self.eat(self.current_token()[0])
+            
             right = self.parse_factor()
             left = BinaryOperation(left, operator, right)
         
         return left
-
-
-
+    
     def parse_factor(self):
         token = self.current_token()
         if token[0] == 'OPEN_PAREN':  # (
@@ -828,7 +847,8 @@ class Parser:
             self.eat('CLOSE_PAREN')
             return expr
         elif token[0] == 'IDENTIFIER':
-            self.eat('IDENTIFIER')
+            self.eat("IDENTIFIER")
+            
             return ColumnExpression(token[1])
         elif token[0] == "FUNC":
             distinct = False
@@ -841,8 +861,8 @@ class Parser:
             self.eat("CLOSE_PAREN")
             return Function(name, expression, distinct=distinct)
             
-        elif token[0] == 'NUMBER':
-            self.eat('NUMBER')
+        elif token[0] == 'NUMBER' or token[0] == "BOOLEAN" or token[0] == "STRING":
+            self.eat(self.current_token()[0])
             return LiteralExpression(token[1])
         elif token[0] == "STAR":
             self.eat("STAR")

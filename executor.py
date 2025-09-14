@@ -35,10 +35,17 @@ def execute_select_query(ast, database):
     
     table = database[table_name].rows
     table_schema = database[table_name].schema
-    
+    filtered_rows = []
     all_ids = []
     for col in ast.columns:
         all_ids.extend(extract_identifiers(col))
+        
+    all_where_ids = []
+    all_where_ids = extract_identifiers(ast.where)
+    for column in all_where_ids:
+        if column not in table_schema:
+            raise ColumnNotFoundError(column, table_name)
+        
 
     table_has_asterisk = "*" in all_ids
     normalized_columns = []
@@ -93,9 +100,10 @@ def execute_select_query(ast, database):
     # Filter rows based on WHERE clause
     filtered_rows = []
     for row in table:
-        if ast.where is None or where_condition_evaluation(ast.where, row, table_schema):
+        if ast.where is None or ast.where.evaluate(row, table_schema):
             filtered_rows.append(row)
-    
+            
+
     result = []
     
     # Handle GROUP BY queries
@@ -146,10 +154,7 @@ def execute_select_query(ast, database):
                 # Only add if not already covered by SELECT
                 if not already_covered:
                     result_row[group_output_name] = bucket_key[i]
-                
-                    
-                
-                    
+
             
             # Third: Add aggregate functions
             for func in ast.function_columns:
@@ -181,6 +186,7 @@ def execute_select_query(ast, database):
             selected_row = {}
             # selected_row = {col.alias if col.alias else col.col_object: row.get(col.col_object) for col in ast.columns}
             for col in ast.columns:
+                
                 selected_row[col.alias or get_expr_name(col)] = col.evaluate(row, table_schema) 
             result.append(serialize_row(selected_row))
     
@@ -565,7 +571,8 @@ def extract_identifiers(expr):
 
     elif isinstance(expr, BinaryOperation):
         return extract_identifiers(expr.left) + extract_identifiers(expr.right)
-
+    elif isinstance(expr, WhereClause):
+        return extract_identifiers(expr.left) + extract_identifiers(expr.right)
     elif isinstance(expr, Function):
         ids = []
         ids.extend(extract_identifiers(expr.expression))
@@ -600,10 +607,12 @@ def get_expr_name(expr):
     elif isinstance(expr, BinaryOperation):
         left = get_expr_name(expr.left)
         right = get_expr_name(expr.right)
-        return f"{left}{expr.operator}{right}"
+        return f"({left} {expr.operator} {right})"
     elif isinstance(expr, Function):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
+    else:
+        raise ValueError(f"Unknown expression type: {expr}")
     
 def are_same_column(expr1, expr2):
     """Check if two expressions refer to the same column"""
