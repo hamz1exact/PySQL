@@ -243,7 +243,7 @@ class Lexer:
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         
-        # print(self.tokens)
+        print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -318,10 +318,10 @@ class Parser:
         self.eat("FROM")
         table = self.parse_table()
         token = self.current_token()
+        
         if token and token[0] == "WHERE":
             self.eat("WHERE")
             where = self.parse_expression()
-            
             
         if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
             group_in = self.group_by()
@@ -346,7 +346,7 @@ class Parser:
         function_columns = []
         alias_name = None
         while True:
-            expr = self.parse_expression()
+            expr = self.parse_addition()
             
             if self.current_token() and self.current_token()[0] == "AS":
                 self.eat("AS")
@@ -795,10 +795,11 @@ class Parser:
         """Parse mathematical expressions with operator precedence"""
         
         return self.parse_where_engine()
+    
 
     def parse_where_engine(self):
         left = self.parse_where_logical_condition()
-
+        
         while self.current_token() and self.current_token()[0] == "BETWEEN":
             is_nott = False
             self.eat("BETWEEN")
@@ -809,7 +810,38 @@ class Parser:
             self.eat("HIGH_PRIORITY_OPERATOR")
             upper = self.parse_factor()
             left = Between(left, lower, upper, is_not = is_nott)
+        while self.current_token() and self.current_token()[0] == "MEMBERSHIP":
+            args = []
+            is_nott = False
+            self.eat("MEMBERSHIP")
+            if self.current_token()[0] == "MEMBERSHIP":
+                self.eat("MEMBERSHIP")
+                is_nott = True
+            self.eat("OPEN_PAREN")
+            while True:
+                arg = self.parse_factor()
+                args.append(arg)
+                if self.current_token() and self.current_token()[0] == "COMMA":
+                    self.eat("COMMA")
+                else:
+                    self.eat("CLOSE_PAREN")
+                    break
+            left = Membership(left, args, is_not=is_nott)
+        while self.current_token() and self.current_token()[0] == "NULLCHECK":
+            is_null = True
+            self.eat("NULLCHECK")
+            if self.current_token() and self.current_token()[0] == "NULLCHECK":
+                self.eat("NULLCHECK")
+                is_null = False
+            self.eat("NULL")
+            
+            return IsNullCondition(left, is_null=is_null)
+                
+        
+
         return left
+    
+    
 
     def parse_where_logical_condition(self):
         left = self.parse_where_condition()
@@ -882,6 +914,11 @@ class Parser:
         elif token[0] == "STAR":
             self.eat("STAR")
             return ColumnExpression(token[1])
+        elif token[0] == "NegationCondition":
+            self.eat("NegationCondition")
+            expr = self.parse_expression()
+            
+            return NegationCondition(expr)
         else:
             raise ValueError(f"Unexpected token in expression: {token}")
         

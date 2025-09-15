@@ -282,3 +282,42 @@ class Between(Expression):
         if not self.is_not:
             return self.lower.evaluate(row, schema, expected_type = expected_type)<=self.expression.evaluate(row, schema)<=self.upper.evaluate(row, schema, expected_type = expected_type)
         return not self.lower.evaluate(row, schema, expected_type = expected_type)<=self.expression.evaluate(row, schema)<=self.upper.evaluate(row, schema, expected_type = expected_type)
+
+class Membership(Expression):
+    def __init__(self, col ,args, is_not = False):
+        self.col = col
+        self.args = tuple(args)
+        self.argset = set(arg.evaluate({}, {}) for arg in args
+                          if isinstance(arg, LiteralExpression)) 
+        self.is_not = is_not
+        
+    def evaluate(self, row, schema):
+        value = self.col.evaluate(row, schema)
+        if self.argset:
+            result = value in self.argset
+        else:
+            result = value in [arg.evaluate(row, schema) for arg in self.args]
+        return not result if self.is_not else result
+
+class NegationCondition(Expression):
+    def __init__(self, expression):
+        self.expression = expression
+    
+    def evaluate(self, row, schema):
+        
+        return not(self.expression.evaluate(row, schema))
+
+class IsNullCondition(Expression):
+    def __init__(self, expression, is_null = True):
+        self.is_null = is_null
+        self.expression = expression
+        
+    def evaluate(self, row, schema):
+        if self.is_null:
+            return self.expression.evaluate(row, schema) is None
+        return self.expression.evaluate(row, schema) is not None
+        
+        
+        
+        
+    
