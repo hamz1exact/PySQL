@@ -279,6 +279,9 @@ class Lexer:
     
  
 class Parser:
+    
+    _AGG_FUNCS = {"COUNT", "SUM", "AVG", "MIN", "MAX"}
+    
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0 
@@ -318,13 +321,14 @@ class Parser:
         
         if token and token[0] == "WHERE":
             self.eat("WHERE")
-            where = self.parse_expression()
+            where = self.parse_expression(context = "WHERE")
             
         if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
             group_in = self.group_by()
             if self.current_token() and self.current_token()[0] == "HAVING":
                 self.eat("HAVING")
-                having_in = self.parse_having()
+                having_in = self.parse_expression(context = "HAVING")
+                
         if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
             order_in = self.order_by()
         if self.current_token() and self.current_token()[0] == "OFFSET":
@@ -343,7 +347,7 @@ class Parser:
         function_columns = []
         alias_name = None
         while True:
-            expr = self.parse_addition()
+            expr = self.parse_addition(context=None)
             
             if self.current_token() and self.current_token()[0] == "AS":
                 self.eat("AS")
@@ -788,112 +792,132 @@ class Parser:
         self.eat("SEMICOLON")
         return UseStatement(db_name)
 
-    def parse_expression(self):
+    def parse_expression(self, context = None):
         """Parse mathematical expressions with operator precedence"""
         
-        return self.parse_where_engine()
+        return self.parse_logical_condition(context)
     
 
-    def parse_where_engine(self):
-        return self.parse_where_logical_condition()
-        
-    
-
-    def parse_where_logical_condition(self):
-        left = self.parse_where_condition()
+    def parse_logical_condition(self, context):
+        left = self.parse_condition_engine(context)
         while self.current_token() and self.current_token()[1] in ["AND", "OR"]:
             operator = self.eat(self.current_token()[0])[1]
-            right = self.parse_where_engine()
-            left = WhereClause(left, operator, right)
+            right = self.parse_condition_engine(context)
+            
+            if context == "WHERE":
+                left = ConditionExpr(left, operator, right, context = "WHERE")
+                self.validate_no_aggregate_in_where(left)                
+            else:
+                left = ConditionExpr(left, operator, right, context = "HAVING")
         return left
-
-    def parse_where_condition(self):
-        left = self.parse_addition()
+    
+    def parse_condition_engine(self, context):
+        expression = self.parse_condition(context)
+        while self.current_token() and self.current_token()[0] == "LIKE":
+            is_not = False
+            if self.current_token()[1] == "NOT":
+                is_not = True
+                self.eat("LIKE")
+            self.eat("LIKE")
+            arg = LiteralExpression(self.eat("STRING")[1])
+            return LikeCondition(expression, arg, is_not)
+        while self.current_token() and self.current_token()[0] == "NULLCHECK":
+            is_null = True
+            self.eat("NULLCHECK")
+            if self.current_token() and self.current_token()[0] == "NULLCHECK":
+                self.eat("NULLCHECK")
+                is_null = False
+            self.eat("NULL")
+            return IsNullCondition(expression, is_null=is_null)
+        while self.current_token() and self.current_token()[0] == "MEMBERSHIP":
+            args = []
+            is_nott = False
+            self.eat("MEMBERSHIP")
+            if self.current_token()[0] == "MEMBERSHIP":
+                self.eat("MEMBERSHIP")
+                is_nott = True
+            self.eat("OPEN_PAREN")
+            while True:
+                arg = self.parse_factor(context)
+                args.append(arg)
+                if self.current_token() and self.current_token()[0] == "COMMA":
+                    self.eat("COMMA")
+                else:
+                    self.eat("CLOSE_PAREN")
+                    break
+            return Membership(expression, args, is_not=is_nott)
+        while self.current_token() and self.current_token()[0] == "BETWEEN":
+            is_nott = False
+            if self.current_token()[1] == "NOT":
+                self.eat("BETWEEN")
+                is_nott = True
+            if self.current_token() and self.current_token()[0] == "BETWEEN":
+                self.eat("BETWEEN")
+            lower = self.parse_factor(context)
+            self.eat("HIGH_PRIORITY_OPERATOR")
+            upper = self.parse_factor(context)
+            return Between(expression, lower, upper, is_not = is_nott)
+        
+        return expression
+    
+    def parse_condition(self, context):
+        left = self.parse_addition(context)
 
         while self.current_token() and self.current_token()[1] in ["=", "!=", ">", "<", ">=", "<="]:
             operator = self.eat(self.current_token()[0])[1]
-            right = self.parse_addition()
-            left = WhereClause(left, operator, right)
+            right = self.parse_addition(context)
+            
+            if context == "WHERE":
+                self.validate_no_aggregate_in_where(left)
+                left = ConditionExpr(left, operator, right, context="WHERE")
+            else:
+                left = ConditionExpr(left, operator, right, context = "HAVING")
         return left
 
-    def parse_addition(self):
-        left = self.parse_multiplication()
+
+    def parse_addition(self, context):
+        left = self.parse_multiplication(context)
         
         while self.current_token() and self.current_token()[1] in ['+', '-']:
             
             operator = self.current_token()[1]
             self.eat('MATH_OPERATOR')  # or whatever token type
-            right = self.parse_multiplication()
+            right = self.parse_multiplication(context)
             left = BinaryOperation(left, operator, right)
         
         return left
 
 
-    def parse_multiplication(self):
+    def parse_multiplication(self, context):
         
-        left = self.parse_factor()
+        left = self.parse_factor(context)
         
         while self.current_token() and self.current_token()[1] in ['*', '/']:
             
             operator = self.current_token()[1]
             self.eat(self.current_token()[0])
             
-            right = self.parse_factor()
+            right = self.parse_factor(context)
             left = BinaryOperation(left, operator, right)
         
         return left
     
-    def parse_factor(self):
+    
+    
+    def parse_factor(self, context = None):
+        
         token = self.current_token()
+        
         if token[0] == 'OPEN_PAREN':  # (
             self.eat('OPEN_PAREN')
-            expr = self.parse_expression()  # Recursively parse inside parentheses
+            expr = self.parse_expression(context)  # Recursively parse inside parentheses
             self.eat('CLOSE_PAREN')
             return expr
+        
         elif token[0] == 'IDENTIFIER':
-            self.eat("IDENTIFIER")
-            if self.current_token() and self.current_token()[0] == "NULLCHECK":
-                while self.current_token() and self.current_token()[0] == "NULLCHECK":
-                    is_null = True
-                    self.eat("NULLCHECK")
-                    if self.current_token() and self.current_token()[0] == "NULLCHECK":
-                        self.eat("NULLCHECK")
-                        is_null = False
-                    self.eat("NULL")
-                return IsNullCondition(ColumnExpression(token[1]), is_null=is_null)
-            elif self.current_token() and self.current_token()[0] == "MEMBERSHIP":
-                while self.current_token() and self.current_token()[0] == "MEMBERSHIP":
-                    args = []
-                    is_nott = False
-                    self.eat("MEMBERSHIP")
-                    if self.current_token()[0] == "MEMBERSHIP":
-                        self.eat("MEMBERSHIP")
-                        is_nott = True
-                    self.eat("OPEN_PAREN")
-                    while True:
-                        arg = self.parse_factor()
-                        args.append(arg)
-                        if self.current_token() and self.current_token()[0] == "COMMA":
-                            self.eat("COMMA")
-                        else:
-                            self.eat("CLOSE_PAREN")
-                            break
-                    return Membership(ColumnExpression(token[1]), args, is_not=is_nott)
-            elif self.current_token() and self.current_token()[0] == "BETWEEN":
-                while self.current_token() and self.current_token()[0] == "BETWEEN":
-                    is_nott = False
-                    
-                    if self.current_token()[1] == "NOT":
-                        self.eat("BETWEEN")
-                        is_nott = True
-                    if self.current_token() and self.current_token()[0] == "BETWEEN":
-                        self.eat("BETWEEN")
-                    lower = self.parse_factor()
-                    self.eat("HIGH_PRIORITY_OPERATOR")
-                    upper = self.parse_factor()
-                    return Between(ColumnExpression(token[1]), lower, upper, is_not = is_nott)
-            else:                
-                return ColumnExpression(token[1])
+            self.eat("IDENTIFIER")    
+            return ColumnExpression(token[1])
+        
         elif token[0] == "FUNC":
             distinct = False
             name = self.eat("FUNC")[1]
@@ -901,20 +925,24 @@ class Parser:
             if self.current_token() and self.current_token()[0] == "DISTINCT":
                 self.eat("DISTINCT")
                 distinct = True
-            expression = self.parse_expression()
+            expression = self.parse_expression(context)
             self.eat("CLOSE_PAREN")
             return Function(name, expression, distinct=distinct)
+        
         elif token[0] == 'NUMBER' or token[0] == "BOOLEAN" or token[0] == "STRING":
             self.eat(self.current_token()[0])
             return LiteralExpression(token[1])
+        
         elif token[0] == "STAR":
             self.eat("STAR")
             return ColumnExpression(token[1])
+        
         elif token[0] == "NOT":
             self.eat("NOT")
-            expr = self.parse_expression()
+            expr = self.parse_expression(context)
             
             return NegationCondition(expr)
+        
         else:
             raise ValueError(f"Unexpected token in expression: {token}")
         
@@ -934,4 +962,50 @@ class Parser:
         else:
             # Handle other expression types as you add them
             return False
+                    
+    def _has_aggregation_in_expr(self, expr) -> bool:
+        if expr is None:
+            return False
 
+        if isinstance(expr, Function):
+            func_name = getattr(expr, "name", None) or getattr(expr, "function_name", None)
+            if func_name and func_name.upper() in Parser._AGG_FUNCS:
+                return True
+            if hasattr(expr, "expression") and expr.expression is not None:
+                if self._has_aggregation_in_expr(expr.expression):
+                    return True
+            if hasattr(expr, "arg") and expr.arg is not None:
+                if self._has_aggregation_in_expr(expr.arg):
+                    return True
+            if hasattr(expr, "args") and expr.args:
+                for a in expr.args:
+                    if self._has_aggregation_in_expr(a):
+                        return True
+            return False
+
+        if isinstance(expr, ConditionExpr):
+            return self._has_aggregation_in_expr(expr.left) or self._has_aggregation_in_expr(expr.right)
+
+        if isinstance(expr, BinaryOperation):
+            return self._has_aggregation_in_expr(expr.left) or self._has_aggregation_in_expr(expr.right)
+
+        if isinstance(expr, (ColumnExpression, LiteralExpression)):
+            return False
+
+        if isinstance(expr, (list, tuple, set)):
+            for item in expr:
+                if self._has_aggregation_in_expr(item):
+                    return True
+            return False
+        for attr in ("left", "right", "expression", "expr", "args", "arg"):
+            child = getattr(expr, attr, None)
+            if child is None:
+                continue
+            if self._has_aggregation_in_expr(child):
+                return True
+
+        return False
+    
+    def validate_no_aggregate_in_where(self, where_expr):
+        if self._has_aggregation_in_expr(where_expr):
+            raise ValueError("Aggregation functions (COUNT, SUM, AVG, MIN, MAX) are not allowed in WHERE — use HAVING instead.")

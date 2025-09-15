@@ -118,12 +118,12 @@ def execute_select_query(ast, database):
                 groups[bucket_key] = []
             groups[bucket_key].append(row)
 
-        # if ast.having:
-        #     results = {}
-        #     for bucket_key, group_rows in groups.items():
-        #         if having_condition_evaluation(ast.having, ast.group_by ,group_rows, table_schema):
-        #             results[bucket_key] = group_rows
-        #     groups = results
+        if ast.having:
+            results = {}
+            for bucket_key, group_rows in groups.items():
+                if ast.having.evaluate(group_rows, table_schema):
+                    results[bucket_key] = group_rows
+            groups = results
         
             
         # Build result rows for each group
@@ -571,7 +571,7 @@ def extract_identifiers(expr):
 
     elif isinstance(expr, BinaryOperation):
         return extract_identifiers(expr.left) + extract_identifiers(expr.right)
-    elif isinstance(expr, WhereClause):
+    elif isinstance(expr, ConditionExpr):
         return extract_identifiers(expr.left) + extract_identifiers(expr.right)
     elif isinstance(expr, Function):
         ids = []
