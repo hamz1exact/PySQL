@@ -258,7 +258,7 @@ class WhereClause(Expression):
         elif self.operator == ">": return left  > right
         elif self.operator == "<": return left < right
         elif self.operator == "<=": return left <= right
-        elif self.operator == ">=": return right >= right
+        elif self.operator == ">=": return left >= right
         elif self.operator == "!=": return left != right
         elif self.operator == "AND": return left and right
         elif self.operator == "OR": return left or  right
@@ -272,7 +272,6 @@ class Between(Expression):
         self.is_not = is_not
 
     def evaluate(self, row, schema):
-        
         expected_type = schema[self.expression.column_name]
         expr_value = self.expression.evaluate(row, schema)
         lower_value = self.lower.evaluate(row, schema, expected_type)
