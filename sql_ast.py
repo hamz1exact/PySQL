@@ -145,6 +145,9 @@ class ColumnExpression(Expression):
     def evaluate(self, row, schema):
         if self.column_name == "*":
             return row
+        
+        if type(row[self.column_name]) in (int, float, str, bool):
+            return row[self.column_name]
         return row[self.column_name].value
 
     def get_referenced_columns(self):
@@ -155,7 +158,8 @@ class LiteralExpression(Expression):
         self.value = value
     
     def evaluate(self, row, schema, expected_type = None):
-        if expected_type:
+        
+        if expected_type is not None and issubclass(expected_type, SQLType):
             converted_value = expected_type(self.value).value            
             return converted_value
         return self.value
@@ -172,6 +176,7 @@ class BinaryOperation(Expression):
     
     def evaluate(self, row, schema):
         left_val = self.left.evaluate(row, schema)
+        
         right_val = self.right.evaluate(row, schema)
         
         if self.operator == '+':
@@ -201,6 +206,7 @@ class Function(Expression):
             return None
         
         # Evaluate the expression for each row
+        
         values = []
         for row in rows:
             try:
@@ -393,8 +399,6 @@ class IsNullCondition(Expression):
             return self.expression.evaluate(row, schema) is None
         return self.expression.evaluate(row, schema) is not None
         
-        
-
 
 class LikeCondition(Expression):
     def __init__(self, expression, pattern_expression, is_not=False):
@@ -425,8 +429,14 @@ class LikeCondition(Expression):
     def evaluate(self, row, schema):
         
         # Evaluate the value to match against
-        current_value = self.expression.evaluate(row[0], schema)
+        
+        try:
+
+            current_value = self.expression.evaluate(row[0], schema)
+        except:
+            current_value = self.expression.evaluate(row, schema)
         # Evaluate the pattern (could be a literal or column reference)
+
         pattern_value = self.pattern_expression.evaluate(row, schema)
         
         # Handle NULL values
@@ -446,3 +456,9 @@ class LikeCondition(Expression):
         # Perform the match and apply NOT if needed
         match_result = self._compiled_regex.match(str(current_value)) is not None
         return not match_result if self.is_not else match_result
+    
+class OrderBy(Expression):
+    def __init__(self, expression, direction = "ASC"):
+        self.expression = expression
+        self.direction = direction
+        

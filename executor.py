@@ -211,212 +211,42 @@ def execute_select_query(ast, database):
     
     # Apply ORDER BY if specified
     if ast.order_by:
-        
         # Build set of available columns in result
         available_columns = set()
         if result:
             available_columns = set(result[0].keys())
         
-        for col, direction in ast.order_by:
-            if col not in available_columns:
-                raise ValueError(f"ORDER BY column '{col}' is not available in the result set")
+        for order_by_clause in ast.order_by:
+            # order_by_clause is now an OrderBy object: (expression, direction)
+            expression = order_by_clause.expression
+            direction = order_by_clause.direction
             
-            # Sort by this column
-            result = sorted(result, key=lambda row: row.get(col), reverse=(direction == "DESC"))
+            # For ColumnExpression, extract the column name
+            if isinstance(expression, ColumnExpression):
+                col = expression.column_name
+                if col not in available_columns:
+                    raise ValueError(f"ORDER BY column '{col}' is not available in the result set")
+                
+                # Sort by this column (your existing logic)
+                result = sorted(result, key=lambda row: row.get(col), 
+                            reverse=(direction == "DESC"))
+            
+            # Handle other expression types (functions, math, etc.)
+            else:
+                
+                # For complex expressions, evaluate them for each row to get sort key
+                sort_key = lambda row, expr=expression: expr.evaluate(row, table_schema)
+                result = sorted(result, key=sort_key, 
+                            reverse=(direction == "DESC"))
     if ast.limit:
         
         if ast.offset:
             result = result[int(ast.offset):]
         result = result[:int(ast.limit)]
     
-    return result
+    return result 
 
 
-def having_condition_evaluation(having, group, row, table_schema):
-    
-    if isinstance(having, HavingCondition):
-        return execute_having_condition(having, group, row, table_schema)
-
-    elif isinstance(having, HavingLogicalCondition):
-        return execute_having_logical_condition(having, group, row, table_schema)
-    
-    
-def execute_having_condition(having, group, row, table_schema):
-        if having.left.type == "FUNC":
-            left = execute_function(having.left.content, row, table_schema)
-        elif having.left.type == "VALUE":
-            left = having.left.content
-        elif having.left.type == "ID":
-            left = execute_having_col_condition(having.left.content, group, row)
-        
-        if having.right.type == "FUNC":
-            right = execute_function(having.right.content, row, table_schema)
-        elif having.right.type == "VALUE":
-            right = having.right.content
-        elif having.right.type == "ID":
-            right = execute_having_col_condition(having.right.content, group, row)
-        
-        if having.left.type == "VALUE":
-            if type(having.left.content) == str:
-                left = str(left).lower()
-        if having.right.type == "VALUE":
-            if type(having.right.content) == str:
-                right = str(right).lower()
-        if having.low_operator == "=": return left == right
-        if having.low_operator == "!=": return left != right
-        if having.low_operator == "<": return left < right
-        if having.low_operator == "<=": return left <= right
-        if having.low_operator == ">": return left > right
-        if having.low_operator == ">=": return left >= right
-        
-def execute_having_logical_condition(having, group, row, table_schema):
-    high_operator = having.high_operator
-    left_expression_result = having_condition_evaluation(having.left_expression ,group, row, table_schema)
-    right_expression_result = having_condition_evaluation(having.right_expression ,group, row, table_schema)
-    
-    if high_operator == "AND":
-        return left_expression_result and right_expression_result
-    else:
-        return left_expression_result or right_expression_result
-
-def execute_having_col_condition(col, group, row):
-    if col not in set(group):
-        raise ValueError(f"column {col} must appear in the GROUP BY clause or be used in an aggregate function")
-    row = row[0]
-    if type(row[col].value) == str:
-        return row[col].value.lower()
-    return row[col].value
-
-
-def where_condition_evaluation(where, row, table_schema):
-    
-    if isinstance(where, NegationCondition):
-        return not(execute_where_negation_condition(where, row, table_schema))
-    
-    if isinstance(where, Membership):
-        return execute_where_membership_condition(where, row, table_schema)
-
-    if isinstance(where, CheckNullColumn):
-        return execute_where_check_nulls(where, row, table_schema)
-        
-    if isinstance(where, Condition):
-       return execute_where_condition(where, row, table_schema)
-
-    elif isinstance(where, LogicalCondition):
-        return execute_where_logical_condition(where, row, table_schema)
-    
-    elif isinstance(where, BetweenCondition):
-        if where.NOT:
-            return not execute_where_between_condition(where, row, table_schema)
-        return execute_where_between_condition(where, row, table_schema)
-    
-    elif isinstance(where, LikeCondition):
-        if where.NOT:
-            return not execute_where_like_condition(where, row, table_schema)
-        return execute_where_like_condition(where, row, table_schema)    
-
-def execute_where_condition(where, row, table_schema):
-            
-    if (isinstance(row[where.column], VARCHAR) and isinstance(table_schema[where.column](where.value), VARCHAR)) or (isinstance(row[where.column], TEXT) and isinstance(table_schema[where.column](where.value), TEXT)):
-            col = row[where.column].value.lower()
-            val = table_schema[where.column](where.value).value.lower()
-    else:
-        col = row[where.column]
-        val = table_schema[where.column](where.value)
-    op  = where.operator
-    
-    if op == "=": return col == val
-    if op == "!=": return col != val
-    if op == "<": return col < val
-    if op == "<=": return col <= val
-    if op == ">": return col > val
-    if op == ">=": return col >= val
-    raise ValueError(f"Unknown operator {op}") 
-
-def execute_where_logical_condition(where, row, table_schema):
-    MainOperator = where.MainOperator.upper()
-    left_result = where_condition_evaluation(where.left, row, table_schema)
-    right_result = where_condition_evaluation(where.right, row, table_schema)
-    
-    if MainOperator == "AND":
-        return left_result and right_result
-    elif MainOperator == "OR":
-        return left_result or right_result
-    else:
-        raise ValueError(f"Unknown logical operator: {MainOperator}")
-    
-def execute_where_check_nulls(where, row, table_schema):
-    value = row.get(where.column).value if issubclass(table_schema[where.column], SQLType) else row.get(where.column)
-    if where.isNull:
-        return value is None
-    else:
-        return value is not None
-
-def execute_where_membership_condition(where, row, table_schema):
-        value = row.get(where.col).value if issubclass(table_schema[where.col], SQLType) else row.get(where.col)
-        if type(value) == str: value = value.lower()
-        if where.IN:
-            return value in where.args
-        else:
-            return value not in where.args
-
-def execute_where_negation_condition(where, row, table_schema):
-    if isinstance(where.expression, Condition):
-        return execute_where_condition(where.expression, row, table_schema)
-
-def execute_where_between_condition(where, row, table_schema):
-    col_val = row[where.col]
-    if col_val.value == None: return False
-    arg1 = where.arg1
-    arg2 = where.arg2
-    if isinstance(col_val, DATE) and isinstance(table_schema[where.col](arg1), DATE) and isinstance(table_schema[where.col](arg2), DATE):
-        arg1 = table_schema[where.col](arg1)
-        arg2 = table_schema[where.col](arg2)
-        return (arg1 <= col_val <= arg2)
-    elif (isinstance(col_val, VARCHAR) or isinstance(col_val, TEXT)) and (isinstance(table_schema[where.col](arg1), VARCHAR) or isinstance(table_schema[where.col](arg1), TEXT)) and (isinstance(table_schema[where.col](arg2), VARCHAR) or isinstance(table_schema[where.col](arg2), TEXT)):
-        arg1 = table_schema[where.col](arg1)
-        arg2 = table_schema[where.col](arg2)
-        return (arg1.value.lower() <= col_val.value.lower() <= arg2.value.lower())
-    elif (isinstance(col_val, INT) or isinstance(col_val, FLOAT)) and (isinstance(table_schema[where.col](arg1), INT) or isinstance(table_schema[where.col](arg1), FLOAT)) and (isinstance(table_schema[where.col](arg2), INT) or isinstance(table_schema[where.col](arg2), FLOAT)):   
-        arg1 = table_schema[where.col](arg1)
-        arg2 = table_schema[where.col](arg2)
-        return (arg1 <= col_val <= arg2)
-    elif isinstance(col_val, TIME) and isinstance(table_schema[where.col](arg1), TIME) and isinstance(table_schema[where.col](arg2), TIME):
-        arg1 = table_schema[where.col](arg1)
-        arg2 = table_schema[where.col](arg2)
-        return (arg1 <= col_val <= arg2)
-    else:
-        return False
-
-def execute_where_like_condition(where, row, table_schema):
-    val = where.arg
-    col_val = row[where.col]
-    if col_val.value == None: return False
-    if (
-        type(val) != str or
-         (
-            isinstance(table_schema[where.col], VARCHAR) or
-            isinstance(table_schema[where.col], TEXT) or
-            isinstance(table_schema[where.col], DATE) or
-            isinstance(table_schema[where.col], TIME)
-        )
-    ):
-        raise ValueError("LIKE condition only works with string values.")
-    val = table_schema[where.col](val).value
-    regex = ''
-    i = 0
-    while i < len(val):
-        c = val[i]
-        if c == '%':
-            regex += '.*'
-        elif c == '_':
-            regex += '.'
-        else:
-            regex += re.escape(c)
-        i += 1
-    regex = '^' + regex + '$'
-    return re.fullmatch(regex, col_val.value) is not None
-    
 
 def execute_insert_query(ast, database):
     table_name = ast.table
@@ -511,58 +341,7 @@ def execute_use_statement(ast, database):
         database.save_database_file()
 
 
-def execute_function(function, rows, table_schema):
-    func_name = function.function_name
-    arguments = function.arg
-    values = None
-    if function.arg == '*':
-        values = rows
-    else:
-            # Extract column values, skip None rows safely
-            values = [row[function.arg].value for row in rows if row[function.arg] is not None]
-    total = 0
-    if function.distinct:
-        values = list(set(values))
 
-    # Execute function
-    if func_name == "COUNT":
-
-        return len(values)
-    elif func_name == "SUM":
-        if arguments == "*":
-            raise ValueError(f"'*' Not Supported in SUM Function")
-        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = sum(values)
-        else:
-            raise ValueError(f"SUM Function works Only with INT/FLOAT columns")
-        return float(f"{total:.2f}")
-    elif func_name == "MIN":
-        if arguments == "*":
-            raise ValueError(f"'*' Not Supported in MIN Function")
-        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = min(values)
-        else:
-            raise ValueError(f"MIN Function works Only with INT/FLOAT columns")
-        return total
-    elif func_name == "MAX":
-        if arguments == "*":
-            raise ValueError(f"'*' Not Supported in MAX Function")
-        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            total = max(values)
-        else:
-            raise ValueError(f"MAX Function works Only with INT/FLOAT columns")
-        return total
-    elif func_name == "AVG":
-        if arguments == "*":
-            raise ValueError(f"'*' Not Supported in AVG Function")
-        if table_schema[function.arg] == FLOAT or table_schema[function.arg] == INT:
-            if not values:  # Handle empty case
-                return 0.0
-            total = sum(values) / len(values)  # Fixed: use len(values)
-            return float(f"{total:.2f}")  # Add return statement and consistent formatting
-        else:
-            raise ValueError(f"AVG Function works Only with INT/FLOAT columns")
-                    
 def extract_identifiers(expr):
     """Recursively extract all column identifiers from an expression object."""
     
@@ -620,3 +399,36 @@ def are_same_column(expr1, expr2):
         return expr1.column_name == expr2.column_name
     # Add more cases for other expression types if needed
     return False
+
+def execute_order_by(result, order_by_clauses, schema):
+    """
+    result: list of dictionaries (rows)
+    order_by_clauses: list of OrderBy objects
+    schema: table schema
+    """
+    if not order_by_clauses or not result:
+        return result
+    
+    # Build set of available columns in result
+    available_columns = set(result[0].keys())
+    
+    for order_by in order_by_clauses:
+        expression = order_by.expression
+        direction = order_by.direction
+        
+        if isinstance(expression, ColumnExpression):
+            # Simple column ordering
+            col = expression.column_name
+            if col not in available_columns:
+                raise ValueError(f"ORDER BY column '{col}' is not available in the result set")
+            
+            result = sorted(result, key=lambda row: row.get(col), 
+                          reverse=(direction == "DESC"))
+        
+        else:
+            # Complex expression ordering (functions, math, etc.)
+            result = sorted(result, 
+                          key=lambda row: expression.evaluate(row, schema), 
+                          reverse=(direction == "DESC"))
+    
+    return result

@@ -415,12 +415,12 @@ class Parser:
         self.eat("ORDER_BY_KEY")
         order = []
         while True:
-            order_col = self.eat("IDENTIFIER")[1]
+            expression = self.parse_expression(None)
             if self.current_token() and self.current_token()[0] != "ORDER_BY_DRC":
                 order_direction = "ASC"
             else:
                 order_direction = self.eat("ORDER_BY_DRC")[1]
-            order.append((order_col, order_direction))
+            order.append(OrderBy(expression,order_direction))
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
             else:
@@ -1005,6 +1005,9 @@ class Parser:
                 return True
 
         return False
+    
+    
+
     
     def validate_no_aggregate_in_where(self, where_expr):
         if self._has_aggregation_in_expr(where_expr):
