@@ -3,6 +3,7 @@ from datatypes import *
 import math
 import re
 
+
 class SelectStatement:
     
     __slots__ = ['columns', 'function_columns', 'table', 'where', 'distinct', 
@@ -214,6 +215,7 @@ class Function(Expression):
         self.distinct = distinct
 
     def evaluate(self, rows, table_schema):
+        
         if not rows:  # Handle empty group
             return None
         
@@ -259,6 +261,7 @@ class Function(Expression):
         elif self.name == "AVG":
             if not all(isinstance(v, (int, float)) for v in values):
                 raise ValueError("AVG works only with numeric values")
+            print(sum(values)/ len(values))
             return sum(values) / len(values)
         elif self.name == "MAX":
             return max(values)
@@ -272,6 +275,7 @@ class GroupBy(Expression):
         self.expressions = expressions
 
 
+
 class ConditionExpr(Expression):
     def __init__(self, left, operator, right, context):
         self.left = left
@@ -281,6 +285,7 @@ class ConditionExpr(Expression):
         
 
     def evaluate(self, row_or_rows, schema):
+        
         if self.context == "HAVING":
             # For HAVING, we need to handle aggregates vs regular columns differently
             left = self._evaluate_having_expr(self.left, row_or_rows, schema)
@@ -290,16 +295,6 @@ class ConditionExpr(Expression):
             left = self._evaluate_where_expr(self.left, row_or_rows, schema)
             right = self._evaluate_where_expr(self.right, row_or_rows, schema)
 
-        # Handle None values in comparisons
-        if left is None or right is None:
-            if self.operator == '=':
-                return left is None and right is None
-            elif self.operator == '!=':
-                return left is not None or right is not None
-            else:
-                return False  # Other operators with NULL values return False
-
-        # Handle string comparisons (case-insensitive)
         if isinstance(right, str) and isinstance(left, str):
             left = left.lower()
             right = right.lower()
@@ -323,17 +318,63 @@ class ConditionExpr(Expression):
             return left or right
         else:
             raise ValueError(f"Unknown operator: {self.operator}")
+    
     def _evaluate_having_expr(self, expr, group_rows, schema):
         """Evaluate expression in HAVING context (with group of rows)"""
-        if not group_rows:  # Handle empty groups
-            return None
-            
         if isinstance(expr, Function):
             # Aggregate functions need the full group
             return expr.evaluate(group_rows, schema)
+        elif isinstance(expr, Cast):
+            # CAST expressions - evaluate the inner expression first
+            inner_value = self._evaluate_having_expr(expr.expression, group_rows, schema)
+            
+            # Now apply the cast to the result
+            if inner_value is None:
+                return None
+            
+            if expr.target_type in ["INT", "INTEGER"]:
+                if type(inner_value) not in (float, int):
+                    raise ValueError(f"Given Expression has datatype of {type(inner_value).__name__} but INT were Given")
+                return int(inner_value)
+                
+            elif expr.target_type in ['VARCHAR', "STRING", "TEXT"]:
+                return str(inner_value)
+            elif expr.target_type in ['FLOAT', "DECIMAL"]:
+                if type(inner_value) not in (float, int):
+                    raise ValueError(f"Given Expression has datatype of {type(inner_value).__name__} but {expr.target_type} target type  were Given")
+                return float(inner_value)
+            # Add other cast types as needed...
+            
+        elif isinstance(expr, Extract):
+            # Extract expressions - evaluate the inner expression first
+            inner_value = self._evaluate_having_expr(expr.expression, group_rows, schema)
+            
+            if inner_value is None:
+                return None
+                
+            from datetime import date, time
+            if not isinstance(inner_value, (date, time)):
+                raise ValueError("EXTRACT Function works Only with DATE & TIME columns")
+            
+            if expr.part == 'YEAR':
+                return inner_value.year
+            elif expr.part == 'MONTH':
+                return inner_value.month
+            elif expr.part == 'DAY':
+                return inner_value.day
+            elif expr.part == 'HOUR':
+                return inner_value.hour
+            elif expr.part == 'MINUTE':
+                return inner_value.minute
+            elif expr.part == 'SECOND':
+                return inner_value.second
+                
         elif isinstance(expr, ColumnExpression):
             # Regular columns: use value from first row (all rows in group have same GROUP BY values)
-            return expr.evaluate(group_rows[0], schema)
+            if group_rows:
+                return expr.evaluate(group_rows[0], schema)
+            else:
+                return None
         elif isinstance(expr, LiteralExpression):
             # Literals evaluate the same regardless of context
             return expr.evaluate({}, schema)
@@ -342,9 +383,6 @@ class ConditionExpr(Expression):
             left = self._evaluate_having_expr(expr.left, group_rows, schema)
             right = self._evaluate_having_expr(expr.right, group_rows, schema)
             
-            if left is None or right is None:
-                return None
-                
             if expr.operator == '+':
                 return left + right
             elif expr.operator == '-':
@@ -355,12 +393,12 @@ class ConditionExpr(Expression):
                 return left / right
             else:
                 raise ValueError(f"Unknown operator: {expr.operator}")
-        elif isinstance(expr, ConditionExpr):
-            # Handle condition expressions in HAVING
-            return expr.evaluate(group_rows, schema)
         else:
             # For other expression types, try normal evaluation with first row
-            return expr.evaluate(group_rows[0], schema)
+            if group_rows:
+                return expr.evaluate(group_rows[0], schema)
+            else:
+                return None
     
     def _evaluate_where_expr(self, expr, row, schema):
         """Evaluate expression in WHERE context (with single row)"""
@@ -373,7 +411,6 @@ class ConditionExpr(Expression):
                 return expr.evaluate(row, schema, expected_type)
         
         return expr.evaluate(row, schema)
-        
 
 class Between(Expression):
     def __init__(self, expression, lower, upper, is_not = False):
@@ -591,6 +628,7 @@ class Cast(Expression):
         self.alias = alias
         
     def evaluate(self, row, schema):
+        # Don't call this if we're in HAVING context - let ConditionExpr handle it
         value = self.expression.evaluate(row, schema)
         if value is None:
             return None
@@ -610,6 +648,7 @@ class Cast(Expression):
             if type(value) != str:
                 raise ValueError (f"Given Expression has datatype of {type(value).__name__} but {self.target_type} target type  were Given")
             try:
+                from datetime import datetime
                 return datetime.strptime(value, "%Y-%m-%d").date()
             except ValueError:
                 raise ValueError(f"Invalid DATE format: {value}. Expected YYYY-MM-DD.")
@@ -617,10 +656,10 @@ class Cast(Expression):
             if type(value) != str:
                 raise ValueError (f"Given Expression has datatype of {type(value).__name__} but {self.target_type} target type  were Given")
             try:
+                from datetime import datetime
                 return datetime.strptime(value, "%H:%M:%S").time()
             except ValueError:
                 raise ValueError(f"Cannot convert '{value}' to TIME. Format must be HH:MM:SS")
-        
 
 class CoalesceFunction(Expression):
     def __init__(self, expressions, name = "COALESCE", alias = None):
@@ -664,7 +703,8 @@ class CurrentDate(Expression):
         self.alias = alias
         
     def evaluate(self, row = None, schema= None):
-        return datetime.date.today()
+        return date.today()
+
     
 
 class NowFunction(Expression):

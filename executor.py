@@ -449,6 +449,9 @@ def get_expr_name(expr):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
     
+    elif isinstance(expr, CurrentDate):
+        return f"{expr.name}"
+    
     
     elif isinstance(expr, DateDIFF):
         inner1= get_expr_name(expr.date1)

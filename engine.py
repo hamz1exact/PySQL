@@ -40,7 +40,9 @@ class Lexer:
         "DAY",
         "HOUR",
         "MINUTE",
-        "SECOND"
+        "SECOND",
+        "CURRENT_DATE",
+        "NOW"
     }
     
     
@@ -429,7 +431,7 @@ class Parser:
                 self.eat("AS")
                 alias_name = self.eat("IDENTIFIER")[1]
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) :
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) or isinstance(expr, CurrentDate) :
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -1106,6 +1108,9 @@ class Parser:
             self.eat("CLOSE_PAREN")
             return Cast(expression, target)
             
+        elif token[0] == "DATE_AND_TIME" and token[1] == "CURRENT_DATE":
+            self.eat("DATE_AND_TIME")
+            return CurrentDate()
         
         elif token[0] == "FUNC":
             distinct = False
@@ -1147,6 +1152,8 @@ class Parser:
             for sub_expr in expr.expressions:
                 if self._contains_aggregates(sub_expr):
                     return True
+            return False
+        elif isinstance(expr, CurrentDate):
             return False
         elif isinstance(expr, DateDIFF):
             if self._contains_aggregates(DateDIFF.date1) or self._contains_aggregates(DateDIFF.date2):
