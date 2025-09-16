@@ -281,7 +281,6 @@ class ConditionExpr(Expression):
         
 
     def evaluate(self, row_or_rows, schema):
-        
         if self.context == "HAVING":
             # For HAVING, we need to handle aggregates vs regular columns differently
             left = self._evaluate_having_expr(self.left, row_or_rows, schema)
@@ -291,6 +290,16 @@ class ConditionExpr(Expression):
             left = self._evaluate_where_expr(self.left, row_or_rows, schema)
             right = self._evaluate_where_expr(self.right, row_or_rows, schema)
 
+        # Handle None values in comparisons
+        if left is None or right is None:
+            if self.operator == '=':
+                return left is None and right is None
+            elif self.operator == '!=':
+                return left is not None or right is not None
+            else:
+                return False  # Other operators with NULL values return False
+
+        # Handle string comparisons (case-insensitive)
         if isinstance(right, str) and isinstance(left, str):
             left = left.lower()
             right = right.lower()
@@ -316,15 +325,15 @@ class ConditionExpr(Expression):
             raise ValueError(f"Unknown operator: {self.operator}")
     def _evaluate_having_expr(self, expr, group_rows, schema):
         """Evaluate expression in HAVING context (with group of rows)"""
+        if not group_rows:  # Handle empty groups
+            return None
+            
         if isinstance(expr, Function):
             # Aggregate functions need the full group
             return expr.evaluate(group_rows, schema)
         elif isinstance(expr, ColumnExpression):
             # Regular columns: use value from first row (all rows in group have same GROUP BY values)
-            if group_rows:
-                return expr.evaluate(group_rows[0], schema)
-            else:
-                return None
+            return expr.evaluate(group_rows[0], schema)
         elif isinstance(expr, LiteralExpression):
             # Literals evaluate the same regardless of context
             return expr.evaluate({}, schema)
@@ -333,6 +342,9 @@ class ConditionExpr(Expression):
             left = self._evaluate_having_expr(expr.left, group_rows, schema)
             right = self._evaluate_having_expr(expr.right, group_rows, schema)
             
+            if left is None or right is None:
+                return None
+                
             if expr.operator == '+':
                 return left + right
             elif expr.operator == '-':
@@ -343,13 +355,12 @@ class ConditionExpr(Expression):
                 return left / right
             else:
                 raise ValueError(f"Unknown operator: {expr.operator}")
+        elif isinstance(expr, ConditionExpr):
+            # Handle condition expressions in HAVING
+            return expr.evaluate(group_rows, schema)
         else:
             # For other expression types, try normal evaluation with first row
-            if group_rows:
-                
-                return expr.evaluate(group_rows[0], schema)
-            else:
-                return None
+            return expr.evaluate(group_rows[0], schema)
     
     def _evaluate_where_expr(self, expr, row, schema):
         """Evaluate expression in WHERE context (with single row)"""

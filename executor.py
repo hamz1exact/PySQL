@@ -118,11 +118,18 @@ def execute_select_query(ast, database):
                 groups[bucket_key] = []
             groups[bucket_key].append(row)
 
+        
         if ast.having:
             results = {}
             for bucket_key, group_rows in groups.items():
-                if ast.having.evaluate(group_rows, table_schema):
-                    results[bucket_key] = group_rows
+                try:
+                    # Pass the group rows to HAVING evaluation
+                    if ast.having.evaluate(group_rows, table_schema):
+                        results[bucket_key] = group_rows
+                except Exception as e:
+                    # Handle evaluation errors gracefully
+                    print(f"Warning: Error evaluating HAVING clause for group {bucket_key}: {e}")
+                    continue
             groups = results
         
             
