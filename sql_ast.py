@@ -146,7 +146,7 @@ class ColumnExpression(Expression):
     def evaluate(self, row, schema):
         # Handle the case where row might be a string or other unexpected type
         if not isinstance(row, dict):
-            raise TypeError(f"ColumnExpression.evaluate expects a dictionary (row), got {type(row)}: {row}")
+            raise TypeError(f"ColumnExpression.evaluate expects a dictionary (row), got {type(row)}")
             
         if self.column_name == "*":
             return row
@@ -261,7 +261,7 @@ class Function(Expression):
         elif self.name == "AVG":
             if not all(isinstance(v, (int, float)) for v in values):
                 raise ValueError("AVG works only with numeric values")
-            print(sum(values)/ len(values))
+            
             return sum(values) / len(values)
         elif self.name == "MAX":
             return max(values)

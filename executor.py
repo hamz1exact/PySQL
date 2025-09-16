@@ -409,6 +409,12 @@ def get_expr_output_name(expr: Columns):
     if isinstance(expr, Cast):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})" 
+    if isinstance(expr, CoalesceFunction):
+        res = ""
+        for exp in expr.expressions:
+            res += get_expr_output_name(exp)
+        return res
+        
 
     elif isinstance(expr, BinaryOperation):
 

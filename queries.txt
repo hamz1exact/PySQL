@@ -1,0 +1,23 @@
+SELECT * FROM users WHERE age > 25 AND gender = 'F';
+SELECT * FROM users WHERE age < 20 OR age > 60;
+SELECT * FROM users WHERE is_active = true AND age >= 30;
+SELECT * FROM users WHERE gender = 'M' OR is_active = false;
+SELECT * FROM users WHERE age > 25 AND gender = 'F';
+SELECT * FROM users WHERE age < 20 OR age > 60;
+SELECT * FROM users WHERE is_active = true AND age >= 30;
+SELECT * FROM users WHERE gender = 'M' OR is_active = false;
+SELECT account_type,currency, COUNT(*) AS account_count, SUM(balance) AS total_balance, AVG(balance) AS avg_balance, CONCAT(currency, ' ', CAST(ROUND(SUM(balance)), STRING)) AS formatted_total
+FROM fn GROUP BY account_type, currency HAVING SUM(balance) > 1000 ORDER BY total_balance DESC;
+SELECT 
+    account_type,
+    currency,
+    COUNT(*) AS account_count,
+    SUM(balance) AS total_balance,
+    AVG(balance) AS avg_balance,
+    CONCAT(currency, ' ', CAST(ROUND(SUM(balance)), STRING)) AS formatted_total
+FROM fn 
+GROUP BY account_type, currency
+HAVING SUM(balance) > 1000
+ORDER BY total_balance DESC;
+SELECT * FROM
+users;

@@ -474,16 +474,14 @@ class Parser:
         self.eat("GROUP_BY_KEY")
         group = []
         while True:
-            if self.current_token() and self.current_token()[0] == "IDENTIFIER":
-                arg = self.eat("IDENTIFIER")[1]
-                group.append(ColumnExpression(arg))
+            arg = self.parse_expression()
+            group.append(arg)
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
                 continue
             else:
                 break
-        # if not set(columns).issubset(group):
-        #     raise ValueError(f"all selected columns must appear in the GROUP BY clause or be used in an aggregate function")
+
         return group
             
         
