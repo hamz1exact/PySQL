@@ -1152,6 +1152,8 @@ class Parser:
             if self._contains_aggregates(DateDIFF.date1) or self._contains_aggregates(DateDIFF.date2):
                 return True
             return False
+        elif isinstance(expr, Extract):  # THIS WAS MISSING!
+            return self._contains_aggregates(expr.expression)  
         
         elif isinstance(expr, BinaryOperation):
             # Check both sides of the operation

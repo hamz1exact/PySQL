@@ -346,6 +346,7 @@ class ConditionExpr(Expression):
         else:
             # For other expression types, try normal evaluation with first row
             if group_rows:
+                
                 return expr.evaluate(group_rows[0], schema)
             else:
                 return None
