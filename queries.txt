@@ -21,3 +21,458 @@ HAVING SUM(balance) > 1000
 ORDER BY total_balance DESC;
 SELECT * FROM
 users;
+-- Basic IN operations
+SELECT * FROM users WHERE age IN (25, 30, 35);
+SELECT * FROM users WHERE gender IN ('M', 'F');
+SELECT * FROM users WHERE username IN ('alice', 'bob', 'charlie');
+
+-- NOT IN operations
+SELECT * FROM users WHERE age NOT IN (25, 30);
+SELECT * FROM users WHERE gender NOT IN ('M');
+
+-- Mixed data types
+SELECT * FROM users WHERE is_active IN (true, false);
+SELECT * FROM fn WHERE balance IN (1000, 2000, 5000);
+-- Simple column selection
+SELECT username FROM users;
+SELECT username, age FROM users;
+SELECT * FROM users;
+
+-- With aliases
+SELECT username AS name FROM users;
+SELECT username AS name, age AS years FROM users;
+-- Basic comparisons
+SELECT * FROM users WHERE age > 25;
+SELECT * FROM users WHERE age >= 25;
+SELECT * FROM users WHERE age < 30;
+SELECT * FROM users WHERE age <= 30;
+SELECT * FROM users WHERE age = 25;
+SELECT * FROM users WHERE age != 25;
+
+-- String comparisons  
+SELECT * FROM users WHERE username = 'alice';
+SELECT * FROM users WHERE gender = 'M';
+
+-- Boolean comparisons
+SELECT * FROM users WHERE is_active = true;
+SELECT * FROM users WHERE is_active = false;
+
+-- Logical operators
+SELECT * FROM users WHERE age > 25 AND gender = 'F';
+SELECT * FROM users WHERE age < 20 OR age > 60;
+SELECT * FROM users WHERE is_active = true AND age >= 30;
+SELECT * FROM users WHERE gender = 'M' OR is_active = false;
+
+-- Complex logical combinations
+SELECT * FROM users WHERE (age > 25 AND gender = 'M') OR (age < 20 AND is_active = true);
+SELECT * FROM users WHERE age > 20 AND (gender = 'F' OR is_active = true);
+-- IS NULL / IS NOT NULL
+SELECT * FROM users WHERE username IS NULL;
+SELECT * FROM users WHERE username IS NOT NULL;
+SELECT * FROM users WHERE age IS NULL;
+SELECT * FROM users WHERE age IS NOT NULL;
+
+-- NULL in logical operations
+SELECT * FROM users WHERE age > 25 AND username IS NOT NULL;
+SELECT * FROM users WHERE is_active IS NULL OR age < 30;
+-- Basic LIKE patterns
+SELECT * FROM users WHERE username LIKE 'a%';
+SELECT * FROM users WHERE username LIKE '%e';
+SELECT * FROM users WHERE username LIKE '%li%';
+SELECT * FROM users WHERE username LIKE 'a_i_e';
+
+-- NOT LIKE
+SELECT * FROM users WHERE username NOT LIKE 'a%';
+SELECT * FROM users WHERE username NOT LIKE '%admin%';
+
+-- LIKE with different data types (should handle conversion)
+SELECT * FROM fn WHERE account_holder LIKE '%CORP%';
+SELECT * FROM fn WHERE currency LIKE 'US%';
+-- Basic IN operations
+SELECT * FROM users WHERE age IN (25, 30, 35);
+SELECT * FROM users WHERE gender IN ('M', 'F');
+SELECT * FROM users WHERE username IN ('alice', 'bob', 'charlie');
+
+-- NOT IN operations
+SELECT * FROM users WHERE age NOT IN (25, 30);
+SELECT * FROM users WHERE gender NOT IN ('M');
+
+-- Mixed data types
+SELECT * FROM users WHERE is_active IN (true, false);
+SELECT * FROM fn WHERE balance IN (1000, 2000, 5000);
+-- Basic IN operations
+SELECT * FROM users WHERE age IN (25, 30, 35);
+SELECT * FROM users WHERE gender IN ('M', 'F');
+SELECT * FROM users WHERE username IN ('alice', 'bob', 'charlie');
+
+-- NOT IN operations
+SELECT * FROM users WHERE age NOT IN (25, 30);
+SELECT * FROM users WHERE gender NOT IN ('M');
+
+-- Mixed data types
+SELECT * FROM users WHERE is_active IN (true, false);
+SELECT * FROM fn WHERE balance IN (1000, 2000, 5000);
+-- Numeric BETWEEN
+SELECT * FROM users WHERE age BETWEEN 25 AND 35;
+SELECT * FROM fn WHERE balance BETWEEN 1000 AND 5000;
+
+-- NOT BETWEEN
+SELECT * FROM users WHERE age NOT BETWEEN 20 AND 30;
+SELECT * FROM fn WHERE balance NOT BETWEEN 0 AND 1000;
+
+-- String BETWEEN (alphabetical)
+SELECT * FROM users WHERE username BETWEEN 'a' AND 'm';
+SELECT * FROM fn WHERE account_holder BETWEEN 'A' AND 'M';
+
+-- Date BETWEEN
+SELECT * FROM users WHERE join_date BETWEEN '2024-01-01' AND '2024-12-31';
+SELECT * FROM users WHERE join_date BETWEEN '2024-06-01' AND '2025-01-01';
+-- Basic aggregates
+SELECT COUNT(*) FROM users;
+SELECT COUNT(username) FROM users;
+SELECT COUNT(DISTINCT gender) FROM users;
+
+SELECT SUM(age) FROM users;
+SELECT AVG(age) FROM users;
+SELECT MIN(age) FROM users;
+SELECT MAX(age) FROM users;
+
+-- Financial aggregates
+SELECT SUM(balance) FROM fn;
+SELECT AVG(balance) FROM fn;
+SELECT MIN(balance) FROM fn;
+SELECT MAX(balance) FROM fn;
+SELECT COUNT(*) FROM fn;
+
+-- Aggregates with aliases
+SELECT COUNT(*) AS total_users FROM users;
+SELECT AVG(age) AS average_age FROM users;
+SELECT MAX(balance) AS highest_balance FROM fn;
+-- Simple GROUP BY
+SELECT gender, COUNT(*) FROM users GROUP BY gender;
+SELECT is_active, COUNT(*) FROM users GROUP BY is_active;
+SELECT account_type, COUNT(*) FROM fn GROUP BY account_type;
+
+-- GROUP BY with aggregates
+SELECT gender, AVG(age) FROM users GROUP BY gender;
+SELECT gender, MIN(age), MAX(age) FROM users GROUP BY gender;
+SELECT account_type, SUM(balance), AVG(balance) FROM fn GROUP BY account_type;
+
+-- Multiple column GROUP BY
+SELECT gender, is_active, COUNT(*) FROM users GROUP BY gender, is_active;
+SELECT account_type, currency, SUM(balance) FROM fn GROUP BY account_type, currency;
+
+-- GROUP BY with aliases
+SELECT gender AS sex, COUNT(*) AS total FROM users GROUP BY gender;
+SELECT account_type AS type, AVG(balance) AS avg_balance FROM fn GROUP BY account_type;
+
+-- Simple GROUP BY
+SELECT gender, COUNT(*) FROM users GROUP BY gender;
+SELECT is_active, COUNT(*) FROM users GROUP BY is_active;
+SELECT account_type, COUNT(*) FROM fn GROUP BY account_type;
+
+-- GROUP BY with aggregates
+SELECT gender, AVG(age) FROM users GROUP BY gender;
+SELECT gender, MIN(age), MAX(age) FROM users GROUP BY gender;
+SELECT account_type, SUM(balance), AVG(balance) FROM fn GROUP BY account_type;
+
+-- Multiple column GROUP BY
+SELECT gender, is_active, COUNT(*) FROM users GROUP BY gender, is_active;
+SELECT account_type, currency, SUM(balance) FROM fn GROUP BY account_type, currency;
+
+-- GROUP BY with aliases
+SELECT gender AS sex, COUNT(*) AS total FROM users GROUP BY gender;
+SELECT account_type AS type, AVG(balance) AS avg_balance FROM fn GROUP BY account_type;
+-- Basic HAVING
+SELECT gender, COUNT(*) FROM users GROUP BY gender HAVING COUNT(*) > 5;
+SELECT account_type, AVG(balance) FROM fn GROUP BY account_type HAVING AVG(balance) > 2000;
+
+-- HAVING with different operators
+SELECT gender, AVG(age) FROM users GROUP BY gender HAVING AVG(age) >= 30;
+SELECT account_type, SUM(balance) FROM fn GROUP BY account_type HAVING SUM(balance) < 10000;
+
+-- HAVING with LIKE
+SELECT account_type, COUNT(*) FROM fn GROUP BY account_type HAVING account_type LIKE '%SAVINGS%';
+SELECT currency, COUNT(*) FROM fn GROUP BY currency HAVING currency LIKE 'US%';
+
+-- Complex HAVING conditions
+SELECT gender, COUNT(*), AVG(age) FROM users GROUP BY gender HAVING COUNT(*) > 3 AND AVG(age) < 35;
+SELECT account_type, AVG(balance) FROM fn GROUP BY account_type HAVING AVG(balance) > 1000 OR COUNT(*) > 10;
+-- Simple ORDER BY
+SELECT * FROM users ORDER BY age;
+SELECT * FROM users ORDER BY username;
+SELECT * FROM users ORDER BY age DESC;
+SELECT * FROM users ORDER BY username DESC;
+
+-- Multiple column ORDER BY
+SELECT * FROM users ORDER BY gender, age;
+SELECT * FROM users ORDER BY gender DESC, age ASC;
+SELECT * FROM users ORDER BY age, username;
+
+-- ORDER BY with aggregates
+SELECT gender, COUNT(*) FROM users GROUP BY gender ORDER BY COUNT(*);
+SELECT account_type, AVG(balance) FROM fn GROUP BY account_type ORDER BY AVG(balance) DESC;
+
+-- ORDER BY expressions
+SELECT username, age FROM users ORDER BY age + 5;
+SELECT account_holder, balance FROM fn ORDER BY balance * 1.1;
+-- Basic LIMIT
+SELECT * FROM users LIMIT 5;
+SELECT * FROM users ORDER BY age LIMIT 3;
+SELECT * FROM fn ORDER BY balance DESC LIMIT 10;
+
+-- LIMIT with OFFSET
+SELECT * FROM users LIMIT 5 OFFSET 2;
+SELECT * FROM users ORDER BY age LIMIT 3 OFFSET 1;
+SELECT * FROM fn ORDER BY balance DESC LIMIT 5 OFFSET 3;
+
+-- Pagination patterns
+SELECT * FROM users ORDER BY username LIMIT 10 OFFSET 0;
+SELECT * FROM users ORDER BY username LIMIT 10 OFFSET 10;
+SELECT * FROM users ORDER BY username LIMIT 10 OFFSET 20;
+-- Basic DISTINCT
+SELECT DISTINCT gender FROM users;
+SELECT DISTINCT is_active FROM users;
+SELECT DISTINCT account_type FROM fn;
+SELECT DISTINCT currency FROM fn;
+
+-- DISTINCT with multiple columns
+SELECT DISTINCT gender, is_active FROM users;
+SELECT DISTINCT account_type, currency FROM fn;
+
+-- DISTINCT with aggregates
+SELECT COUNT(DISTINCT gender) FROM users;
+SELECT COUNT(DISTINCT account_type) FROM fn;
+-- Basic arithmetic
+SELECT username, age, age + 5 AS age_plus_five FROM users;
+SELECT username, age, age - 2 AS age_minus_two FROM users;
+SELECT username, age, age * 2 AS double_age FROM users;
+SELECT username, age, age / 2 AS half_age FROM users;
+
+-- Financial calculations
+SELECT account_holder, balance, balance * 1.05 AS with_interest FROM fn;
+SELECT account_holder, balance, balance - 100 AS after_fee FROM fn;
+
+-- Arithmetic in WHERE clauses
+SELECT * FROM users WHERE age * 2 > 60;
+SELECT * FROM fn WHERE balance / 1000 > 2;
+
+-- Complex arithmetic
+SELECT username, age, (age + 5) * 2 AS complex_calc FROM users;
+SELECT account_holder, balance, balance * 0.02 / 12 AS monthly_interest FROM fn;
+-- UPPER and LOWER
+SELECT username, UPPER(username) AS upper_name FROM users;
+SELECT account_holder, LOWER(account_holder) AS lower_name FROM fn;
+
+-- LENGTH
+SELECT username, LENGTH(username) AS name_length FROM users;
+SELECT account_holder, LENGTH(account_holder) FROM fn;
+
+-- SUBSTRING
+SELECT username, SUBSTRING(username, 1, 3) AS first_three FROM users;
+SELECT account_holder, SUBSTRING(account_holder, 2) AS without_first FROM fn;
+SELECT username, SUBSTRING(username, 2, 2) AS middle_chars FROM users;
+
+-- REVERSE
+SELECT username, REVERSE(username) AS reversed FROM users;
+-- Basic REPLACE
+SELECT username, REPLACE(username, 'a', 'X') AS replaced FROM users;
+SELECT account_holder, REPLACE(account_holder, 'CORP', 'Company') FROM fn;
+SELECT currency, REPLACE(currency, 'USD', 'Dollar') FROM fn;
+
+-- REPLACE with empty string
+SELECT username, REPLACE(username, 'admin', '') AS no_admin FROM users;
+-- Basic CONCAT
+SELECT CONCAT(username, ' - ', gender) AS user_info FROM users;
+SELECT CONCAT('Age: ', age) AS age_label FROM users;
+SELECT CONCAT(account_holder, ' (', account_type, ')') AS account_info FROM fn;
+
+-- CONCAT with multiple fields
+SELECT CONCAT(username, ' is ', age, ' years old') AS description FROM users;
+SELECT CONCAT('Account ', account_holder, ' has $', balance) AS summary FROM fn;
+
+-- CONCAT with NULL handling
+SELECT CONCAT(username, ' - ', COALESCE(username, 'Unknown')) FROM users;
+-- Basic CAST operations
+SELECT username, CAST(age, STRING) AS age_string FROM users;
+SELECT account_holder, CAST(balance, INT) AS balance_int FROM fn;
+SELECT username, CAST(is_active, STRING) AS active_string FROM users;
+
+-- CAST in WHERE clauses
+SELECT * FROM users WHERE CAST(age, STRING) LIKE '2%';
+SELECT * FROM fn WHERE CAST(balance, INT) > 1000;
+
+-- CAST with aggregates (the problematic case we fixed)
+SELECT account_type, AVG(balance) FROM fn GROUP BY account_type HAVING CAST(AVG(balance), INT) > 3000;
+SELECT gender, COUNT(*) FROM users GROUP BY gender HAVING CAST(COUNT(*), STRING) LIKE '1%';
+-- ROUND function
+SELECT account_holder, ROUND(balance) AS rounded_balance FROM fn;
+SELECT account_holder, ROUND(balance, 1) AS balance_one_decimal FROM fn;
+
+-- ABS function  
+SELECT username, ABS(age - 30) AS age_diff_from_30 FROM users;
+SELECT account_holder, ABS(balance) FROM fn;
+
+-- CEIL and FLOOR
+SELECT account_holder, CEIL(balance) AS ceiling_balance FROM fn;
+SELECT account_holder, FLOOR(balance) AS floor_balance FROM fn;
+
+-- Math functions in aggregates
+SELECT ROUND(AVG(balance), 2) AS avg_balance FROM fn;
+SELECT ABS(MIN(balance)) AS abs_min_balance FROM fn;
+
+-- Basic COALESCE
+SELECT username, COALESCE(username, 'Unknown') AS safe_username FROM users;
+SELECT account_holder, COALESCE(balance, 0) AS safe_balance FROM fn;
+
+-- COALESCE with multiple values
+SELECT COALESCE(username, account_holder, 'No Name') AS name FROM users;
+
+-- Basic NULLIF
+SELECT username, NULLIF(age, 0) AS non_zero_age FROM users;
+SELECT account_holder, NULLIF(balance, 0) AS non_zero_balance FROM fn;
+
+-- NULLIF in calculations
+SELECT account_holder, balance / NULLIF(1, 0) FROM fn;
+
+-- Large aggregations
+SELECT COUNT(*) FROM users;
+SELECT gender, COUNT(*), AVG(age), MIN(age), MAX(age) FROM users GROUP BY gender;
+
+-- Complex queries
+SELECT 
+    account_type,
+    COUNT(*) AS countt,
+    AVG(balance) AS avg_balance,
+    SUM(balance) AS total_balance,
+    MIN(balance) AS min_balance,
+    MAX(balance) AS max_balance
+FROM fn 
+GROUP BY account_type
+HAVING COUNT(*) > 1
+ORDER BY AVG(balance) DESC;
+
+-- User analytics
+
+
+-- Financial reporting
+SELECT 
+    account_type,
+    currency,
+    COUNT(*) AS account_count,
+    SUM(balance) AS total_balance,
+    AVG(balance) AS avg_balance,
+    CONCAT(currency, ' ', CAST(ROUND(SUM(balance)), STRING)) AS formatted_total
+FROM fn 
+GROUP BY account_type, currency
+HAVING SUM(balance) > 1000
+ORDER BY total_balance DESC;
+
+-- User registration trends
+SELECT 
+    EXTRACT(YEAR FROM join_date) AS years,
+    EXTRACT(MONTH FROM join_date) AS months,
+    COUNT(*) AS registrations
+FROM users 
+GROUP BY EXTRACT(YEAR FROM join_date), EXTRACT(MONTH FROM join_date)
+ORDER BY years, months;
+SELECT account_holder, balance FROM fn WHERE balance > 5000;
+SELECT account_type, AVG(balance) AS avg_balance 
+FROM fn 
+GROUP BY account_type 
+HAVING AVG(balance) > 3000;
+SELECT account_holder, balance, balance * 1.1 AS projected_balance 
+FROM fn 
+ORDER BY balance * 1.1 DESC 
+LIMIT 5;
+SELECT UPPER(account_holder) AS upper_name, 
+       LENGTH(account_holder) AS name_length,
+       SUBSTRING(account_holder, 1, 3) AS name_prefix
+FROM fn 
+WHERE LENGTH(account_holder) > 10;
+
+SELECT account_holder, account_type, balance 
+FROM fn 
+WHERE (account_type = 'SAVINGS' AND balance > 2000) 
+   OR (account_type = 'CHECKING' AND balance < 1000);
+   SELECT account_type, currency, 
+       COUNT(*) AS account_count,
+       AVG(balance) AS avg_balance
+FROM fn 
+GROUP BY account_type, currency;
+SELECT account_holder, account_type
+FROM fn 
+WHERE account_holder LIKE 'J%' OR account_holder LIKE '%son';
+SELECT account_holder, 
+       COALESCE(transaction_time, '00:00:00') AS safe_time
+FROM fn;
+SELECT account_type, 
+       COUNT(*) AS total_accounts,
+       AVG(balance) AS avg_balance,
+       MAX(balance) AS max_balance,
+       MIN(balance) AS min_balance
+FROM fn 
+GROUP BY account_type 
+HAVING COUNT(*) > 2 
+   AND AVG(balance) > 1000 
+   AND MAX(balance) < 10000;
+
+SELECT account_holder,
+       balance,
+       (balance * interest_rate / 100) AS annual_interest,
+       ROUND((balance * interest_rate / 100) / 365, 4) AS daily_interest
+FROM fn 
+WHERE balance > 0 AND interest_rate > 0;
+
+SELECT account_holder,
+       UPPER(SUBSTRING(account_holder, 1, 3)) AS prefix,
+       LENGTH(account_holder) AS name_length,
+       CONCAT(account_type, ' - ', currency) AS type_currency
+FROM fn 
+WHERE LENGTH(account_holder) BETWEEN 5 AND 15;
+
+SELECT account_holder, balance, account_type, currency
+FROM fn 
+WHERE (account_type = 'SAVINGS' AND balance > 5000 AND currency = 'USD')
+   OR (account_type = 'CHECKING' AND balance BETWEEN 1000 AND 3000)
+   OR (account_type NOT IN ('SAVINGS', 'CHECKING') AND balance < 1000);
+
+SELECT account_type,
+       currency,
+       ROUND(AVG(balance), 2) AS avg_balance,
+       COUNT(*) AS cnt
+FROM fn 
+GROUP BY account_type, currency
+HAVING AVG(balance) > 1500
+ORDER BY account_type, currency;
+
+
+SELECT account_holder, 
+       account_type,
+       balance,
+       balance * interest_rate AS interest_value
+FROM fn 
+WHERE balance IS NOT NULL
+ORDER BY account_type DESC, 
+         LENGTH(account_holder) DESC;
+
+SELECT AVG(balance * interest_rate) AS avg_interest_value,
+       MAX(balance * interest_rate) AS max_interest_value,
+       MIN(balance * interest_rate) AS min_interest_value
+FROM fn 
+WHERE balance > 0 AND interest_rate > 0;
+
+
+SELECT account_holder,
+       balance,
+       interest_rate,
+       balance * COALESCE(interest_rate, 1) AS effective_balance
+FROM fn 
+ORDER BY effective_balance DESC;
+
+
+SELECT account_holder, account_type
+FROM fn 
+WHERE (account_holder LIKE 'J%' AND account_type = 'SAVINGS')
+   OR (account_holder LIKE '%son%' AND balance > 2000)
+   OR (account_holder NOT LIKE '%e%' AND account_type = 'CHECKING');

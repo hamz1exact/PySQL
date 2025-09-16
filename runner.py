@@ -3,10 +3,24 @@ from engine import Lexer, Parser
 from executor import execute
 from engine import db_manager
 
+GREEN = "\033[92m"
+RED = "\033[91m"
+RESET = "\033[0m"
+
 def run_queries_from_file(file_path, log_file="failed_queries.log"):
-    # Read entire file
+    # Read file
     with open(file_path, "r") as f:
-        raw = f.read()
+        raw = f.readlines()
+
+    # Remove comments and join back into one string
+    cleaned_lines = []
+    for line in raw:
+        if line.strip().startswith("--"):  # ignore full-line comments
+            continue
+        if "--" in line:  # strip inline comments
+            line = line.split("--", 1)[0]
+        cleaned_lines.append(line)
+    raw = " ".join(cleaned_lines)
 
     # Split queries by semicolon (multi-line queries preserved)
     queries = [q.strip() + ";" for q in raw.split(";") if q.strip()]
@@ -44,10 +58,10 @@ def run_queries_from_file(file_path, log_file="failed_queries.log"):
             if ast:
                 execute(ast, db_manager.active_db)
 
-            print(f"test {i} / {total} success")
+            print(f"test {i} / {total}{GREEN} success{RESET}")
 
         except Exception as e:
-            print(f"test {i} / {total} failed")
+            print(f"test {i} / {total}{RED} failed{RESET}")
             with open(log_file, "a") as log:
                 log.write(f"--- Test {i} Failed ---\n")
                 log.write(f"Query:\n{query}\n")
