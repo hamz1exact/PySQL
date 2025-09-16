@@ -1,6 +1,6 @@
-# su-sql
+# PySQL
 
-**su-sql** is a lightweight, in-memory SQL-like database engine implemented in Python. It supports core SQL features including schema creation, CRUD operations, aggregate functions, and advanced `WHERE` filtering. Designed primarily for **learning and experimentation**, it provides insight into how databases parse, plan, and execute queries.
+**PySQL** is a lightweight, in-memory SQL-like database engine implemented in Python. It supports core SQL features including schema creation, CRUD operations, aggregate functions, and advanced `WHERE` filtering. Designed primarily for **learning and experimentation**, it provides insight into how databases parse, plan, and execute queries.
 
 ---
 
@@ -41,7 +41,7 @@
 
 ## Why this project?
 
-**su-sql** was built to explore database internals and give hands-on experience with:  
+**PySQL** was built to explore database internals and give hands-on experience with:  
 
 - How SQL is parsed into an AST  
 - How query executors evaluate conditions, aggregations, and grouping  
