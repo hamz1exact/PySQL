@@ -386,6 +386,25 @@ def get_output_name(col: Columns):
         left = get_expr_name(obj.left)
         right = get_expr_name(obj.right)
         return f"{left}{obj.operator}{right}"
+    
+    
+def get_expr_output_name(expr: Columns):
+    if isinstance(expr, LiteralExpression):
+        return str(expr.value)
+    if expr.alias:
+        return expr.alias
+    if isinstance(expr, ColumnExpression):
+        return expr.column_name
+    if isinstance(expr, Cast):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})" 
+
+    elif isinstance(expr, BinaryOperation):
+
+        left = get_expr_output_name(expr.left)
+        right = get_expr_output_name(expr.right)
+        return f"{left}{expr.operator}{right}"
+    
 
 def get_expr_name(expr):
     if isinstance(expr, ColumnExpression):
@@ -404,6 +423,17 @@ def get_expr_name(expr):
         return f"{expr.name}({inner})"
     elif isinstance(expr, StringFunction):
         inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
+    elif isinstance(expr, Replace):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
+    elif isinstance(expr, Cast):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
+    elif isinstance(expr, Concat):
+        inner = ""
+        for exp in expr.expressions:
+            inner += get_expr_output_name(exp)
         return f"{expr.name}({inner})"
     else:
         raise ValueError(f"Unknown expression type: {expr}")

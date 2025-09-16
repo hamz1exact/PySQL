@@ -22,8 +22,21 @@ class Lexer:
     membership = {
         "IN"
     }
+    concat = {
+        "CONCAT"
+    }
+    
     between = {
         "BETWEEN"
+    }
+    
+    cast =  {
+        "CAST"
+    }
+    
+    
+    replace = {
+        "REPLACE"
     }
     like = {
         "LIKE"
@@ -59,7 +72,8 @@ class Lexer:
         "UPPER",
         "LOWER",
         "LENGTH",
-        "SUBSTRING"
+        "SUBSTRING",
+        "REVERSE"
     }
     
     math_operations = {
@@ -129,7 +143,13 @@ class Lexer:
                     
                 elif upper_word in Lexer.limit_keys:
                     self.tokens.append(("LIMIT", "LIMIT"))
-                
+                    
+                elif upper_word in Lexer.concat:
+                    self.tokens.append(("CONCAT", "CONCAT"))
+                    
+                elif upper_word in Lexer.replace:
+                    self.tokens.append(("REPLACE", "REPLACE"))
+
                 elif upper_word in Lexer.string_functions:
                     self.tokens.append(("STRING_FUNC", upper_word))
                     
@@ -157,6 +177,9 @@ class Lexer:
                     
                 elif upper_word in Lexer.having_keys:
                     self.tokens.append(("HAVING", upper_word))
+                    
+                elif upper_word in Lexer.cast:
+                    self.tokens.append(("CAST", "CAST"))
                     
                 elif upper_word == "BY":
                     if self.tokens[-1][0] == "ORDER_BY_KEY":
@@ -374,7 +397,7 @@ class Parser:
                 self.eat("AS")
                 alias_name = self.eat("IDENTIFIER")[1]
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction):
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast):
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -964,6 +987,43 @@ class Parser:
             self.eat("CLOSE_PAREN")
             return StringFunction(name, expression, start, length)
         
+        elif token[0] == "REPLACE":
+            self.eat("REPLACE")
+            self.eat("OPEN_PAREN")
+            expression = self.parse_expression(context)
+            self.eat("COMMA")
+            old = self.parse_expression(context)
+            self.eat("COMMA")
+            new = self.parse_expression(context)
+            self.eat("CLOSE_PAREN")
+            return Replace(expression, old, new)
+        
+        elif token[0] == "CONCAT":
+            self.eat("CONCAT")
+            expressions = []
+            self.eat("OPEN_PAREN")
+            while self.current_token()[0] != "CLOSE_PAREN":
+                arg = self.parse_expression()
+                expressions.append(arg)
+                
+                if self.current_token()[0] == "COMMA":
+                    self.eat("COMMA")
+            self.eat("CLOSE_PAREN")
+            return Concat(expressions)
+                
+                
+        elif token[0] == "CAST":
+            self.eat("CAST")
+            self.eat("OPEN_PAREN")
+            expression = self.parse_expression()
+            self.eat("COMMA")
+            target = self.eat(self.current_token()[0])[1].upper()
+            if target not in Lexer.datatypes or target == "SERIAL":
+                raise ValueError("Invalid Given Data Type")
+            self.eat("CLOSE_PAREN")
+            return Cast(expression, target)
+            
+        
         elif token[0] == "FUNC":
             distinct = False
             name = self.eat("FUNC")[1]
@@ -997,8 +1057,15 @@ class Parser:
         """Check if an expression contains aggregate functions"""
         if isinstance(expr, Function): 
             return True
-        elif isinstance(expr, MathFunction) or isinstance(expr, StringFunction):
+        elif isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Cast):
+            
             return self._contains_aggregates(expr.expression)
+        elif isinstance(expr, Concat):
+            for sub_expr in expr.expressions:
+                if self._contains_aggregates(sub_expr):
+                    return True
+            return False
+        
         elif isinstance(expr, BinaryOperation):
             # Check both sides of the operation
             return (self._contains_aggregates(expr.left) or 

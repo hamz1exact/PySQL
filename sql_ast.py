@@ -513,6 +513,86 @@ class StringFunction(Expression):
             if self.length:
                 value = value[:self.length]
             return value
+        elif self.name == "REVERSE":
+            return value[::-1]
+            
+
+class Replace(Expression):
+    def __init__(self, expression, old, new, name = "REPLACE", alias = None):
+        self.name = name
+        self.expression = expression
+        self.old = old
+        self.new = new
+        self.alias = alias
+        
+        
+    def evaluate(self, row, schema):
+        value = self.expression.evaluate(row, schema)
+        old = self.old.evaluate(row, schema)
+        new = self.new.evaluate(row, schema)
+        if type(value) != str or type(old) != str or type(new) != str:
+            raise ValueError("string functions work only with strings") 
+        if old not in str(value):
+            return value
+        val = value.replace(old, new)
+        return val
+
+
+class Concat(Expression):
+    def __init__(self, expressions, name = "Concat", alias = None):
+        self.expressions = expressions
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row, schema):
+        res = ""
+        for exp in self.expressions:
+            val = exp.evaluate(row, schema)
+            if val is not None:
+                res += str(val)
+            
+        return res if res else None
+    
+class Cast(Expression):
+    def __init__(self, expression, target_type, name = "Cast", alias = None):
+        self.expression = expression
+        self.target_type = target_type
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row, schema):
+        value = self.expression.evaluate(row, schema)
+        if value is None:
+            return None
+        
+        if self.target_type in ["INT", "INTEGER"]:
+            if type(value) not in (float, int):
+                raise ValueError (f"Given Expression has datatype of {type(value).__name__} but INT were Given")
+            return int(value)
+            
+        elif self.target_type in ['VARCHAR', "STRING", "TEXT"]:
+            return str(value)
+        elif self.target_type in ['FLOAT', "DECIMAL"]:
+            if type(value) not in (float, int):
+                raise ValueError (f"Given Expression has datatype of {type(value).__name__} but {self.target_type} target type  were Given")
+            return float(value)
+        elif self.target_type in ["DATE"]:
+            if type(value) != str:
+                raise ValueError (f"Given Expression has datatype of {type(value).__name__} but {self.target_type} target type  were Given")
+            try:
+                return datetime.strptime(value, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError(f"Invalid DATE format: {value}. Expected YYYY-MM-DD.")
+        elif self.target_type in ["TIME"]:
+            if type(value) != str:
+                raise ValueError (f"Given Expression has datatype of {type(value).__name__} but {self.target_type} target type  were Given")
+            try:
+                return datetime.strptime(value, "%H:%M:%S").time()
+            except ValueError:
+                raise ValueError(f"Cannot convert '{value}' to TIME. Format must be HH:MM:SS")
+        
+        
+        
             
         
         
