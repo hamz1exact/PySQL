@@ -646,8 +646,13 @@ class NullIF(Expression):
     def evaluate(self, row, schema):
         a = self.expression.evaluate(row, schema)
         b = self.number.evaluate(row, schema)
-        if type(a) not in (float, int) or type(b) not in (float, int):
-            raise ValueError("NULLIF works only with numeric values")
+        if type(a) in (float, int):
+            if type(b) not in (float, int):
+                raise ValueError("NULLIF must take arguments with the same datatype")
+        if type(a) == str:
+            if type(b) != str:
+                raise ValueError("NULLIF must take arguments with the same datatype")
+                
         
         if a == b:
             return None
