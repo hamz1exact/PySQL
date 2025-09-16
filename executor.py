@@ -217,27 +217,36 @@ def execute_select_query(ast, database):
             available_columns = set(result[0].keys())
         
         for order_by_clause in ast.order_by:
-            # order_by_clause is now an OrderBy object: (expression, direction)
             expression = order_by_clause.expression
             direction = order_by_clause.direction
             
-            # For ColumnExpression, extract the column name
             if isinstance(expression, ColumnExpression):
                 col = expression.column_name
                 if col not in available_columns:
                     raise ValueError(f"ORDER BY column '{col}' is not available in the result set")
                 
-                # Sort by this column (your existing logic)
-                result = sorted(result, key=lambda row: row.get(col), 
-                            reverse=(direction == "DESC"))
-            
-            # Handle other expression types (functions, math, etc.)
-            else:
+                # Handle NULL values for column sorting
+                def column_sort_key(row):
+                    value = row.get(col)
+                    # For NULL values, treat them as "less than everything" for ASC,
+                    # and "greater than everything" for DESC to match SQL standard
+                    if value is None:
+                        # Return a tuple that sorts NULLs appropriately
+                        return (0 if direction == "ASC" else 1,)
+                    return (1 if direction == "ASC" else 0, value)
                 
-                # For complex expressions, evaluate them for each row to get sort key
-                sort_key = lambda row, expr=expression: expr.evaluate(row, table_schema)
-                result = sorted(result, key=sort_key, 
-                            reverse=(direction == "DESC"))
+                result = sorted(result, key=column_sort_key)
+            
+            else:
+                # Handle NULL values for expression sorting
+                def expression_sort_key(row):
+                    value = expression.evaluate(row, table_schema)
+                    if value is None:
+                        # Return a tuple that sorts NULLs appropriately
+                        return (0 if direction == "ASC" else 1,)
+                    return (1 if direction == "ASC" else 0, value)
+                
+                result = sorted(result, key=expression_sort_key)
     if ast.limit:
         
         if ast.offset:
