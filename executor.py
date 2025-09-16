@@ -128,7 +128,7 @@ def execute_select_query(ast, database):
                         results[bucket_key] = group_rows
                 except Exception as e:
                     # Handle evaluation errors gracefully
-                    print(f"Warning: Error evaluating HAVING clause for group {bucket_key}: {e}")
+                    print(f"Warning: Error evaluating HAVING clause for group {bucket_key}: {e}") 
                     continue
             groups = results
         
