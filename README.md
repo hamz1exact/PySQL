@@ -52,7 +52,7 @@ It’s not a production-ready database, but it provides a **realistic playground
 
 ---
 
-## 🚀 Usage
+## Usage
 
 1. **Run the interactive shell:**
 
