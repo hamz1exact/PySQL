@@ -34,6 +34,20 @@ class Lexer:
         "CAST"
     }
     
+    date_and_time = {
+        "YEAR",
+        "MONTH",
+        "DAY",
+        "HOUR",
+        "MINUTE",
+        "SECOND"
+    }
+    
+    
+    extract = {
+        "EXTRACT"
+    }
+    
     nullif = {
         "NULLIF"
     }
@@ -148,6 +162,8 @@ class Lexer:
                 if upper_word in Lexer.keywords:
                     self.tokens.append((upper_word, upper_word))
                     
+                elif upper_word in Lexer.date_and_time:
+                    self.tokens.append(("DATE_AND_TIME", upper_word)) 
                 elif upper_word in Lexer.limit_keys:
                     self.tokens.append(("LIMIT", "LIMIT"))
                     
@@ -172,6 +188,9 @@ class Lexer:
                     
                 elif upper_word in Lexer.nullif:
                     self.tokens.append(("NULLIF", "NULLIF"))
+                    
+                elif upper_word in Lexer.extract:
+                    self.tokens.append(("EXTRACT", "EXTRACT")) 
                     
                 elif upper_word in Lexer.like:
                     if self.tokens and self.tokens[-1][1] == "NOT":
@@ -410,7 +429,7 @@ class Parser:
                 self.eat("AS")
                 alias_name = self.eat("IDENTIFIER")[1]
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction):
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) :
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -1023,7 +1042,35 @@ class Parser:
                     self.eat("COMMA")
             self.eat("CLOSE_PAREN")
             return Concat(expressions)
-                
+            
+        elif token[0] == "DateDIFF":
+            unit = 'days'    
+            self.eat("DateDIFF")
+            self.eat("OPEN_PAREN")
+            date1 = self.parse_expression()
+            self.eat("COMMA")
+            date2 = self.parse_expression()
+            if self.current_token()[0] == "COMMA":
+                self.eat("COMMA")
+                unit = self.parse_expression()
+            self.eat("CLOSE_PAREN")
+            return DateDIFF(date1, date2, unit)
+        
+        
+        elif token[0] == "EXTRACT":
+            self.eat("EXTRACT")
+            self.eat("OPEN_PAREN")
+            part = self.eat("DATE_AND_TIME")[1].upper()
+            self.eat("FROM")
+            expression = self.parse_expression()
+            self.eat("CLOSE_PAREN")
+            return Extract(expression, part)
+            
+            
+            
+            
+            
+        
         elif token[0] == "COALESCE":
             expressions = []
             self.eat("COALESCE")
@@ -1101,6 +1148,10 @@ class Parser:
                 if self._contains_aggregates(sub_expr):
                     return True
             return False
+        elif isinstance(expr, DateDIFF):
+            if self._contains_aggregates(DateDIFF.date1) or self._contains_aggregates(DateDIFF.date2):
+                return True
+            return False
         
         elif isinstance(expr, BinaryOperation):
             # Check both sides of the operation
@@ -1137,6 +1188,8 @@ class Parser:
         if isinstance(expr, ConditionExpr):
             return self._has_aggregation_in_expr(expr.left) or self._has_aggregation_in_expr(expr.right)
 
+            
+        
         if isinstance(expr, BinaryOperation):
             return self._has_aggregation_in_expr(expr.left) or self._has_aggregation_in_expr(expr.right)
 

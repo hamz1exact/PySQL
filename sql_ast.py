@@ -2,6 +2,7 @@ import errors
 from datatypes import *
 import math
 import re
+
 class SelectStatement:
     
     __slots__ = ['columns', 'function_columns', 'table', 'where', 'distinct', 
@@ -135,21 +136,28 @@ class Expression:
 
         raise NotImplementedError
 
-
-
-        
+ 
 class ColumnExpression(Expression):
     def __init__(self, column_name, alias = None):
         self.column_name = column_name
         self.alias = alias
     
     def evaluate(self, row, schema):
+        # Handle the case where row might be a string or other unexpected type
+        if not isinstance(row, dict):
+            raise TypeError(f"ColumnExpression.evaluate expects a dictionary (row), got {type(row)}: {row}")
+            
         if self.column_name == "*":
             return row
         
-        if type(row[self.column_name]) in (int, float, str, bool):
-            return row[self.column_name]
-        return row[self.column_name].value
+        if self.column_name not in row:
+            raise KeyError(f"Column '{self.column_name}' not found in row")
+        
+        value = row[self.column_name]
+        if isinstance(value, SQLType):
+            return value.value
+        else:
+            return value
 
     def get_referenced_columns(self):
         return {self.column_name}
@@ -209,15 +217,22 @@ class Function(Expression):
         if not rows:  # Handle empty group
             return None
         
-        # Evaluate the expression for each row
+        # Ensure rows is a list
+        if not isinstance(rows, list):
+            rows = [rows]
         
+        # Evaluate the expression for each row
         values = []
         for row in rows:
             try:
+                # Make sure each row is a dictionary
+                if not isinstance(row, dict):
+                    continue
+                    
                 value = self.expression.evaluate(row, table_schema)
                 if value is not None:  # Skip None values
                     values.append(value)
-            except (KeyError, AttributeError):
+            except (KeyError, AttributeError, TypeError):
                 # Skip rows where evaluation fails
                 continue
         
@@ -431,17 +446,17 @@ class LikeCondition(Expression):
         return '^' + ''.join(regex_pattern) + '$'
 
     def evaluate(self, row, schema):
-        
-        # Evaluate the value to match against
-        
-        try:
-
+        # Properly handle both list and dict cases
+        if isinstance(row, list):
+            if not row:
+                return False
+            # Use the first row for evaluation
             current_value = self.expression.evaluate(row[0], schema)
-        except:
+            pattern_value = self.pattern_expression.evaluate(row[0], schema)
+        else:
+            # Single row case
             current_value = self.expression.evaluate(row, schema)
-        # Evaluate the pattern (could be a literal or column reference)
-
-        pattern_value = self.pattern_expression.evaluate(row, schema)
+            pattern_value = self.pattern_expression.evaluate(row, schema)
         
         # Handle NULL values
         if current_value is None or pattern_value is None:
@@ -625,6 +640,78 @@ class NullIF(Expression):
         if a == b:
             return None
         return a
+
+class CurrentDate(Expression):
+    def __init__(self, name = "CURRENT_DATE", alias = None):
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row = None, schema= None):
+        return datetime.date.today()
+    
+
+class NowFunction(Expression):
+    def __init__(self, name = "NOW", alias = None):
+        self.name = name
+        self.alias = alias
         
         
+    def evaluate(self, row = None, schema =None):
+        return datetime.datetime.now()
+    
+class Extract(Expression):
+    def __init__(self, expression, part, name = "EXTRACT", alias = None):
+        self.expression = expression
+        self.part = part
+        self.name = name
+        self.alias = alias
         
+    def evaluate(self, row, schema):
+        # Handle both single row and aggregate result cases
+        if isinstance(self.expression, Function):
+            # If the inner expression is an aggregate function, 
+            # it needs to be evaluated differently
+            if isinstance(row, list):
+                # This is a group of rows for aggregate evaluation
+                value = self.expression.evaluate(row, schema)
+            else:
+                # This is a single row, but we need to pass it as a list to the function
+                value = self.expression.evaluate([row], schema)
+        else:
+            # Regular expression evaluation with single row
+            if isinstance(row, list):
+                if not row:
+                    return None
+                # Use first row if we have a list
+                value = self.expression.evaluate(row[0], schema)
+            else:
+                value = self.expression.evaluate(row, schema)
+        
+        if value is None:
+            return None
+            
+        # Import here to avoid circular imports
+        from datetime import date, time
+        
+        if not isinstance(value, (date, time)):
+            raise ValueError("EXTRACT Function works Only with DATE & TIME columns")
+        
+        if self.part == 'YEAR':
+            return value.year
+        elif self.part == 'MONTH':
+            return value.month
+        elif self.part == 'DAY':
+            return value.day
+        elif self.part == 'HOUR':
+            return value.hour
+        elif self.part == 'MINUTE':
+            return value.minute
+        elif self.part == 'SECOND':
+            return value.second
+class DateDIFF(Expression):
+    def __init__(self, date1, date2, unit = 'days'):
+        self.date1 = date1
+        self.date2 = date2
+        self.unit = unit
+        
+            

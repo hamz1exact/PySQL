@@ -167,11 +167,11 @@ def execute_select_query(ast, database):
          
     
     # Handle queries with only aggregate functions (no GROUP BY)
+    
     elif ast.function_columns and not ast.columns:
         result_row = {}
-        # Add all aggregate function results to the same row
         for func in ast.function_columns:
-
+            # Aggregate functions need the full list of filtered rows
             result_row[func.alias or get_expr_name(func)] = func.evaluate(filtered_rows, table_schema)
         result.append(serialize_row(result_row))
     
@@ -184,10 +184,14 @@ def execute_select_query(ast, database):
         
         for row in filtered_rows:
             selected_row = {}
-            # selected_row = {col.alias if col.alias else col.col_object: row.get(col.col_object) for col in ast.columns}
             for col in ast.columns:
-                
-                selected_row[col.alias or get_expr_name(col)] = col.evaluate(row, table_schema) 
+                # Non-aggregate expressions need single rows
+                if isinstance(col, Function):
+                    # Even non-aggregate functions should receive proper context
+                    selected_row[col.alias or get_expr_name(col)] = col.evaluate([row], table_schema)
+                else:
+                    # Regular expressions get single row
+                    selected_row[col.alias or get_expr_name(col)] = col.evaluate(row, table_schema)
             result.append(serialize_row(selected_row))
     
     # Apply DISTINCT if specified
@@ -433,6 +437,17 @@ def get_expr_name(expr):
     elif isinstance(expr, Cast):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
+    
+    elif isinstance(expr, Extract):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
+    
+    
+    elif isinstance(expr, DateDIFF):
+        inner1= get_expr_name(expr.date1)
+        inner2= get_expr_name(expr.date2)
+        return f"{expr.name}({inner1} - {inner2})"
+    
     elif isinstance(expr, Concat) or isinstance(expr, CoalesceFunction):
         inner = ""
         for exp in expr.expressions:
