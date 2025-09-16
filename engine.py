@@ -47,6 +47,21 @@ class Lexer:
         "LIMIT"
     }
     
+    math_functions = {
+        
+        "ABS",
+        "ROUND",
+        "CEIL",
+        "FLOOR"
+    }
+    
+    string_functions = {
+        "UPPER",
+        "LOWER",
+        "LENGTH",
+        "SUBSTRING"
+    }
+    
     math_operations = {
         
         "*",
@@ -115,8 +130,15 @@ class Lexer:
                 elif upper_word in Lexer.limit_keys:
                     self.tokens.append(("LIMIT", "LIMIT"))
                 
+                elif upper_word in Lexer.string_functions:
+                    self.tokens.append(("STRING_FUNC", upper_word))
+                    
+                
                 elif upper_word in Lexer.offset_keys:
                     self.tokens.append(("OFFSET", "OFFSET"))
+                    
+                elif upper_word in Lexer.math_functions:
+                    self.tokens.append(("MATH_FUNC", upper_word))
                 
                 elif upper_word in Lexer.like:
                     if self.tokens and self.tokens[-1][1] == "NOT":
@@ -340,7 +362,6 @@ class Parser:
         self.eat("SEMICOLON")
         return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
 
-
               
     def parse_columns(self):
         columns = []
@@ -353,7 +374,7 @@ class Parser:
                 self.eat("AS")
                 alias_name = self.eat("IDENTIFIER")[1]
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function):
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction):
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -918,6 +939,31 @@ class Parser:
             self.eat("IDENTIFIER")    
             return ColumnExpression(token[1])
         
+        elif token[0] == "MATH_FUNC":
+            name = self.eat("MATH_FUNC")[1]
+            round_by = None
+            self.eat("OPEN_PAREN")
+            expression = self.parse_expression(context)
+            if self.current_token()[0] == "COMMA":
+                self.eat("COMMA")
+                round_by = int(self.eat("NUMBER")[1])
+            self.eat("CLOSE_PAREN")
+            return MathFunction(name, expression, round_by)
+            
+        elif token[0] == "STRING_FUNC":
+            name = self.eat("STRING_FUNC")[1]
+            start = length = None
+            self.eat("OPEN_PAREN")
+            expression = self.parse_expression(context)
+            if self.current_token()[0] == "COMMA":
+                self.eat("COMMA")
+                start = int(self.eat("NUMBER")[1])
+                if self.current_token()[0] == "COMMA":
+                    self.eat("COMMA")
+                    length = int(self.eat("NUMBER")[1])
+            self.eat("CLOSE_PAREN")
+            return StringFunction(name, expression, start, length)
+        
         elif token[0] == "FUNC":
             distinct = False
             name = self.eat("FUNC")[1]
@@ -949,8 +995,10 @@ class Parser:
         
     def _contains_aggregates(self, expr):
         """Check if an expression contains aggregate functions"""
-        if isinstance(expr, Function):  # or whatever your aggregate class is called
+        if isinstance(expr, Function): 
             return True
+        elif isinstance(expr, MathFunction) or isinstance(expr, StringFunction):
+            return self._contains_aggregates(expr.expression)
         elif isinstance(expr, BinaryOperation):
             # Check both sides of the operation
             return (self._contains_aggregates(expr.left) or 
@@ -960,7 +1008,7 @@ class Parser:
         elif isinstance(expr, LiteralExpression):
             return False
         else:
-            # Handle other expression types as you add them
+
             return False
                     
     def _has_aggregation_in_expr(self, expr) -> bool:

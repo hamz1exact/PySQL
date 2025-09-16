@@ -1,5 +1,6 @@
 import errors
 from datatypes import *
+import math
 import re
 class SelectStatement:
     
@@ -462,3 +463,65 @@ class OrderBy(Expression):
         self.expression = expression
         self.direction = direction
         
+
+class MathFunction(Expression):
+    def __init__(self, name,  expression, round_by = None, alias = None):
+        self.name = name
+        self.expression = expression
+        self.round_by = round_by
+        self.alias = alias
+        
+    def evaluate(self, row, schema):
+        value = self.expression.evaluate(row, schema)
+        if value is None:
+            return value
+        elif type(value) not in (float, int):
+            raise ValueError('math functions work only with numeric values')
+        if self.name == "ROUND":
+            if self.round_by:
+                return round(value, self.round_by)
+            return round(value)
+        elif self.name == "CEIL":
+            return math.ceil(value)
+        elif self.name == "FLOOR":
+            return math.floor(value)
+        elif self.name == "ABS":
+            return abs(value)
+        
+class StringFunction(Expression):
+    def __init__(self, name, expression, start = None, length = None, alias = None):
+        self.name = name
+        self.expression = expression
+        self.start =  start
+        self.length = length
+        self.alias = alias
+        
+    def evaluate(self, row, schema):
+        value = self.expression.evaluate(row, schema)
+        if type(value) != str:
+            raise ValueError("string functions work only with strings")
+        
+        if self.name == "UPPER":
+            return value.upper()
+        elif self.name == "LOWER":
+            return value.lower()
+        elif self.name == "LENGTH":
+            return len(value)
+        elif self.name == "SUBSTRING":
+            if self.start:
+                value = value[self.start:]
+            if self.length:
+                value = value[:self.length]
+            return value
+            
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+    

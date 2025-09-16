@@ -399,6 +399,12 @@ def get_expr_name(expr):
     elif isinstance(expr, Function):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
+    elif isinstance(expr, MathFunction):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
+    elif isinstance(expr, StringFunction):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
     else:
         raise ValueError(f"Unknown expression type: {expr}")
     
