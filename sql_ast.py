@@ -180,6 +180,9 @@ class BinaryOperation(Expression):
         
         right_val = self.right.evaluate(row, schema)
         
+        if left_val is None or right_val is None:
+            return None
+        
         if self.operator == '+':
             return left_val + right_val
         elif self.operator == '-':
@@ -591,17 +594,37 @@ class Cast(Expression):
             except ValueError:
                 raise ValueError(f"Cannot convert '{value}' to TIME. Format must be HH:MM:SS")
         
-        
-        
+
+class CoalesceFunction(Expression):
+    def __init__(self, expressions, name = "COALESCE", alias = None):
+        self.expressions = expressions
+        self.name = name
+        self.alias = alias
+    def evaluate(self, row, schema):
+        for exr in self.expressions:
+            val = exr.evaluate(row, schema)
+            if val is not None:
+                return val
+        return None
             
         
+class NullIF(Expression):
+    def __init__(self, expression, number, name = "NULLIF", alias = None):
+        self.expression = expression
+        self.number = number
+        self.name = name
+        self.alias = alias
+        
+        
+    def evaluate(self, row, schema):
+        a = self.expression.evaluate(row, schema)
+        b = self.number.evaluate(row, schema)
+        if type(a) not in (float, int) or type(b) not in (float, int):
+            raise ValueError("NULLIF works only with numeric values")
+        
+        if a == b:
+            return None
+        return a
         
         
         
-        
-        
-        
-        
-        
-        
-    

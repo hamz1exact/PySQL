@@ -34,6 +34,9 @@ class Lexer:
         "CAST"
     }
     
+    nullif = {
+        "NULLIF"
+    }
     
     replace = {
         "REPLACE"
@@ -58,6 +61,10 @@ class Lexer:
     }
     limit_keys = {
         "LIMIT"
+    }
+    
+    coalesce = {
+        "COALESCE"
     }
     
     math_functions = {
@@ -144,6 +151,9 @@ class Lexer:
                 elif upper_word in Lexer.limit_keys:
                     self.tokens.append(("LIMIT", "LIMIT"))
                     
+                elif upper_word in Lexer.coalesce:
+                    self.tokens.append(("COALESCE", "COALESCE"))
+                    
                 elif upper_word in Lexer.concat:
                     self.tokens.append(("CONCAT", "CONCAT"))
                     
@@ -159,7 +169,10 @@ class Lexer:
                     
                 elif upper_word in Lexer.math_functions:
                     self.tokens.append(("MATH_FUNC", upper_word))
-                
+                    
+                elif upper_word in Lexer.nullif:
+                    self.tokens.append(("NULLIF", "NULLIF"))
+                    
                 elif upper_word in Lexer.like:
                     if self.tokens and self.tokens[-1][1] == "NOT":
                         self.tokens.pop()
@@ -397,7 +410,7 @@ class Parser:
                 self.eat("AS")
                 alias_name = self.eat("IDENTIFIER")[1]
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast):
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction):
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -1011,12 +1024,35 @@ class Parser:
             self.eat("CLOSE_PAREN")
             return Concat(expressions)
                 
+        elif token[0] == "COALESCE":
+            expressions = []
+            self.eat("COALESCE")
+            self.eat("OPEN_PAREN")
+            while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
+                exp = self.parse_expression()
+                expressions.append(exp)
+                
+                if self.current_token()[0] == "COMMA":
+                    self.eat("COMMA")
+                
+            self.eat("CLOSE_PAREN")
+            return CoalesceFunction(expressions)
+        
+        elif token[0] == "NULLIF":
+            self.eat("NULLIF")
+            self.eat("OPEN_PAREN")
+            expr = self.parse_expression()
+            self.eat("COMMA")
+            number = self.parse_expression()
+            self.eat("CLOSE_PAREN")
+            return NullIF(expr, number)
                 
         elif token[0] == "CAST":
             self.eat("CAST")
             self.eat("OPEN_PAREN")
             expression = self.parse_expression()
-            self.eat("COMMA")
+            if self.current_token()[0] in ("COMMA", "AS"):
+                self.eat(self.current_token()[0])
             target = self.eat(self.current_token()[0])[1].upper()
             if target not in Lexer.datatypes or target == "SERIAL":
                 raise ValueError("Invalid Given Data Type")
@@ -1057,10 +1093,10 @@ class Parser:
         """Check if an expression contains aggregate functions"""
         if isinstance(expr, Function): 
             return True
-        elif isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Cast):
+        elif isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Cast) or isinstance(expr, NullIF):
             
             return self._contains_aggregates(expr.expression)
-        elif isinstance(expr, Concat):
+        elif isinstance(expr, Concat) or isinstance(expr, CoalesceFunction):
             for sub_expr in expr.expressions:
                 if self._contains_aggregates(sub_expr):
                     return True

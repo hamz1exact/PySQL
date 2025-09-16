@@ -421,6 +421,9 @@ def get_expr_name(expr):
     elif isinstance(expr, MathFunction):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
+    elif isinstance(expr, NullIF):
+        inner = get_expr_name(expr.expression)
+        return f"{expr.name}({inner})"
     elif isinstance(expr, StringFunction):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
@@ -430,7 +433,7 @@ def get_expr_name(expr):
     elif isinstance(expr, Cast):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
-    elif isinstance(expr, Concat):
+    elif isinstance(expr, Concat) or isinstance(expr, CoalesceFunction):
         inner = ""
         for exp in expr.expressions:
             inner += get_expr_output_name(exp)
