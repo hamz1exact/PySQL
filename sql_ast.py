@@ -276,7 +276,7 @@ class GroupBy(Expression):
 
 
 class ConditionExpr(Expression):
-    def __init__(self, left, operator, right, context):
+    def __init__(self, left, operator, right, context = None):
         self.left = left
         self.operator = operator
         self.right = right
@@ -284,15 +284,17 @@ class ConditionExpr(Expression):
         
 
     def evaluate(self, row_or_rows, schema):
-        
         if self.context == "HAVING":
             # For HAVING, we need to handle aggregates vs regular columns differently
             left = self._evaluate_having_expr(self.left, row_or_rows, schema)
             right = self._evaluate_having_expr(self.right, row_or_rows, schema)
-        else:
+        elif self.context == "WHERE":
             # For WHERE, evaluate normally with single row
             left = self._evaluate_where_expr(self.left, row_or_rows, schema)
             right = self._evaluate_where_expr(self.right, row_or_rows, schema)
+        else:
+            left = self.left.evaluate(row_or_rows, schema)
+            right = self.right.evaluate(row_or_rows, schema)
 
         # Debug print to see what values we're getting
 
@@ -911,7 +913,19 @@ class DateDIFF(Expression):
             return days
         
         
-                
-    
+class CaseWhen(Expression):
+    def __init__(self, expressions, actions, case_else = None, name = "CASE", alias = None,):
+        self.expressions = expressions
+        self.actions = actions
+        self.case_else = case_else
+        self.name = name
+        self.alias = alias
         
-            
+    def evaluate(self, row, schema):
+
+        for i, expr in enumerate(self.expressions):
+            if expr.evaluate(row, schema):
+                return self.actions[i].evaluate(row, schema)
+        if self.case_else:
+            return self.case_else.evaluate(row, schema)        
+        return None

@@ -3,6 +3,7 @@ from database_manager import Table
 import re
 from datatypes import *
 from errors import *
+import random
 def execute(ast, database):
     
     if isinstance(ast, SelectStatement):
@@ -45,7 +46,7 @@ def execute_select_query(ast, database):
     for column in all_where_ids:
         if column not in table_schema:
             raise ColumnNotFoundError(column, table_name)
-        
+
 
     table_has_asterisk = "*" in all_ids
     normalized_columns = []
@@ -186,9 +187,9 @@ def execute_select_query(ast, database):
     elif ast.function_columns and ast.columns:
         raise ValueError("Selected columns must appear in the GROUP BY clause or be used in an aggregate function")
     
-    # Handle regular SELECT queries (no aggregates, no GROUP BY)    
+    # Handle regular SELECT queries (no aggregates, no GROUP BY)  
+      
     else:
-        
         for row in filtered_rows:
             selected_row = {}
             for col in ast.columns:
@@ -424,6 +425,7 @@ def get_expr_output_name(expr: Columns):
     
 
 def get_expr_name(expr):
+    ID = get_id()
     if isinstance(expr, ColumnExpression):
         return expr.column_name
     elif isinstance(expr, LiteralExpression):
@@ -449,7 +451,9 @@ def get_expr_name(expr):
         return f"{expr.name}({inner})"
     elif isinstance(expr, Cast):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({inner})"
+    elif isinstance(expr, CaseWhen):
+        return f"{expr.name}.id({id(expr.name)})"
     
     elif isinstance(expr, DateDIFF):
         inner = get_expr_name(expr.date1)
@@ -517,3 +521,6 @@ def execute_order_by(result, order_by_clauses, schema):
                           reverse=(direction == "DESC"))
     
     return result
+
+def get_id():
+    return random.randint(1, 100000)
