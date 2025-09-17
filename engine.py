@@ -42,7 +42,8 @@ class Lexer:
         "MINUTE",
         "SECOND",
         "CURRENT_DATE",
-        "NOW"
+        "NOW",
+        "DATEDIFF"
     }
     
     
@@ -402,6 +403,7 @@ class Parser:
             self.eat("WHERE")
             where = self.parse_expression(context = "WHERE")
             
+            
         if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
             group_in = self.group_by()
             if self.current_token() and self.current_token()[0] == "HAVING":
@@ -429,9 +431,9 @@ class Parser:
             
             if self.current_token() and self.current_token()[0] == "AS":
                 self.eat("AS")
-                alias_name = self.eat("IDENTIFIER")[1]
+                alias_name = (self.eat(self.current_token()[0])[1]).lower()
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) or isinstance(expr, CurrentDate) :
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) or isinstance(expr, CurrentDate) or isinstance(expr, DateDIFF):
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -1042,10 +1044,11 @@ class Parser:
                     self.eat("COMMA")
             self.eat("CLOSE_PAREN")
             return Concat(expressions)
+        
             
-        elif token[0] == "DateDIFF":
+        elif token[0] == "DATE_AND_TIME" and token[1] == "DATEDIFF":
             unit = 'days'    
-            self.eat("DateDIFF")
+            self.eat("DATE_AND_TIME")
             self.eat("OPEN_PAREN")
             date1 = self.parse_expression()
             self.eat("COMMA")
@@ -1053,6 +1056,8 @@ class Parser:
             if self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
                 unit = self.parse_expression()
+                if not isinstance(unit, LiteralExpression):
+                    raise ValueError("unit must be represented as string")
             self.eat("CLOSE_PAREN")
             return DateDIFF(date1, date2, unit)
         
@@ -1066,9 +1071,7 @@ class Parser:
             self.eat("CLOSE_PAREN")
             return Extract(expression, part)
             
-            
-            
-            
+
             
         
         elif token[0] == "COALESCE":
@@ -1109,6 +1112,7 @@ class Parser:
         elif token[0] == "DATE_AND_TIME" and token[1] == "CURRENT_DATE":
             self.eat("DATE_AND_TIME")
             return CurrentDate()
+
         
         elif token[0] == "FUNC":
             distinct = False
@@ -1154,7 +1158,7 @@ class Parser:
         elif isinstance(expr, CurrentDate):
             return False
         elif isinstance(expr, DateDIFF):
-            if self._contains_aggregates(DateDIFF.date1) or self._contains_aggregates(DateDIFF.date2):
+            if self._contains_aggregates(expr.date1) or self._contains_aggregates(expr.date2):
                 return True
             return False
         elif isinstance(expr, Extract):  # THIS WAS MISSING!

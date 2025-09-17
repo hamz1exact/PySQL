@@ -461,14 +461,22 @@ class Between(Expression):
             expected_type = schema[self.expression.column_name]
         else:
             expected_type = None
+        
+        if isinstance(self.lower, LiteralExpression):
+            lower_value = self.lower.evaluate(row, schema, expected_type)
+        else: lower_value = self.lower.evaluate(row, schema)  
+        
+        if isinstance(self.upper, LiteralExpression):
+            upper_value = self.upper.evaluate(row, schema, expected_type)
+        else: upper_value = self.upper.evaluate(row, schema)
+        
         expr_value = self.expression.evaluate(row, schema)
-        lower_value = self.lower.evaluate(row, schema, expected_type)
-        upper_value = self.upper.evaluate(row, schema, expected_type)
+        
         if expr_value is None or lower_value is None or upper_value is None:
             return False
         if not self.is_not:
-            return self.lower.evaluate(row, schema, expected_type = expected_type)<=self.expression.evaluate(row, schema)<=self.upper.evaluate(row, schema, expected_type = expected_type)
-        return not self.lower.evaluate(row, schema, expected_type = expected_type)<=self.expression.evaluate(row, schema)<=self.upper.evaluate(row, schema, expected_type = expected_type)
+            return lower_value<=self.expression.evaluate(row, schema)<=upper_value
+        return not lower_value<=self.expression.evaluate(row, schema)<=upper_value
 
 class Membership(Expression):
     def __init__(self, col ,args, is_not = False):
@@ -817,8 +825,7 @@ class NowFunction(Expression):
         self.name = name
         self.alias = alias
         
-        
-    def evaluate(self, row = None, schema =None):
+    def evaluate(self, row = None, schema = None):
         return datetime.datetime.now()
     
 class Extract(Expression):
@@ -871,9 +878,40 @@ class Extract(Expression):
         elif self.part == 'SECOND':
             return value.second
 class DateDIFF(Expression):
-    def __init__(self, date1, date2, unit = 'days'):
+    def __init__(self, date1, date2, unit = 'days', name = "DATEDIFF", alias = None):
         self.date1 = date1
         self.date2 = date2
         self.unit = unit
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row, schema):
+        date1 = self.date1.evaluate(row, schema, DATE) if isinstance(self.date1, LiteralExpression) else self.date1.evaluate(row ,schema)
+        date2 = self.date2.evaluate(row, schema, DATE) if isinstance(self.date2, LiteralExpression) else self.date2.evaluate(row ,schema)
+        years = date1.year - date2.year
+        months = date1.month - date2.month
+        days = date1.day - date2.day    
+        unit = self.unit.evaluate(row, schema)
+        
+        if days < 0:
+            months -= 1
+            # find number of days in previous month
+            prev_month = (date1.month - 1) if date1.month > 1 else 12
+            prev_year = date1.year if date1.month > 1 else date1.year - 1
+            from calendar import monthrange
+            days += monthrange(prev_year, prev_month)[1]
+        if months < 0:
+            years -= 1
+            months += 12
+        if unit.lower() == 'years':
+            return years
+        elif unit.lower() == 'months':
+            return months
+        elif unit.lower() == 'days':
+            return days
+        
+        
+                
+    
         
             

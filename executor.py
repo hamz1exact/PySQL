@@ -451,6 +451,12 @@ def get_expr_name(expr):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
     
+    elif isinstance(expr, DateDIFF):
+        inner = get_expr_name(expr.date1)
+        inner2 = get_expr_name(expr.date2)
+        inner3 = get_expr_name(expr.unit)
+        return f"{expr.name}({inner, inner2}, {inner3})"    
+    
     elif isinstance(expr, Extract):
         inner = get_expr_name(expr.expression)
         return f"{expr.name}({inner})"
