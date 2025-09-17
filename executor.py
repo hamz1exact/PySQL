@@ -510,7 +510,6 @@ def get_expr_output_name(expr: Columns):
     
 
 def get_expr_name(expr):
-    ID = get_id()
     if isinstance(expr, ColumnExpression):
         return expr.column_name
     elif isinstance(expr, LiteralExpression):
