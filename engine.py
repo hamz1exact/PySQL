@@ -15,7 +15,7 @@ class Lexer:
         "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT")
     AbsenceOfValue = {
         "NONE", "NULL", "EMPTY"
-    }
+    } 
     nullchecks = {
         "IS"
     }
@@ -439,12 +439,14 @@ class Parser:
         columns = []
         function_columns = []
         alias_name = None
+        self._select_aliases = {}
         while True:
             expr = self.parse_addition(context=None)
             
             if self.current_token() and self.current_token()[0] == "AS":
                 self.eat("AS")
                 alias_name = (self.eat(self.current_token()[0])[1]).lower()
+                self._select_aliases[alias_name] = expr
                 # Attach alias to expr
                 if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) or isinstance(expr, CurrentDate) or isinstance(expr, DateDIFF) or isinstance(expr, CaseWhen):
                     expr.alias = alias_name
@@ -485,12 +487,30 @@ class Parser:
             
 
     def group_by(self):
-        self.eat("GROUP_BY_KEY")
-        self.eat("GROUP_BY_KEY")
+        self.eat("GROUP_BY_KEY")  # GROUP
+        self.eat("GROUP_BY_KEY")  # BY
         group = []
+        
         while True:
-            arg = self.parse_expression()
-            group.append(arg)
+            # Try to parse as expression first
+            if self.current_token() and self.current_token()[0] == "IDENTIFIER":
+                identifier = self.current_token()[1]
+                
+                # Check if this is an alias from SELECT clause
+                if identifier.lower() in self._select_aliases:
+                    # This is an alias - use the original expression
+                    self.eat("IDENTIFIER")  # consume the identifier
+                    resolved_expr = self._select_aliases[identifier.lower()]
+                    group.append(resolved_expr)
+                else:
+                    # Regular column or expression
+                    expr = self.parse_expression()
+                    group.append(expr)
+            else:
+                # Complex expression
+                expr = self.parse_expression()
+                group.append(expr)
+            
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
                 continue
@@ -502,20 +522,38 @@ class Parser:
         
 
     def order_by(self):
-        self.eat("ORDER_BY_KEY")
-        self.eat("ORDER_BY_KEY")
+        self.eat("ORDER_BY_KEY")  # ORDER
+        self.eat("ORDER_BY_KEY")  # BY
         order = []
+        
         while True:
-            expression = self.parse_expression(None)
+            # Check for alias resolution
+            if self.current_token() and self.current_token()[0] == "IDENTIFIER":
+                identifier = self.current_token()[1]
+                
+                if identifier.lower() in self._select_aliases:
+                    # This is an alias - use the original expression
+                    self.eat("IDENTIFIER")  # consume the identifier
+                    expression = self._select_aliases[identifier.lower()]
+                else:
+                    # Regular column or expression
+                    expression = self.parse_expression(None)
+            else:
+                # Complex expression
+                expression = self.parse_expression(None)
+            
             if self.current_token() and self.current_token()[0] != "ORDER_BY_DRC":
                 order_direction = "ASC"
             else:
                 order_direction = self.eat("ORDER_BY_DRC")[1]
-            order.append(OrderBy(expression,order_direction))
+                
+            order.append(OrderBy(expression, order_direction))
+            
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
             else:
                 break
+                
         return order
     
     def parse_having_expression(self):
@@ -922,6 +960,9 @@ class Parser:
                 is_null = False
             self.eat("NULL")
             return IsNullCondition(expression, is_null=is_null)
+
+        
+        
         while self.current_token() and self.current_token()[0] == "MEMBERSHIP":
             args = []
             is_nott = False
@@ -1187,7 +1228,6 @@ class Parser:
         if isinstance(expr, Function): 
             return True
         elif isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Cast) or isinstance(expr, NullIF):
-            
             return self._contains_aggregates(expr.expression)
         elif isinstance(expr, Concat) or isinstance(expr, CoalesceFunction):
             for sub_expr in expr.expressions:
@@ -1197,24 +1237,24 @@ class Parser:
         elif isinstance(expr, CurrentDate):
             return False
         elif isinstance(expr, DateDIFF):
-            if self._contains_aggregates(expr.date1) or self._contains_aggregates(expr.date2):
-                return True
-            return False
+            # Check if any of the date expressions contain aggregates
+            return (self._contains_aggregates(self.date1) if hasattr(self, 'date1') else 
+                    (self._contains_aggregates(expr.date1) if hasattr(expr, 'date1') else False) or
+                    self._contains_aggregates(expr.date2) if hasattr(expr, 'date2') else False)
         elif isinstance(expr, CaseWhen):
-            
+            # Check all WHEN conditions and THEN actions
             for expr_r in expr.expressions:
                 if self._contains_aggregates(expr_r):
                     return True
             for expr_r in expr.actions:
                 if self._contains_aggregates(expr_r):
                     return True
+            if expr.case_else and self._contains_aggregates(expr.case_else):
+                return True
             return False
-            
-        elif isinstance(expr, Extract):  # THIS WAS MISSING!
+        elif isinstance(expr, Extract):
             return self._contains_aggregates(expr.expression)  
-        
         elif isinstance(expr, BinaryOperation):
-            # Check both sides of the operation
             return (self._contains_aggregates(expr.left) or 
                     self._contains_aggregates(expr.right))
         elif isinstance(expr, ColumnExpression):
@@ -1222,7 +1262,6 @@ class Parser:
         elif isinstance(expr, LiteralExpression):
             return False
         else:
-
             return False
                     
     def _has_aggregation_in_expr(self, expr) -> bool:

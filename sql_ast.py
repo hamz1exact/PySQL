@@ -883,34 +883,48 @@ class DateDIFF(Expression):
     def __init__(self, date1, date2, unit = 'days', name = "DATEDIFF", alias = None):
         self.date1 = date1
         self.date2 = date2
-        self.unit = unit
+        self.unit = unit  # This can be a LiteralExpression
         self.name = name
         self.alias = alias
         
     def evaluate(self, row, schema):
-        date1 = self.date1.evaluate(row, schema, DATE) if isinstance(self.date1, LiteralExpression) else self.date1.evaluate(row ,schema)
-        date2 = self.date2.evaluate(row, schema, DATE) if isinstance(self.date2, LiteralExpression) else self.date2.evaluate(row ,schema)
-        years = date1.year - date2.year
-        months = date1.month - date2.month
-        days = date1.day - date2.day    
-        unit = self.unit.evaluate(row, schema)
+        # Evaluate dates
+        if isinstance(self.date1, CurrentDate):
+            date1_val = self.date1.evaluate(row, schema)
+        else:
+            date1_val = self.date1.evaluate(row, schema)
+            
+        if isinstance(self.date2, ColumnExpression):
+            date2_val = self.date2.evaluate(row, schema)
+        else:
+            date2_val = self.date2.evaluate(row, schema)
         
-        if days < 0:
-            months -= 1
-            # find number of days in previous month
-            prev_month = (date1.month - 1) if date1.month > 1 else 12
-            prev_year = date1.year if date1.month > 1 else date1.year - 1
-            from calendar import monthrange
-            days += monthrange(prev_year, prev_month)[1]
-        if months < 0:
-            years -= 1
-            months += 12
-        if unit.lower() == 'years':
-            return years
-        elif unit.lower() == 'months':
-            return months
-        elif unit.lower() == 'days':
-            return days
+        # Get unit - it might be a LiteralExpression
+        if isinstance(self.unit, LiteralExpression):
+            unit_val = self.unit.evaluate(row, schema)
+        elif isinstance(self.unit, str):
+            unit_val = self.unit
+        else:
+            unit_val = self.unit.evaluate(row, schema)
+        
+        # Calculate difference
+        if hasattr(date1_val, 'year') and hasattr(date2_val, 'year'):
+            # Both are dates
+            years = date1_val.year - date2_val.year
+            months = date1_val.month - date2_val.month
+            days = (date1_val - date2_val).days
+            
+            if unit_val.lower() == 'years':
+                return years
+            elif unit_val.lower() == 'months':
+                return years * 12 + months  # Approximate
+            elif unit_val.lower() == 'days':
+                return days
+            else:
+                return days  # default to days
+        else:
+            raise ValueError("DATEDIFF requires date arguments")
+
         
         
 class CaseWhen(Expression):

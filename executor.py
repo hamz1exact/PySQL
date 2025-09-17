@@ -110,8 +110,21 @@ def execute_select_query(ast, database):
     # Handle GROUP BY queries
     if ast.group_by and ast.function_columns:
 
-        
+        alias_map = {}
         groups = {}
+        all_exprs = (ast.columns or []) + (ast.function_columns or [])
+        for expr in all_exprs:
+            if hasattr(expr, 'alias') and expr.alias:
+                alias_map[expr.alias] = expr
+                
+        resolved_group_by = []
+        for group_expr in ast.group_by:
+            if (isinstance(group_expr, ColumnExpression) and 
+                group_expr.column_name in alias_map):
+                # Use the original expression instead of the alias
+                resolved_group_by.append(alias_map[group_expr.column_name])
+            else:
+                resolved_group_by.append(group_expr)
         for row in filtered_rows:
             bucket_key = tuple(expr.evaluate(row, table_schema) for expr in ast.group_by)
             
@@ -451,15 +464,15 @@ def get_expr_name(expr):
         return f"{expr.name}({inner})"
     elif isinstance(expr, Cast):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}.id({inner})"
+        return f"{expr.name}.id({id(expr)})"
     elif isinstance(expr, CaseWhen):
-        return f"{expr.name}.id({id(expr.name)})"
+        return f"{expr.name}.id({id(expr)})"
     
     elif isinstance(expr, DateDIFF):
-        inner = get_expr_name(expr.date1)
-        inner2 = get_expr_name(expr.date2)
-        inner3 = get_expr_name(expr.unit)
-        return f"{expr.name}({inner, inner2}, {inner3})"    
+        # inner = get_expr_name(expr.date1)
+        # inner2 = get_expr_name(expr.date2)
+        # inner3 = get_expr_name(expr.unit)
+        return f"{expr.name}.id({id(expr)})"    
     
     elif isinstance(expr, Extract):
         inner = get_expr_name(expr.expression)
