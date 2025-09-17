@@ -928,7 +928,7 @@ class DateDIFF(Expression):
         
         
 class CaseWhen(Expression):
-    def __init__(self, expressions, actions, case_else = None, name = "CASE", alias = None,):
+    def __init__(self, expressions, actions, case_else = None, name = "CASE", alias = None):
         self.expressions = expressions
         self.actions = actions
         self.case_else = case_else
@@ -936,10 +936,18 @@ class CaseWhen(Expression):
         self.alias = alias
         
     def evaluate(self, row, schema):
-
+        # Handle GROUP BY context where row might be a list
+        if isinstance(row, list):
+            # In GROUP BY context, use first row since GROUP BY columns have same values
+            eval_row = row[0] if row else {}
+        else:
+            eval_row = row
+        
         for i, expr in enumerate(self.expressions):
-            if expr.evaluate(row, schema):
-                return self.actions[i].evaluate(row, schema)
+            if expr.evaluate(eval_row, schema):
+                return self.actions[i].evaluate(eval_row, schema)
+        
         if self.case_else:
-            return self.case_else.evaluate(row, schema)        
+            return self.case_else.evaluate(eval_row, schema)
+        
         return None

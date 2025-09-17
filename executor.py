@@ -109,61 +109,65 @@ def execute_select_query(ast, database):
     
     # Handle GROUP BY queries
     if ast.group_by and ast.function_columns:
-
-        alias_map = {}
-        groups = {}
-        all_exprs = (ast.columns or []) + (ast.function_columns or [])
-        for expr in all_exprs:
+        # Build alias-to-expression mapping
+        alias_to_expr = {}
+        all_select_exprs = (ast.columns or []) + (ast.function_columns or [])
+        for expr in all_select_exprs:
             if hasattr(expr, 'alias') and expr.alias:
-                alias_map[expr.alias] = expr
-                
+                alias_to_expr[expr.alias] = expr
+        
+        # Resolve GROUP BY expressions that might be aliases
         resolved_group_by = []
         for group_expr in ast.group_by:
             if (isinstance(group_expr, ColumnExpression) and 
-                group_expr.column_name in alias_map):
-                # Use the original expression instead of the alias
-                resolved_group_by.append(alias_map[group_expr.column_name])
+                group_expr.column_name in alias_to_expr):
+                # Use the original expression
+                resolved_group_by.append(alias_to_expr[group_expr.column_name])
             else:
                 resolved_group_by.append(group_expr)
+        groups = {}
         for row in filtered_rows:
-            bucket_key = tuple(expr.evaluate(row, table_schema) for expr in ast.group_by)
-            
+            bucket_key = tuple(expr.evaluate(row, table_schema) for expr in resolved_group_by)
             if bucket_key not in groups:
                 groups[bucket_key] = []
             groups[bucket_key].append(row)
 
-        
+        # Apply HAVING with proper context
         if ast.having:
             results = {}
             for bucket_key, group_rows in groups.items():
                 try:
-                    # Pass the group rows to HAVING evaluation
                     if ast.having.evaluate(group_rows, table_schema):
                         results[bucket_key] = group_rows
                 except Exception as e:
-                    # Handle evaluation errors gracefully
                     print(f"Warning: Error evaluating HAVING clause for group {bucket_key}: {e}") 
                     continue
             groups = results
         
-            
-        # Build result rows for each group
+        # Build result rows
         for bucket_key, group_rows in groups.items():
             result_row = {}
             
-            # Add GROUP BY columns first
+            # Add regular SELECT columns (non-aggregates)
             for col_expr in ast.columns:
                 if isinstance(col_expr, Function):
                     continue  # Skip functions, handle below
                 
                 output_name = col_expr.alias or get_expr_name(col_expr)
-
-                result_row[output_name] = col_expr.evaluate(group_rows[0], table_schema)
                 
-            group_expressions = ast.group_by.expressions if hasattr(ast.group_by, 'expressions') else ast.group_by
+                # Handle different expression types in GROUP BY context
+                if isinstance(col_expr, CaseWhen):
+                    # Pass the group to CaseWhen for proper evaluation
+                    result_row[output_name] = col_expr.evaluate(group_rows, table_schema)
+                else:
+                    # Regular expressions use first row
+                    result_row[output_name] = col_expr.evaluate(group_rows[0], table_schema)
             
-            for i, group_expr in enumerate(group_expressions):
+            # Add GROUP BY columns that aren't already in SELECT
+            for i, group_expr in enumerate(resolved_group_by):
                 group_output_name = group_expr.alias if hasattr(group_expr, "alias") and group_expr.alias else get_expr_name(group_expr)
+                
+                # Only add if not already covered by SELECT
                 already_covered = False
                 for col_expr in ast.columns:
                     if isinstance(col_expr, Function):
@@ -172,17 +176,16 @@ def execute_select_query(ast, database):
                         already_covered = True
                         break
                 
-                # Only add if not already covered by SELECT
                 if not already_covered:
                     result_row[group_output_name] = bucket_key[i]
-
             
-            # Third: Add aggregate functions
+            # Add aggregate functions
             for func in ast.function_columns:
                 output_name = func.alias or get_expr_name(func)
                 result_row[output_name] = func.evaluate(group_rows, table_schema)
             
             result.append(serialize_row(result_row))
+    
             
             # Add regular SELECT columns (must be in GROUP BY)
          
@@ -241,37 +244,106 @@ def execute_select_query(ast, database):
         if result:
             available_columns = set(result[0].keys())
         
+        # Build comprehensive mapping of expressions to their output names
+        expr_to_output_name = {}
+        alias_to_expr = {}
+        
+        # Map all SELECT expressions to their output names
+        all_select_exprs = (ast.columns or []) + (ast.function_columns or [])
+        for expr in all_select_exprs:
+            output_name = expr.alias or get_expr_name(expr)
+            expr_to_output_name[expr] = output_name
+            
+            if hasattr(expr, 'alias') and expr.alias:
+                alias_to_expr[expr.alias] = expr
+        
+        # Process each ORDER BY clause
         for order_by_clause in ast.order_by:
             expression = order_by_clause.expression
             direction = order_by_clause.direction
             
             if isinstance(expression, ColumnExpression):
                 col = expression.column_name
-                if col not in available_columns:
-                    raise ValueError(f"ORDER BY column '{col}' is not available in the result set")
                 
-                # Handle NULL values for column sorting
-                def column_sort_key(row):
-                    value = row.get(col)
-                    # For NULL values, treat them as "less than everything" for ASC,
-                    # and "greater than everything" for DESC to match SQL standard
-                    if value is None:
-                        # Return a tuple that sorts NULLs appropriately
-                        return (0 if direction == "ASC" else 1,)
-                    return (1 if direction == "ASC" else 0, value)
+                # Strategy 1: Direct column/alias lookup in result
+                if col in available_columns:
+                    def sort_key(row):
+                        value = row.get(col)
+                        if value is None:
+                            return (0 if direction == "ASC" else 1,)
+                        return (1 if direction == "ASC" else 0, value)
+                    
+                    result = sorted(result, key=sort_key, reverse=(direction == "DESC"))
+                    continue
                 
-                result = sorted(result, key=column_sort_key)
+                # Strategy 2: Check if it's an alias that maps to an expression
+                if col in alias_to_expr:
+                    original_expr = alias_to_expr[col]
+                    output_name = original_expr.alias or get_expr_name(original_expr)
+                    
+                    if output_name in available_columns:
+                        def sort_key(row):
+                            value = row.get(output_name)
+                            if value is None:
+                                return (0 if direction == "ASC" else 1,)
+                            return (1 if direction == "ASC" else 0, value)
+                        
+                        result = sorted(result, key=sort_key, reverse=(direction == "DESC"))
+                        continue
+                
+                # Strategy 3: For non-GROUP BY queries, allow original table columns
+                if not ast.group_by:
+                    if col in table_schema:
+                        def sort_key(row):
+                            # This only works for non-GROUP BY queries where result contains original columns
+                            value = row.get(col)
+                            if value is None:
+                                return (0 if direction == "ASC" else 1,)
+                            return (1 if direction == "ASC" else 0, value)
+                        
+                        result = sorted(result, key=sort_key, reverse=(direction == "DESC"))
+                        continue
+                
+                # If we get here, the column wasn't found
+                raise ValueError(f"ORDER BY column '{col}' is not available in the result set. Available columns: {list(available_columns)}")
             
             else:
-                # Handle NULL values for expression sorting
-                def expression_sort_key(row):
-                    value = expression.evaluate(row, table_schema)
-                    if value is None:
-                        # Return a tuple that sorts NULLs appropriately
-                        return (0 if direction == "ASC" else 1,)
-                    return (1 if direction == "ASC" else 0, value)
+                # Complex expression (Function, Extract, etc.)
                 
-                result = sorted(result, key=expression_sort_key)
+                # Strategy 1: Check if this exact expression is in SELECT clause
+                matching_output_name = None
+                for select_expr in all_select_exprs:
+                    if expressions_are_equivalent(expression, select_expr):
+                        matching_output_name = select_expr.alias or get_expr_name(select_expr)
+                        break
+                
+                if matching_output_name and matching_output_name in available_columns:
+                    def sort_key(row):
+                        value = row.get(matching_output_name)
+                        if value is None:
+                            return (0 if direction == "ASC" else 1,)
+                        return (1 if direction == "ASC" else 0, value)
+                    
+                    result = sorted(result, key=sort_key, reverse=(direction == "DESC"))
+                    continue
+                
+                # Strategy 2: For non-GROUP BY queries, evaluate the expression directly
+                if not ast.group_by:
+                    def sort_key(row):
+                        try:
+                            value = expression.evaluate(row, table_schema)
+                            if value is None:
+                                return (0 if direction == "ASC" else 1,)
+                            return (1 if direction == "ASC" else 0, value)
+                        except Exception:
+                            return (2,)  # Put problematic rows at end
+                    
+                    result = sorted(result, key=sort_key, reverse=(direction == "DESC"))
+                    continue
+                
+                # If we get here, it's a complex expression in GROUP BY that's not in SELECT
+                raise ValueError(f"ORDER BY expression must appear in SELECT clause when using GROUP BY. Available columns: {list(available_columns)}")
+
     if ast.limit:
         
         if ast.offset:
@@ -496,10 +568,26 @@ def get_expr_name(expr):
         raise ValueError(f"Unknown expression type: {expr}")
     
 def are_same_column(expr1, expr2):
-    """Check if two expressions refer to the same column"""
+    """Check if two expressions refer to the same column or are equivalent"""
     if isinstance(expr1, ColumnExpression) and isinstance(expr2, ColumnExpression):
         return expr1.column_name == expr2.column_name
-    # Add more cases for other expression types if needed
+    
+    # Check if they're the same expression type with same parameters
+    if type(expr1) == type(expr2):
+        if isinstance(expr1, Extract):
+            return (expr1.part == expr2.part and 
+                    are_same_column(expr1.expression, expr2.expression))
+        elif isinstance(expr1, CaseWhen):
+            # For CASE expressions, check if they have the same structure
+            if len(expr1.expressions) != len(expr2.expressions):
+                return False
+            for i in range(len(expr1.expressions)):
+                if not are_same_column(expr1.expressions[i], expr2.expressions[i]):
+                    return False
+                if not are_same_column(expr1.actions[i], expr2.actions[i]):
+                    return False
+            return True
+    
     return False
 
 def execute_order_by(result, order_by_clauses, schema):
@@ -537,3 +625,55 @@ def execute_order_by(result, order_by_clauses, schema):
 
 def get_id():
     return random.randint(1, 100000)
+
+# Replace your ORDER BY section in execute_select_query with this:
+
+
+# Helper function to check if two expressions are equivalent
+def expressions_are_equivalent(expr1, expr2):
+    """Check if two expressions are functionally equivalent"""
+    
+    # Same type check
+    if type(expr1) != type(expr2):
+        return False
+    
+    # Handle different expression types
+    if isinstance(expr1, ColumnExpression):
+        return expr1.column_name == expr2.column_name
+    
+    elif isinstance(expr1, LiteralExpression):
+        return expr1.value == expr2.value
+    
+    elif isinstance(expr1, Function):
+        return (expr1.name == expr2.name and 
+                expr1.distinct == expr2.distinct and
+                expressions_are_equivalent(expr1.expression, expr2.expression))
+    
+    elif isinstance(expr1, Extract):
+        return (expr1.part == expr2.part and
+                expressions_are_equivalent(expr1.expression, expr2.expression))
+    
+    elif isinstance(expr1, Cast):
+        return (expr1.target_type == expr2.target_type and
+                expressions_are_equivalent(expr1.expression, expr2.expression))
+    
+    elif isinstance(expr1, MathFunction):
+        return (expr1.name == expr2.name and
+                expr1.round_by == expr2.round_by and
+                expressions_are_equivalent(expr1.expression, expr2.expression))
+    
+    elif isinstance(expr1, BinaryOperation):
+        return (expr1.operator == expr2.operator and
+                expressions_are_equivalent(expr1.left, expr2.left) and
+                expressions_are_equivalent(expr1.right, expr2.right))
+    
+    elif isinstance(expr1, Concat):
+        if len(expr1.expressions) != len(expr2.expressions):
+            return False
+        return all(expressions_are_equivalent(e1, e2) 
+                  for e1, e2 in zip(expr1.expressions, expr2.expressions))
+    
+    # Add more cases as needed for other expression types
+    else:
+        # Fallback: compare string representations
+        return str(expr1) == str(expr2)
