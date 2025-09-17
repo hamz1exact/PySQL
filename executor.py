@@ -623,8 +623,6 @@ def execute_order_by(result, order_by_clauses, schema):
     
     return result
 
-def get_id():
-    return random.randint(1, 100000)
 
 # Replace your ORDER BY section in execute_select_query with this:
 
