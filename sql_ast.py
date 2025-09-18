@@ -178,11 +178,12 @@ class LiteralExpression(Expression):
         return set()
 
 class BinaryOperation(Expression):
-    def __init__(self, left, operator, right, alias = None):
+    def __init__(self, left, operator, right, alias = None, name = "Operation"):
         self.left = left        
         self.operator = operator 
         self.right = right      
         self.alias = alias
+        self.name = name
     
     def evaluate(self, row, schema):
         left_val = self.left.evaluate(row, schema)

@@ -11,6 +11,11 @@ older_versions/
 # C extensions
 *.so
 app.spec
+clibeta2.py
+clibeta3.py
+clibeta5.pt
+clibeta5.py
+clibeta2.py
 dist/
 build/
 runner.py

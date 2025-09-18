@@ -756,12 +756,39 @@ class EnhancedSQLShell:
         
         # SQL keywords for completion
         self.sql_keywords = [
-            'SELECT', 'FROM', 'WHERE', 'INSERT', 'UPDATE', 'DELETE',
-            'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'INDEX',
-            'AND', 'OR', 'NOT', 'NULL', 'IS', 'IN', 'LIKE', 'BETWEEN',
-            'ORDER', 'BY', 'GROUP', 'HAVING', 'DISTINCT', 'COUNT',
-            'SUM', 'AVG', 'MAX', 'MIN', 'JOIN', 'LEFT', 'RIGHT',
-            'INNER', 'OUTER', 'ON', 'AS', 'USE'
+            # DML
+            'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE',
+            # DDL
+            'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'INDEX', 'VIEW', 'TRIGGER',
+            # Constraints
+            'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'UNIQUE', 'NOT', 'NULL', 'DEFAULT',
+            'CHECK', 'CONSTRAINT',
+            # Data Types
+            'INT', 'INTEGER', 'VARCHAR', 'CHAR', 'TEXT', 'BLOB', 'REAL', 'NUMERIC', 'DECIMAL',
+            'DATE', 'TIME', 'TIMESTAMP', 'BOOLEAN', 'FLOAT', 'DOUBLE',
+            # Operators and Functions
+            'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN', 'IS', 'EXISTS', 'CASE', 'WHEN', 'THEN',
+            'ELSE', 'END', 'AS', 'DISTINCT', 'ALL', 'ANY', 'SOME',
+            # Joins
+            'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'ON', 'USING',
+            # Grouping and Ordering
+            'ORDER', 'BY', 'GROUP', 'HAVING', 'ASC', 'DESC', 'NULLS', 'FIRST', 'LAST',
+            # Aggregate Functions
+            'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'TOTAL', 'GROUP_CONCAT',
+            # String Functions
+            'LENGTH', 'SUBSTR', 'SUBSTRING', 'UPPER', 'LOWER', 'TRIM', 'LTRIM', 'RTRIM',
+            'REPLACE', 'CONCAT',
+            # Numeric Functions
+            'ABS', 'ROUND', 'CEIL', 'CEILING', 'FLOOR', 'MOD', 'POWER', 'SQRT',
+            # Date Functions
+            'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'DATE', 'TIME',
+            'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND',
+            # Other Keywords
+            'USE', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'UNION', 'EXCEPT', 'INTERSECT',
+            'WITH', 'RECURSIVE', 'LIMIT', 'OFFSET', 'FETCH', 'FIRST', 'ROWS', 'ONLY',
+            'COMMIT', 'ROLLBACK', 'TRANSACTION', 'BEGIN', 'START', 'SAVEPOINT',
+            'GRANT', 'REVOKE', 'PRIVILEGES', 'TO', 'FROM', 'PUBLIC',
+            'TRUE', 'FALSE', 'UNKNOWN', "CAST", "COALESCE"
         ]
         
         # Setup completions
