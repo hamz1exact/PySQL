@@ -1706,7 +1706,7 @@ class EnhancedSQLShell:
                 value = self._format_value_simple(row.get(col))
                 # Escape commas and quotes for CSV
                 if ',' in value or '"' in value:
-                    value = f'"{value.replace('"', '""')}"'
+                    value = f""" "{value.replace('"', '""')}" """
                 row_data.append(value)
             print(",".join(row_data))
             

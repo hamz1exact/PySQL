@@ -418,6 +418,8 @@ def get_expr_output_name(expr: Columns):
     
 
 def get_expr_name(expr):
+    call_id = str(id(expr))
+    call_id = call_id[-5:]
     if isinstance(expr, ColumnExpression):
         return expr.column_name
     elif isinstance(expr, LiteralExpression):
@@ -425,41 +427,37 @@ def get_expr_name(expr):
     elif isinstance(expr, BinaryOperation):
         left = get_expr_name(expr.left)
         right = get_expr_name(expr.right)
-        return f"({left} {expr.operator} {right})"
+        return f"{expr.name}.id({call_id})"
     elif isinstance(expr, Function):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({call_id})"
     elif isinstance(expr, MathFunction):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({call_id})"
     elif isinstance(expr, NullIF):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({call_id})"
     elif isinstance(expr, StringFunction):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({call_id})"
     elif isinstance(expr, Replace):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({call_id})"
     elif isinstance(expr, Cast):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
-    
+        return f"{expr.name}.id({call_id})"
     elif isinstance(expr, Extract):
         inner = get_expr_name(expr.expression)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({call_id})"
     
     
     elif isinstance(expr, DateDIFF):
-        inner1= get_expr_name(expr.date1)
-        inner2= get_expr_name(expr.date2)
-        return f"{expr.name}({inner1} - {inner2})"
+        # inner1= get_expr_name(expr.date1)
+        # inner2= get_expr_name(expr.date2)
+        return f"{expr.name}.id({call_id})"
     
     elif isinstance(expr, Concat) or isinstance(expr, CoalesceFunction):
-        inner = ""
-        for exp in expr.expressions:
-            inner += get_expr_output_name(exp)
-        return f"{expr.name}({inner})"
+        return f"{expr.name}.id({call_id})"
     else:
         raise ValueError(f"Unknown expression type: {expr}")
     
