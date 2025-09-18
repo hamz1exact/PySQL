@@ -13,6 +13,9 @@ older_versions/
 app.spec
 dist/
 build/
+runner.py
+release_note.md
+queries.txt
 # Distribution / packaging
 build/
 dist/
