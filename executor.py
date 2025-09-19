@@ -384,6 +384,7 @@ def execute_insert_query(ast, database):
     table_default = table_obj.defaults
     table_auto = table_obj.auto
     table_constraints = getattr(table_obj, 'constraints', {})
+    table_restrictions = table_obj.restrictions
     
     if len(values) != len(columns):
         raise ValueError(
@@ -411,7 +412,15 @@ def execute_insert_query(ast, database):
                 # Backwards compatibility for non-Expression defaults
                 new_row[col_object] = default_expr
         else:
-            new_row[col_object] = None
+            if col_object in table_constraints:
+                if table_constraints[col_object] == "NOT NULL" or table_constraints[col_object] == "PRIMARY KEY":
+                    raise ValueError(f"Column <{col_object}> cannot be null; it uses a NOT NULL constraint.")
+            else:
+                new_row[col_object] = None
+        
+        if col_object in table_restrictions:
+            if not table_restrictions[col_object].evaluate(new_row, table_schema):
+                raise ValueError(f"new row for relation '{table_name}' violates check constraint")
     violation = find_constraint_violation(table_obj, new_row)
     should_insert = handle_conflict_resolution(ast, violation, table_obj, new_row)
     
@@ -474,8 +483,8 @@ def execute_create_database_statement(ast, database):
         database.use_database(ast.database_name)
         
 def execute_create_table_statement(ast, database):
-        print(ast.constraints)
-        table = Table(ast.table_name, ast.schema, ast.defaults, ast.auto, ast.constraints)
+
+        table = Table(ast.table_name, ast.schema, ast.defaults, ast.auto, ast.constraints, ast.restrictions)
         database.active_db[ast.table_name] = table
         database.save_database_file()
         

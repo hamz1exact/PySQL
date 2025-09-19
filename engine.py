@@ -124,6 +124,9 @@ class Lexer:
         "+",
         "-"
             }
+    restrictions = {
+        "CHECK"
+    }
     
     functions = {
         
@@ -223,7 +226,10 @@ class Lexer:
                 
                 elif upper_word in Lexer.conflict_keywords:
                     self.tokens.append(("CONF", upper_word))
-            
+
+                elif upper_word in Lexer.restrictions:
+                    self.tokens.append(("RESTS", upper_word))
+                
                 elif upper_word in Lexer.concat:
                     self.tokens.append(("CONCAT", "CONCAT"))
                     
@@ -385,7 +391,6 @@ class Lexer:
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         
-        print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -720,6 +725,7 @@ class Parser:
         auto = {}
         defaults = {} 
         constraints = {}
+        restrictions = {}
         is_serial = False
         is_default = False
         while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
@@ -767,11 +773,16 @@ class Parser:
             else:
                 is_default = False
             if self.current_token() and self.current_token()[0] == "CONST":
-                
                 contr = self.eat("CONST")[1]
                 if contr == "NOT NULL" and is_default:
                     raise ValueError("if a Column has DEFAULT VALUE it cannot inheritance  NOT NULL constraints")
                 constraints[col_name] = contr
+            
+            if self.current_token() and self.current_token()[0] == "RESTS":
+                self.eat("RESTS")
+                expr = self.parse_expression(context=None)
+                restrictions[col_name] = expr
+                
             # Skip comma if present
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
@@ -779,7 +790,7 @@ class Parser:
         self.eat("CLOSE_PAREN")  # )
         self.eat("SEMICOLON")
         print(constraints)
-        return CreateTableStatement(table_name, schema, defaults, auto, constraints)
+        return CreateTableStatement(table_name, schema, defaults, auto, constraints, restrictions)
         
 
 

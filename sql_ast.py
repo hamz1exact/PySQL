@@ -91,12 +91,13 @@ class CreateDatabseStatement:
         self.database_name = database_name
         
 class CreateTableStatement:
-    def __init__(self, table_name, schema, defaults, auto, constraints):
+    def __init__(self, table_name, schema, defaults, auto, constraints, restrictions):
         self.table_name = table_name
         self.schema = schema
         self.defaults = defaults
         self.auto = auto
         self.constraints = constraints
+        self.restrictions = restrictions
 
 class UseStatement:
     def __init__(self, database_name):
