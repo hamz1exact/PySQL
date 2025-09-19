@@ -21,12 +21,14 @@ import argparse
 # Enhanced terminal UI imports
 try:
     from prompt_toolkit import prompt
-    from prompt_toolkit.completion import WordCompleter
+    from prompt_toolkit.completion import WordCompleter, Completer, Completion
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
     from prompt_toolkit.shortcuts import print_formatted_text
     from prompt_toolkit.formatted_text import FormattedText
     from prompt_toolkit.styles import Style
+    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.keys import Keys
     PROMPT_TOOLKIT_AVAILABLE = True
 except ImportError:
     PROMPT_TOOLKIT_AVAILABLE = False
@@ -103,35 +105,6 @@ except ImportError as e:
     execute = mock_execute
 
 
-class Colors:
-    """Enhanced ANSI color codes for terminal output"""
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
-    DIM = '\033[2m'
-    ITALIC = '\033[3m'
-    UNDERLINE = '\033[4m'
-    
-    # Foreground colors
-    BLACK = '\033[30m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[97m'
-    MAGENTA = '\033[97m'
-    CYAN = '\033[97m'
-    WHITE = '\033[37m'
-    
-    # Bright colors
-    BRIGHT_BLACK = '\033[90m'
-    BRIGHT_RED = '\033[91m'
-    BRIGHT_GREEN = '\033[92m'
-    BRIGHT_YELLOW = '\033[93m'
-    BRIGHT_BLUE = '\033[97m'
-    BRIGHT_MAGENTA = '\033[97m'
-    BRIGHT_CYAN = '\033[97m'
-    BRIGHT_WHITE = '\033[97m'
-
-
 class Config:
     """Enhanced configuration with hot-reload support"""
     def __init__(self):
@@ -144,16 +117,15 @@ class Config:
         self.history_size = 1000
         self.auto_commit = True
         self.echo_queries = False
-        self.colorize_output = True
         self.table_format = 'ascii'  # ascii, markdown, csv
         self.timing = True
         self.last_result = None
         self.last_columns = None
         self.auto_reload = True  # Enable auto-reload on file changes
         self.reload_on_error = False  # Reload modules on execution error
-        self.auto_detect_wide = False   # ADD THIS LINE
-        self.wide_table_threshold = 10  # ADD THIS LINE - columns threshold
-
+        self.auto_detect_wide = False   # Default to false - user must explicitly enable
+        self.wide_table_threshold = 10  # columns threshold
+        self.display_mode = 'auto'  # 'auto', 'force_normal', 'force_wide'
         
         # Load config from file if exists
         self.config_file = Path.home() / '.myshell_config.json'
@@ -184,16 +156,98 @@ class Config:
                 'history_size': self.history_size,
                 'auto_commit': self.auto_commit,
                 'echo_queries': self.echo_queries,
-                'colorize_output': self.colorize_output,
                 'table_format': self.table_format,
                 'timing': self.timing,
                 'auto_reload': self.auto_reload,
-                'reload_on_error': self.reload_on_error
+                'reload_on_error': self.reload_on_error,
+                'auto_detect_wide': self.auto_detect_wide,
+                'wide_table_threshold': self.wide_table_threshold,
+                'display_mode': self.display_mode
             }
             with open(self.config_file, 'w') as f:
                 json.dump(config_data, f, indent=2)
         except Exception as e:
             print(f"Warning: Could not save config file: {e}")
+
+
+class FilteredFileHistory(FileHistory):
+    """File history that filters out meta commands"""
+    
+    def __init__(self, filename):
+        super().__init__(filename)
+    
+    def append_string(self, string):
+        """Only append SQL queries, not meta commands"""
+        if not string.strip().startswith('\\'):
+            super().append_string(string)
+
+
+class SQLCompleter(Completer):
+    """Enhanced SQL completer with keywords, table names, and column names"""
+    
+    def __init__(self, db_manager=None):
+        self.db_manager = db_manager
+        
+        # Comprehensive SQL keywords
+        self.sql_keywords = [
+            # DML
+            'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE',
+            # DDL
+            'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'INDEX', 'VIEW', 'TRIGGER',
+            # Constraints
+            'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'UNIQUE', 'NOT', 'NULL', 'DEFAULT',
+            'CHECK', 'CONSTRAINT',
+            # Data Types
+            'INT', 'INTEGER', 'VARCHAR', 'CHAR', 'TEXT', 'BLOB', 'REAL', 'NUMERIC', 'DECIMAL',
+            'DATE', 'TIME', 'TIMESTAMP', 'BOOLEAN', 'FLOAT', 'DOUBLE',
+            # Operators and Functions
+            'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN', 'IS', 'EXISTS', 'CASE', 'WHEN', 'THEN',
+            'ELSE', 'END', 'AS', 'DISTINCT', 'ALL', 'ANY', 'SOME',
+            # Joins
+            'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'ON', 'USING',
+            # Grouping and Ordering
+            'ORDER', 'BY', 'GROUP', 'HAVING', 'ASC', 'DESC', 'NULLS', 'FIRST', 'LAST',
+            # Aggregate Functions
+            'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'TOTAL', 'GROUP_CONCAT',
+            # String Functions
+            'LENGTH', 'SUBSTR', 'SUBSTRING', 'UPPER', 'LOWER', 'TRIM', 'LTRIM', 'RTRIM',
+            'REPLACE', 'CONCAT',
+            # Numeric Functions
+            'ABS', 'ROUND', 'CEIL', 'CEILING', 'FLOOR', 'MOD', 'POWER', 'SQRT',
+            # Date Functions
+            'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'DATE', 'TIME',
+            'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND',
+            # Other Keywords
+            'USE', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'UNION', 'EXCEPT', 'INTERSECT',
+            'WITH', 'RECURSIVE', 'LIMIT', 'OFFSET', 'FETCH', 'FIRST', 'ROWS', 'ONLY',
+            'COMMIT', 'ROLLBACK', 'TRANSACTION', 'BEGIN', 'START', 'SAVEPOINT',
+            'GRANT', 'REVOKE', 'PRIVILEGES', 'TO', 'FROM', 'PUBLIC',
+            'TRUE', 'FALSE', 'UNKNOWN'
+        ]
+    
+    def get_completions(self, document, complete_event):
+        word = document.get_word_before_cursor()
+        
+        # SQL Keywords
+        for keyword in self.sql_keywords:
+            if keyword.lower().startswith(word.lower()):
+                yield Completion(keyword, start_position=-len(word))
+        
+        # Table names
+        try:
+            if self.db_manager and hasattr(self.db_manager, 'active_db') and self.db_manager.active_db:
+                for table_name in self.db_manager.active_db.keys():
+                    if table_name.lower().startswith(word.lower()):
+                        yield Completion(table_name, start_position=-len(word))
+                
+                # Column names (from all tables)
+                for table_name, table_obj in self.db_manager.active_db.items():
+                    if hasattr(table_obj, 'schema'):
+                        for column_name in table_obj.schema.keys():
+                            if column_name.lower().startswith(word.lower()):
+                                yield Completion(column_name, start_position=-len(word))
+        except:
+            pass
 
 
 class EnhancedHistoryManager:
@@ -203,7 +257,7 @@ class EnhancedHistoryManager:
         self.history_file = Path.home() / '.myshell_history'
         
         if PROMPT_TOOLKIT_AVAILABLE:
-            self.file_history = FileHistory(str(self.history_file))
+            self.file_history = FilteredFileHistory(str(self.history_file))
         else:
             self.setup_readline_history()
     
@@ -238,7 +292,7 @@ class TableFormatter:
     def format_table(self, rows: List[Dict], columns: List[str] = None) -> str:
         """Format table data for display"""
         if not rows:
-            return self._colorize("Empty result set", Colors.BRIGHT_BLACK)
+            return "Empty result set"
         
         if columns is None:
             columns = list(rows[0].keys()) if rows else []
@@ -249,187 +303,29 @@ class TableFormatter:
             return self._format_markdown(rows, columns)
         else:
             return self._format_ascii(rows, columns)
-    def _format_vertical(self, rows, columns):
-        """Format as vertical records (like MySQL \\G command)"""
-        lines = []
-        
-        for i, row in enumerate(rows, 1):
-            lines.append(f"{Colors.BOLD}*************************** {i}. row ***************************{Colors.RESET}")
-            
-            # Find the maximum column name length for alignment
-            max_col_len = max(len(col) for col in columns) if columns else 0
-            
-            for col in columns:
-                value = self._format_value_simple(row.get(col))
-                col_name = col.rjust(max_col_len)
-                
-                if self.config.colorize_output:
-                    col_name = f"{Colors.BRIGHT_CYAN}{col_name}{Colors.RESET}"
-                    if row.get(col) is None:
-                        value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
-                    elif isinstance(row.get(col), (int, float)):
-                        value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
-                
-                lines.append(f"{col_name}: {value}")
-            
-            if i < len(rows):  # Add separator between records
-                lines.append("")
-        
-        return '\n'.join(lines)
-
-    def _format_value_simple(self, value):
-        """Simple value formatter (since we can't access formatter._format_value)"""
-        if value is None:
-            return self.config.null_display
-        elif isinstance(value, bool):
-            return 'TRUE' if value else 'FALSE'
-        elif isinstance(value, (int, float)):
-            return str(value)
-        else:
-            return str(value)
     
-    def _format_wrapped_columns(self, rows, columns):
-        """Format with wrapped columns - show in chunks"""
-        try:
-            import shutil
-            terminal_width = shutil.get_terminal_size().columns
-        except:
-            terminal_width = 80
-        
-        chunk_size = max(3, terminal_width // 25)  # Roughly 25 chars per column
-        
-        lines = []
-        
-        # Split columns into chunks
-        for chunk_start in range(0, len(columns), chunk_size):
-            chunk_end = min(chunk_start + chunk_size, len(columns))
-            chunk_columns = columns[chunk_start:chunk_end]
-            
-            lines.append(f"\n{Colors.BOLD}Columns {chunk_start + 1}-{chunk_end}:{Colors.RESET}")
-            lines.append("=" * 50)
-            
-            # Format this chunk as a simple table
-            # Header
-            header_parts = []
-            for col in chunk_columns:
-                col_display = col[:15] if len(col) <= 15 else col[:12] + "..."
-                header_parts.append(col_display.ljust(15))
-            
-            if self.config.colorize_output:
-                header = " | ".join(f"{Colors.BRIGHT_CYAN}{part}{Colors.RESET}" for part in header_parts)
-            else:
-                header = " | ".join(header_parts)
-            
-            lines.append(header)
-            lines.append("-" * (len(chunk_columns) * 17))
-            
-            # Data rows (show first 10 rows to avoid overwhelming)
-            display_rows = rows[:10] if len(rows) > 10 else rows
-            for row in display_rows:
-                row_data = []
-                for col in chunk_columns:
-                    value = self._format_value_simple(row.get(col))
-                    if len(value) > 15:
-                        value = value[:12] + "..."
-                    
-                    # Add colors
-                    if self.config.colorize_output:
-                        if row.get(col) is None:
-                            value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
-                        elif isinstance(row.get(col), (int, float)):
-                            value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
-                    
-                    row_data.append(value.ljust(15))
-                lines.append(" | ".join(row_data))
-            
-            if len(rows) > 10:
-                lines.append(f"{Colors.BRIGHT_BLACK}... and {len(rows) - 10} more rows{Colors.RESET}")
-        
-        return '\n'.join(lines)
-    
-    def _format_vertical(self, rows, columns):
-        """Format as vertical records (like MySQL \\G command)"""
-        lines = []
-        
-        for i, row in enumerate(rows, 1):
-            lines.append(f"{Colors.BOLD}*************************** {i}. row ***************************{Colors.RESET}")
-            
-            # Find the maximum column name length for alignment
-            max_col_len = max(len(col) for col in columns) if columns else 0
-            
-            for col in columns:
-                value = self._format_value(row.get(col))
-                col_name = col.rjust(max_col_len)
-                
-                if self.config.colorize_output:
-                    col_name = f"{Colors.BRIGHT_CYAN}{col_name}{Colors.RESET}"
-                    if row.get(col) is None:
-                        value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
-                    elif isinstance(row.get(col), (int, float)):
-                        value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
-                
-                lines.append(f"{col_name}: {value}")
-            
-            if i < len(rows):  # Add separator between records
-                lines.append("")
-        
-        return '\n'.join(lines)
-
-    def _format_wrapped_columns(self, rows, columns):
-        """Format with wrapped columns - show in chunks"""
-        try:
-            import shutil
-            terminal_width = shutil.get_terminal_size().columns
-        except:
-            terminal_width = 80
-        
-        chunk_size = max(3, terminal_width // 25)  # Roughly 25 chars per column
-        
-        lines = []
-        
-        # Split columns into chunks
-        for chunk_start in range(0, len(columns), chunk_size):
-            chunk_end = min(chunk_start + chunk_size, len(columns))
-            chunk_columns = columns[chunk_start:chunk_end]
-            
-            lines.append(f"\n{Colors.BOLD}Columns {chunk_start + 1}-{chunk_end}:{Colors.RESET}")
-            lines.append("=" * 50)
-            
-            # Format this chunk as a simple table
-            # Header
-            header = " | ".join(col[:15] for col in chunk_columns)
-            lines.append(header)
-            lines.append("-" * len(header))
-            
-            # Data rows (show first 10 rows to avoid overwhelming)
-            display_rows = rows[:10] if len(rows) > 10 else rows
-            for row in display_rows:
-                row_data = []
-                for col in chunk_columns:
-                    value = self._format_value(row.get(col))
-                    if len(value) > 15:
-                        value = value[:12] + "..."
-                    row_data.append(value.ljust(15))
-                lines.append(" | ".join(row_data))
-            
-            if len(rows) > 10:
-                lines.append(f"... and {len(rows) - 10} more rows")
-        
-        return '\n'.join(lines)
-        
     def _format_ascii(self, rows: List[Dict], columns: List[str]) -> str:
-        """Enhanced ASCII table with wide table support"""
+        """Enhanced ASCII table with display mode support"""
         if not rows:
-            return self._colorize("Empty result set", Colors.BRIGHT_BLACK)
+            return "Empty result set"
         
-        # NEW: Check if table is too wide for terminal
-        terminal_width = self._get_terminal_width()
-        total_estimated_width = len(columns) * 15  # Rough estimate
+        # Check display mode
+        num_columns = len(columns)
         
-        if len(columns) > 10 or total_estimated_width > terminal_width:
+        if self.config.display_mode == 'force_normal':
+            # Always show normal table
+            return self._format_normal_table(rows, columns)
+        elif self.config.display_mode == 'force_wide':
+            # Always show wide format
             return self._format_wide_table(rows, columns)
-        
-        # Original table formatting code for narrow tables
+        else:  # auto mode
+            if self.config.auto_detect_wide and num_columns > self.config.wide_table_threshold:
+                return self._format_wide_table(rows, columns)
+            else:
+                return self._format_normal_table(rows, columns)
+    
+    def _format_normal_table(self, rows: List[Dict], columns: List[str]) -> str:
+        """Format as normal ASCII table"""
         col_widths = {}
         for col in columns:
             col_widths[col] = min(len(col), self.config.max_column_width)
@@ -451,8 +347,6 @@ class TableFormatter:
         header_parts = []
         for col in columns:
             header_text = col[:col_widths[col]].ljust(col_widths[col])
-            if self.config.colorize_output:
-                header_text = self._colorize(header_text, Colors.BOLD + Colors.CYAN)
             header_parts.append(f' {header_text} ')
         lines.append('|' + '|'.join(header_parts) + '|')
         
@@ -470,10 +364,6 @@ class TableFormatter:
                     value_str = value_str[:col_widths[col]-3] + '...'
                 
                 value_str = value_str.ljust(col_widths[col])
-                
-                if self.config.colorize_output:
-                    value_str = self._colorize_value(value_str, value)
-                
                 row_parts.append(f' {value_str} ')
             lines.append('|' + '|'.join(row_parts) + '|')
         
@@ -481,186 +371,24 @@ class TableFormatter:
         lines.append('+' + '+'.join(border_parts) + '+')
         
         return '\n'.join(lines)
-
-    def _get_terminal_width(self):
-        """Get terminal width or return default"""
-        try:
-            import shutil
-            return shutil.get_terminal_size().columns
-        except:
-            return 80
-        
+    
     def _format_wide_table(self, rows: List[Dict], columns: List[str]) -> str:
-        """Format wide tables in a more readable way"""
-        if not rows:
-            return self._colorize("Empty result set", Colors.BRIGHT_BLACK)
-        
-        # Option 1: Vertical format (like MySQL's \G)
-        if len(columns) > 20:
-            return self._format_vertical(rows, columns)
-        
-        # Option 2: Wrapped columns
-        elif len(columns) > 10:
-            return self._format_wrapped_columns(rows, columns)
-        
-        # Option 3: Scrollable format with column groups
-        else:
-            return self._format_column_groups(rows, columns)
-        
-    def _format_column_groups(self, rows: List[Dict], columns: List[str]) -> str:
-            """Show a summary first, then let user choose columns to view"""
-            lines = []
-            
-            # Show summary
-            lines.append(f"{Colors.BOLD}Wide table detected: {len(columns)} columns, {len(rows)} rows{Colors.RESET}")
-            lines.append(f"{Colors.YELLOW}Columns:{Colors.RESET}")
-            
-            # Show columns in a compact list
-            for i, col in enumerate(columns, 1):
-                if i % 6 == 1:  # New line every 6 columns
-                    lines.append("")
-                lines.append(f"{i:2}. {col:15}", end="")
-            
-            lines.append(f"\n\n{Colors.CYAN}💡 Tip: Use these commands to view specific columns:{Colors.RESET}")
-            lines.append(f"   \\set table_format vertical  # Show as vertical records")
-            lines.append(f"   \\set max_column_width 15    # Make columns narrower") 
-            lines.append(f"   \\export csv mydata.csv      # Export to CSV for Excel")
-            
-            # Show first few columns as preview
-            preview_cols = columns[:5]
-            lines.append(f"\n{Colors.BRIGHT_BLACK}Preview (first 5 columns):{Colors.RESET}")
-            preview_table = self._format_regular_chunk(rows, preview_cols)
-            lines.extend(preview_table.split('\n'))
-            
-            return '\n'.join(lines)
-        
-    def _cmd_wide(self, args):
-        """Show wide table in different formats"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        if not args:
-            print(f"{Colors.YELLOW}Usage: \\wide [vertical|wrapped]{Colors.RESET}")
-            return
-        
-        format_type = args[0].lower()
-        columns = list(self.config.last_result[0].keys()) if self.config.last_result else []
-        
-        if format_type == 'vertical':
-            result = self._format_vertical(self.config.last_result, columns)
-        elif format_type == 'wrapped':
-            result = self._format_wrapped_columns(self.config.last_result, columns)
-        else:
-            print(f"{Colors.RED}Unknown format: {format_type}. Use 'vertical' or 'wrapped'{Colors.RESET}")
-            return
-        
-        print(result)
-
-        
-    def _cmd_cols(self, args):
-        """Show specific columns from last result"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        if not args:
-            # Show available columns
-            columns = list(self.config.last_result[0].keys())
-            print(f"{Colors.BOLD}Available columns ({len(columns)} total):{Colors.RESET}")
-            for i, col in enumerate(columns, 1):
-                print(f"{i:3}. {col}")
-            print(f"\n{Colors.CYAN}Usage: \\cols 1,3,5  or  \\cols name,age,email{Colors.RESET}")
-            return
-        
-        # Parse column specification
-        col_spec = ' '.join(args)
-        all_columns = list(self.config.last_result[0].keys())
-        
-        selected_columns = []
-        for spec in col_spec.split(','):
-            spec = spec.strip()
-            if spec.isdigit():
-                # Column number
-                idx = int(spec) - 1
-                if 0 <= idx < len(all_columns):
-                    selected_columns.append(all_columns[idx])
-            elif spec in all_columns:
-                # Column name
-                selected_columns.append(spec)
-        
-        if not selected_columns:
-            print(f"{Colors.RED}No valid columns specified{Colors.RESET}")
-            return
-        
-        # Show selected columns
-        formatted_table = self.formatter.format_table(self.config.last_result, selected_columns)
-        print(formatted_table)
-    
-    def _format_regular_chunk(self, rows: List[Dict], columns: List[str]) -> str:
-        """Format a chunk of columns as a regular table"""
-        col_widths = {}
-        for col in columns:
-            col_widths[col] = min(len(col), 20)  # Smaller width for chunks
-            
-        for row in rows:
-            for col in columns:
-                value_str = self._format_value(row.get(col))
-                col_widths[col] = max(col_widths[col], min(len(value_str), 20))
-        
+        """Format wide tables in vertical format"""
         lines = []
         
-        # Header
-        header_parts = []
-        for col in columns:
-            header_text = col[:col_widths[col]].ljust(col_widths[col])
-            if self.config.colorize_output:
-                header_text = self._colorize(header_text, Colors.BOLD + Colors.CYAN)
-            header_parts.append(header_text)
-        lines.append(' | '.join(header_parts))
-        
-        # Separator
-        sep_parts = ['-' * col_widths[col] for col in columns]
-        lines.append('-+-'.join(sep_parts))
-        
-        # Data rows
-        for row in rows:
-            row_parts = []
+        for i, row in enumerate(rows, 1):
+            lines.append(f"*************************** {i}. row ***************************")
+            
+            # Find the maximum column name length for alignment
+            max_col_len = max(len(col) for col in columns) if columns else 0
+            
             for col in columns:
-                value = row.get(col)
-                value_str = self._format_value(value)
-                
-                if len(value_str) > col_widths[col]:
-                    value_str = value_str[:col_widths[col]-3] + '...'
-                
-                value_str = value_str.ljust(col_widths[col])
-                
-                if self.config.colorize_output:
-                    value_str = self._colorize_value(value_str, value)
-                
-                row_parts.append(value_str)
-            lines.append(' | '.join(row_parts))
-        
-        return '\n'.join(lines)
-    
-    def _format_wrapped_columns(self, rows: List[Dict], columns: List[str]) -> str:
-        """Format with wrapped columns - show in chunks"""
-        terminal_width = self._get_terminal_width()
-        chunk_size = max(3, terminal_width // 25)  # Roughly 25 chars per column
-        
-        lines = []
-        
-        # Split columns into chunks
-        for chunk_start in range(0, len(columns), chunk_size):
-            chunk_end = min(chunk_start + chunk_size, len(columns))
-            chunk_columns = columns[chunk_start:chunk_end]
+                value = self._format_value(row.get(col))
+                col_name = col.rjust(max_col_len)
+                lines.append(f"{col_name}: {value}")
             
-            lines.append(f"\n{Colors.BOLD}Columns {chunk_start + 1}-{chunk_end}:{Colors.RESET}")
-            lines.append("=" * 50)
-            
-            # Format this chunk as a regular table
-            chunk_lines = self._format_regular_chunk(rows, chunk_columns)
-            lines.extend(chunk_lines.split('\n'))
+            if i < len(rows):  # Add separator between records
+                lines.append("")
         
         return '\n'.join(lines)
     
@@ -671,11 +399,11 @@ class TableFormatter:
         
         lines = []
         
-        # Header with better alignment
+        # Header
         header = '| ' + ' | '.join(f"**{col}**" for col in columns) + ' |'
         lines.append(header)
         
-        # Enhanced separator
+        # Separator
         separator = '| ' + ' | '.join([':---:'] * len(columns)) + ' |'
         lines.append(separator)
         
@@ -717,29 +445,6 @@ class TableFormatter:
             return str(value)
         else:
             return str(value)
-    
-    def _colorize_value(self, text: str, value, dim=False) -> str:
-        """Apply color based on value type with optional dimming"""
-        base_color = ""
-        if value is None:
-            base_color = Colors.BRIGHT_BLACK
-        elif isinstance(value, bool):
-            base_color = Colors.BRIGHT_MAGENTA
-        elif isinstance(value, (int, float)):
-            base_color = Colors.BRIGHT_GREEN
-        elif isinstance(value, str):
-            base_color = Colors.WHITE
-        
-        if dim and base_color:
-            base_color = Colors.DIM + base_color
-        
-        return self._colorize(text, base_color) if base_color else text
-    
-    def _colorize(self, text: str, color: str) -> str:
-        """Apply color to text"""
-        if self.config.colorize_output:
-            return f"{color}{text}{Colors.RESET}"
-        return text
 
 
 class EnhancedSQLShell:
@@ -751,57 +456,14 @@ class EnhancedSQLShell:
         self.formatter = TableFormatter(self.config)
         self.query_count = 0
         self.start_time = datetime.now()
-        self.auto_detect_wide = False   # ADD THIS LINE
-        self.wide_table_threshold = 30  # ADD THIS LINE - columns threshold
-        
-        # SQL keywords for completion
-        self.sql_keywords = [
-            # DML
-            'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE',
-            # DDL
-            'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'INDEX', 'VIEW', 'TRIGGER',
-            # Constraints
-            'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'UNIQUE', 'NOT', 'NULL', 'DEFAULT',
-            'CHECK', 'CONSTRAINT',
-            # Data Types
-            'INT', 'INTEGER', 'VARCHAR', 'CHAR', 'TEXT', 'BLOB', 'REAL', 'NUMERIC', 'DECIMAL',
-            'DATE', 'TIME', 'TIMESTAMP', 'BOOLEAN', 'FLOAT', 'DOUBLE',
-            # Operators and Functions
-            'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN', 'IS', 'EXISTS', 'CASE', 'WHEN', 'THEN',
-            'ELSE', 'END', 'AS', 'DISTINCT', 'ALL', 'ANY', 'SOME',
-            # Joins
-            'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'ON', 'USING',
-            # Grouping and Ordering
-            'ORDER', 'BY', 'GROUP', 'HAVING', 'ASC', 'DESC', 'NULLS', 'FIRST', 'LAST',
-            # Aggregate Functions
-            'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'TOTAL', 'GROUP_CONCAT',
-            # String Functions
-            'LENGTH', 'SUBSTR', 'SUBSTRING', 'UPPER', 'LOWER', 'TRIM', 'LTRIM', 'RTRIM',
-            'REPLACE', 'CONCAT',
-            # Numeric Functions
-            'ABS', 'ROUND', 'CEIL', 'CEILING', 'FLOOR', 'MOD', 'POWER', 'SQRT',
-            # Date Functions
-            'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'DATE', 'TIME',
-            'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND',
-            # Other Keywords
-            'USE', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'UNION', 'EXCEPT', 'INTERSECT',
-            'WITH', 'RECURSIVE', 'LIMIT', 'OFFSET', 'FETCH', 'FIRST', 'ROWS', 'ONLY',
-            'COMMIT', 'ROLLBACK', 'TRANSACTION', 'BEGIN', 'START', 'SAVEPOINT',
-            'GRANT', 'REVOKE', 'PRIVILEGES', 'TO', 'FROM', 'PUBLIC',
-            'TRUE', 'FALSE', 'UNKNOWN', "CAST", "COALESCE"
-        ]
         
         # Setup completions
         if PROMPT_TOOLKIT_AVAILABLE:
-            self.completer = WordCompleter(self.sql_keywords, ignore_case=True)
-            self.style = Style.from_dict({
-                'prompt': '#ansibrightblue bold',
-                'continuation': '#ansibrightblack',
-                'error': '#ansibrightred',
-                'success': '#ansibrightgreen',
-                'warning': '#ansiyellow',
-                'info': '#ansibrightcyan',
-            })
+            self.completer = SQLCompleter(db_manager)
+            self.style = Style.from_dict({})  # No colors
+            
+            # Setup key bindings for Ctrl+Enter
+
         
         # Enhanced command mappings
         self.meta_commands = {
@@ -836,122 +498,14 @@ class EnhancedSQLShell:
             '\\debug': self._cmd_debug_mode,
             '\\wide' : self._cmd_wide,
             '\\cols': self._cmd_cols,
-            '\\normal':self._cmd_show_normal,
-            '\\force':self._cmd_show_normal,
-            '\\wide_force':self._cmd_show_wide_forced,
+            '\\normal': self._cmd_set_normal,
+            '\\force': self._cmd_set_normal,
+            '\\auto': self._cmd_set_auto,
             '\\csv': self._cmd_show_csv_style,
             '\\columns': self._cmd_show_columns_only,
             '\\schema':  self._cmd_show_columns_only
         }
     
-
-        
-    # ADD THESE METHODS TO YOUR EXISTING SQLShell CLASS in shell.py
-
-    def _cmd_wide(self, args):
-        """Show wide table in different formats"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        if not args:
-            print(f"{Colors.YELLOW}Usage: \\wide [vertical|wrapped]{Colors.RESET}")
-            return
-        
-        format_type = args[0].lower()
-        columns = list(self.config.last_result[0].keys()) if self.config.last_result else []
-        
-        if format_type == 'vertical':
-            result = self._format_vertical(self.config.last_result, columns)
-        elif format_type == 'wrapped':
-            result = self._format_wrapped_columns(self.config.last_result, columns)
-        else:
-            print(f"{Colors.RED}Unknown format: {format_type}. Use 'vertical' or 'wrapped'{Colors.RESET}")
-            return
-        
-        print(result)
-
-    def _format_value_simple(self, value):
-        """Simple value formatter (since we can't access formatter._format_value)"""
-        if value is None:
-            return self.config.null_display
-        elif isinstance(value, bool):
-            return 'TRUE' if value else 'FALSE'
-        elif isinstance(value, (int, float)):
-            return str(value)
-        else:
-            return str(value)
-    def _format_vertical(self, rows, columns):
-            """Format as vertical records (like MySQL \\G command)"""
-            lines = []
-            
-            for i, row in enumerate(rows, 1):
-                lines.append(f"{Colors.BOLD}*************************** {i}. row ***************************{Colors.RESET}")
-                
-                # Find the maximum column name length for alignment
-                max_col_len = max(len(col) for col in columns) if columns else 0
-                
-                for col in columns:
-                    value = self._format_value_simple(row.get(col))
-                    col_name = col.rjust(max_col_len)
-                    
-                    if self.config.colorize_output:
-                        col_name = f"{Colors.BRIGHT_CYAN}{col_name}{Colors.RESET}"
-                        if row.get(col) is None:
-                            value = f"{Colors.BRIGHT_BLACK}{value}{Colors.RESET}"
-                        elif isinstance(row.get(col), (int, float)):
-                            value = f"{Colors.BRIGHT_GREEN}{value}{Colors.RESET}"
-                    
-                    lines.append(f"{col_name}: {value}")
-                
-                if i < len(rows):  # Add separator between records
-                    lines.append("")
-            
-            return '\n'.join(lines)
-    def _cmd_cols(self, args):
-        """Show specific columns from last result"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        if not args:
-            # Show available columns
-            columns = list(self.config.last_result[0].keys())
-            print(f"{Colors.BOLD}Available columns ({len(columns)} total):{Colors.RESET}")
-            for i, col in enumerate(columns, 1):
-                print(f"{i:3}. {col}")
-            print(f"\n{Colors.CYAN}Usage: \\cols 1,3,5  or  \\cols name,age,email{Colors.RESET}")
-            return
-        
-        # Parse column specification
-        col_spec = ' '.join(args)
-        all_columns = list(self.config.last_result[0].keys())
-        
-        selected_columns = []
-        for spec in col_spec.split(','):
-            spec = spec.strip()
-            if spec.isdigit():
-                # Column number
-                idx = int(spec) - 1
-                if 0 <= idx < len(all_columns):
-                    selected_columns.append(all_columns[idx])
-            elif spec in all_columns:
-                # Column name
-                selected_columns.append(spec)
-        
-        if not selected_columns:
-            print(f"{Colors.RED}No valid columns specified{Colors.RESET}")
-            return
-        
-        # Show selected columns
-        formatted_table = self.formatter.format_table(self.config.last_result, selected_columns)
-        print(formatted_table)
-
-    
-
-    # MODIFY YOUR EXISTING _handle_select_result method to store the result:
-
-        
     def _get_connection_info(self) -> str:
         """Get current connection information"""
         try:
@@ -960,11 +514,11 @@ class EnhancedSQLShell:
                 filename = os.path.basename(current_db)
                 if filename.endswith('.su'):
                     filename = filename[:-3]
-                return f"{Colors.GREEN}Connected to: {Colors.BOLD}{filename}{Colors.RESET}"
+                return f"Connected to: {filename}"
             else:
-                return f"{Colors.YELLOW}No database selected. Use {Colors.BOLD}USE database_name{Colors.RESET}{Colors.YELLOW} to connect.{Colors.RESET}"
+                return "No database selected. Use USE database_name to connect."
         except:
-            return f"{Colors.RED}Database manager not available{Colors.RESET}"
+            return "Database manager not available"
     
     def get_prompt_text(self) -> str:
         """Generate the command prompt text"""
@@ -995,14 +549,42 @@ class EnhancedSQLShell:
             except:
                 pass
             
-            return FormattedText([
-                ('class:prompt', f"{db_name}> "),
-            ])
+            return f"{db_name}> "
         else:
             return self.get_prompt_text()
     
+    def _strip_comments(self, query: str) -> str:
+        """Remove SQL comments from query"""
+        lines = query.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            # Find comment start
+            comment_pos = line.find('--')
+            if comment_pos != -1:
+                # Keep everything before the comment
+                line = line[:comment_pos].rstrip()
+            
+            if line.strip():  # Only add non-empty lines
+                cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines)
+    
+    def _split_multiple_queries(self, query_text: str) -> List[str]:
+        """Split multiple queries separated by semicolons"""
+        # Remove comments first
+        cleaned_query = self._strip_comments(query_text)
+        
+        # Split by semicolon and filter empty queries
+        queries = []
+        for q in cleaned_query.split(';'):
+            q = q.strip()
+            if q:
+                queries.append(q + ';')  # Add semicolon back
+        
+        return queries
+    
     def run(self):
-        """Enhanced main shell loop with better error handling"""
         
         query_buffer = []
         
@@ -1011,12 +593,13 @@ class EnhancedSQLShell:
                 # Get input with enhanced prompting
                 if PROMPT_TOOLKIT_AVAILABLE:
                     if query_buffer:
-                        continuation_prompt = FormattedText([('class:continuation', '    -> ')])
+                        continuation_prompt = "    -> "
                         line = prompt(continuation_prompt, 
                                     style=self.style,
                                     history=self.history.file_history,
                                     auto_suggest=AutoSuggestFromHistory(),
-                                    completer=self.completer).strip()
+            completer=self.completer).strip()
+                                    
                     else:
                         line = prompt(self.get_formatted_prompt(),
                                     style=self.style,
@@ -1026,7 +609,7 @@ class EnhancedSQLShell:
                 else:
                     # Fallback to basic input
                     if query_buffer:
-                        prompt_text = f"{Colors.DIM}    -> {Colors.RESET}" if self.config.colorize_output else "    -> "
+                        prompt_text = "    -> "
                     else:
                         prompt_text = self.get_prompt_text()
                     line = input(prompt_text).strip()
@@ -1037,7 +620,7 @@ class EnhancedSQLShell:
                 # Handle meta-commands
                 if line.startswith('\\'):
                     if query_buffer:
-                        self._print_warning("Discarding incomplete query")
+                        print("Discarding incomplete query")
                         query_buffer = []
                     
                     self._handle_meta_command(line)
@@ -1046,52 +629,30 @@ class EnhancedSQLShell:
                 # Build query buffer
                 query_buffer.append(line)
                 
-                # Execute when query is complete
+                # Check if we have complete queries (ending with semicolon)
                 full_query = ' '.join(query_buffer)
-                if full_query.rstrip().endswith(';'):
-                    self._execute_query(full_query)
+                if ';' in full_query:
+                    # Execute all complete queries
+                    queries = self._split_multiple_queries(full_query)
+                    
+                    for query in queries:
+                        if query.strip():
+                            self._execute_query(query)
+                    
                     query_buffer = []
                 
             except KeyboardInterrupt:
-                self._print_warning("^C - Query cancelled")
+                print("^C - Query cancelled")
                 query_buffer = []
                 continue
             except EOFError:
-                print(f"\n{Colors.BRIGHT_BLACK}Goodbye!{Colors.RESET}")
+                print("\nGoodbye!")
                 break
             except Exception as e:
-                self._print_error(f"Unexpected error: {e}")
+                print(f"Unexpected error: {e}")
                 if self.config.reload_on_error:
-                    self._print_info("Auto-reloading modules due to error...")
+                    print("Auto-reloading modules due to error...")
                     self._cmd_reload([])
-    
-    def _print_success(self, message):
-        """Print success message"""
-        if PROMPT_TOOLKIT_AVAILABLE:
-            print_formatted_text(FormattedText([('class:success', f"{message}")]))
-        else:
-            print(f"{Colors.BRIGHT_GREEN}{message}{Colors.RESET}")
-    
-    def _print_error(self, message):
-        """Print error message"""
-        if PROMPT_TOOLKIT_AVAILABLE:
-            print_formatted_text(FormattedText([('class:error', f"{message}")]))
-        else:
-            print(f"{Colors.BRIGHT_RED}{message}{Colors.RESET}")
-    
-    def _print_warning(self, message):
-        """Print warning message"""
-        if PROMPT_TOOLKIT_AVAILABLE:
-            print_formatted_text(FormattedText([('class:warning', f"{message}")]))
-        else:
-            print(f"{Colors.YELLOW}{message}{Colors.RESET}")
-    
-    def _print_info(self, message):
-        """Print info message"""
-        if PROMPT_TOOLKIT_AVAILABLE:
-            print_formatted_text(FormattedText([('class:info', f"{message}")]))
-        else:
-            print(f"{Colors.BRIGHT_CYAN}{message}{Colors.RESET}")
     
     def _handle_meta_command(self, command: str):
         """Handle meta-commands with enhanced error reporting"""
@@ -1103,11 +664,11 @@ class EnhancedSQLShell:
             try:
                 self.meta_commands[cmd](args)
             except Exception as e:
-                self._print_error(f"Command failed: {e}")
-                print(f"{Colors.BRIGHT_BLACK}Details: {traceback.format_exc()}{Colors.RESET}")
+                print(f"Command failed: {e}")
+                print(f"Details: {traceback.format_exc()}")
         else:
-            self._print_error(f"Unknown command: {cmd}")
-            print(f"Type {Colors.BOLD}\\h{Colors.RESET} for help")
+            print(f"Unknown command: {cmd}")
+            print("Type \\h for help")
     
     def _execute_query(self, query: str):
         """Execute SQL query with enhanced error handling and hot-reload support"""
@@ -1115,8 +676,13 @@ class EnhancedSQLShell:
         if not query:
             return
         
+        # Strip comments
+        query = self._strip_comments(query)
+        if not query:
+            return
+        
         if self.config.echo_queries:
-            print(f"{Colors.DIM}{query}{Colors.RESET}")
+            print(query)
         
         start_time = time.time()
         
@@ -1169,7 +735,7 @@ class EnhancedSQLShell:
                     db_manager.save_database_file()
                     self._handle_ddl_result("CREATE TABLE", start_time)
                 else:
-                    self._print_error("Unsupported CREATE statement")
+                    print("Unsupported CREATE statement")
                     
             elif token_type == "DROP":
                 if next_token_type == "DATABASE":
@@ -1182,7 +748,7 @@ class EnhancedSQLShell:
                     db_manager.save_database_file()
                     self._handle_ddl_result("DROP TABLE", start_time)
                 else:
-                    self._print_error("Unsupported DROP statement")
+                    print("Unsupported DROP statement")
                     
             elif token_type == "ALTER":
                 ast = parser.parse_alter_statement()
@@ -1196,21 +762,21 @@ class EnhancedSQLShell:
                 self._handle_use_result("USE", start_time)
                 
             else:
-                self._print_error(f"Unsupported statement type '{token_type}'")
+                print(f"Unsupported statement type '{token_type}'")
             
             self.query_count += 1
             
         except Exception as e:
             execution_time = time.time() - start_time
-            self._print_error(f"Query execution failed: {str(e)}")
+            print(f"Query execution failed: {str(e)}")
             
             if self.config.timing:
                 time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
-                print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
+                print(f"Time: {time_str}")
             
             # Auto-reload on error if enabled
             if self.config.reload_on_error:
-                self._print_info("Auto-reloading modules...")
+                print("Auto-reloading modules...")
                 self._cmd_reload([])
         
         print()  # Empty line for readability
@@ -1219,62 +785,42 @@ class EnhancedSQLShell:
         """Handle SELECT query results"""
         execution_time = time.time() - start_time
         
-        # STORE THE RESULT
+        # Store the result
         self.config.last_result = result
         
         if result:  # Assuming result is a list of dictionaries for SELECT
-            num_columns = len(result[0]) if result else 0
-            
-            # Check if table is wide AND auto-detection is enabled
-            if (self.config.auto_detect_wide and 
-                num_columns > self.config.wide_table_threshold):
-                
-                print(f"\n{Colors.YELLOW}📊 Wide table detected: {num_columns} columns, {len(result)} rows{Colors.RESET}")
-                print(f"{Colors.CYAN}💡 Wide table mode is ON. Use these commands:{Colors.RESET}")
-                print(f"   {Colors.BOLD}\\wide vertical{Colors.RESET}  - Show as vertical records")
-                print(f"   {Colors.BOLD}\\cols 1,2,3{Colors.RESET}    - Show specific columns")
-                print(f"   {Colors.BOLD}\\cols{Colors.RESET}          - List all columns")
-                print(f"   {Colors.BOLD}\\show normal{Colors.RESET}   - Force show normal table")
-                print(f"   {Colors.BOLD}\\set auto_detect_wide false{Colors.RESET} - Disable auto-detection")
-                print()
-                
-                # Don't show the table automatically, let user choose
-                print(f"{Colors.BRIGHT_BLACK}Table too wide for automatic display.{Colors.RESET}")
-                print(f"{Colors.BRIGHT_BLACK}Use the commands above to view your data.{Colors.RESET}")
-            else:
-                # Normal table display
-                formatted_table = self.formatter.format_table(result)
-                print(formatted_table)
+            formatted_table = self.formatter.format_table(result)
+            print(formatted_table)
             
             # Show summary
             if self.config.show_row_count:
                 row_count = len(result)
                 plural = 's' if row_count != 1 else ''
-                print(f"\n{Colors.BRIGHT_BLACK}({row_count} row{plural}){Colors.RESET}")
+                print(f"\n({row_count} row{plural})")
         else:
-            print(f"{Colors.BRIGHT_BLACK}Empty result set{Colors.RESET}")
+            print("Empty result set")
         
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
-            print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
+            print(f"Time: {time_str}")
     
     def _handle_modify_result(self, operation, start_time):
         """Handle INSERT/UPDATE/DELETE results"""
         execution_time = time.time() - start_time
-        self._print_success(f"{operation} operation completed")
+        print(f"{operation} operation completed")
         
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
-            print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
+            print(f"Time: {time_str}")
     
     def _handle_ddl_result(self, operation, start_time):
         """Handle CREATE/DROP/ALTER results"""
         execution_time = time.time() - start_time
-        self._print_success(f"{operation} completed successfully")
+        print(f"{operation} completed successfully")
         
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
-            print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
+            print(f"Time: {time_str}")
     
     def _handle_use_result(self, operation, start_time):
         """Handle USE database results"""
@@ -1288,84 +834,98 @@ class EnhancedSQLShell:
                     filename = filename[:-3]
                 current_db_name = filename
             
-            self._print_success(f"Switched to database: {current_db_name}")
+            print(f"Switched to database: {current_db_name}")
         except:
-            self._print_success("Database switch completed")
+            print("Database switch completed")
         
         if self.config.timing:
             time_str = f"{execution_time:.3f}s" if execution_time < 1 else f"{execution_time:.2f}s"
-            print(f"{Colors.BRIGHT_BLACK}Time: {time_str}{Colors.RESET}")
+            print(f"Time: {time_str}")
     
     # Enhanced Meta-command implementations
     def _cmd_quit(self, args):
         """Quit the shell with cleanup"""
         self.config.save_config()
-        print(f"{Colors.BRIGHT_GREEN}Session lasted {datetime.now() - self.start_time}{Colors.RESET}")
+        print(f"Session lasted {datetime.now() - self.start_time}")
         sys.exit(0)
     
     def _cmd_help(self, args):
         """Show comprehensive help information"""
         help_text = f"""
 
+Meta Commands:
+  \\h, \\help              Show this help
+  \\q, \\quit, \\exit      Quit the shell
+  \\l, \\list              List all databases
+  \\d, \\dt                List tables in current database
+  \\c <db>, \\connect <db>  Connect to database
+  \\clear, \\cls           Clear screen
 
-{Colors.BOLD}Meta Commands:{Colors.RESET}
-  {Colors.BRIGHT_BLUE}\\h, \\help{Colors.RESET}              Show this help
-  {Colors.BRIGHT_BLUE}\\q, \\quit, \\exit{Colors.RESET}      Quit the shell
-  {Colors.BRIGHT_BLUE}\\l, \\list{Colors.RESET}              List all databases
-  {Colors.BRIGHT_BLUE}\\d, \\dt{Colors.RESET}                List tables in current database
-  {Colors.BRIGHT_BLUE}\\c <db>, \\connect <db>{Colors.RESET}  Connect to database
-  {Colors.BRIGHT_BLUE}\\clear, \\cls{Colors.RESET}           Clear screen
+Hot-Reload Commands:
+  \\r, \\reload           Reload all SQL engine modules
+  \\modules               List loaded modules
+  \\debug                 Toggle debug mode
 
-{Colors.BOLD}Hot-Reload Commands:{Colors.RESET}
-  {Colors.BRIGHT_GREEN}\\r, \\reload{Colors.RESET}           Reload all SQL engine modules
-  {Colors.BRIGHT_GREEN}\\modules{Colors.RESET}               List loaded modules
-  {Colors.BRIGHT_GREEN}\\debug{Colors.RESET}                 Toggle debug mode
+Display Mode Commands:
+  \\normal, \\force       Set normal table display (persistent)
+  \\auto                  Set auto table display mode (persistent)
+  \\wide vertical         Show last result in vertical format
+  \\cols                  Show specific columns from last result
 
-{Colors.BOLD}Configuration:{Colors.RESET}
-  {Colors.BRIGHT_YELLOW}\\timing{Colors.RESET}                Toggle query timing on/off
-  {Colors.BRIGHT_YELLOW}\\echo{Colors.RESET}                  Toggle query echo on/off
-  {Colors.BRIGHT_YELLOW}\\set <option> <value>{Colors.RESET}  Set configuration option
-  {Colors.BRIGHT_YELLOW}\\show [option]{Colors.RESET}         Show configuration
+Configuration:
+  \\timing                Toggle query timing on/off
+  \\echo                  Toggle query echo on/off
+  \\set <option> <value>  Set configuration option
+  \\show [option]         Show configuration
 
-{Colors.BOLD}Data Operations:{Colors.RESET}
-  {Colors.BRIGHT_MAGENTA}\\export <format> <file>{Colors.RESET} Export last SELECT result
-  {Colors.BRIGHT_MAGENTA}\\import <file>{Colors.RESET}         Import and execute SQL file
-  {Colors.BRIGHT_MAGENTA}\\history{Colors.RESET}               Show command history
+Data Operations:
+  \\export <format> <file> Export last SELECT result
+  \\import <file>         Import and execute SQL file
+  \\history               Show command history
 
-{Colors.BOLD}Information:{Colors.RESET}
-  {Colors.BRIGHT_CYAN}\\version{Colors.RESET}                Show version information
-  {Colors.BRIGHT_CYAN}\\status{Colors.RESET}                 Show session status
+Information:
+  \\version               Show version information
+  \\status                Show session status
 
-{Colors.BOLD}Configuration Options:{Colors.RESET}
-  {Colors.WHITE}table_format{Colors.RESET}           ascii, markdown, csv
-  {Colors.WHITE}max_column_width{Colors.RESET}       Maximum width for table columns
-  {Colors.WHITE}null_display{Colors.RESET}           How to display NULL values
-  {Colors.WHITE}colorize_output{Colors.RESET}        Enable/disable colors (true/false)
-  {Colors.WHITE}auto_reload{Colors.RESET}            Auto-reload modules on file changes
-  {Colors.WHITE}reload_on_error{Colors.RESET}        Auto-reload on execution errors
+Configuration Options:
+  table_format           ascii, markdown, csv
+  max_column_width       Maximum width for table columns
+  null_display           How to display NULL values
+  auto_detect_wide       Enable/disable wide table detection (true/false)
+  wide_table_threshold   Column count threshold for wide tables
+  display_mode          'auto', 'force_normal', 'force_wide'
+  auto_reload            Auto-reload modules on file changes
+  reload_on_error        Auto-reload on execution errors
 
-{Colors.BOLD}Tips:{Colors.RESET}
+Multi-Query Support:
+  • Separate multiple queries with semicolons (;)
+  • Press Enter to execute complete queries
+  • Press Ctrl+Enter to add new line within query
+  • Comments with -- are supported
+
+Tips:
   • End queries with semicolon (;)
-  • Multi-line queries supported
+  • Multi-line and multi-query support
   • Ctrl+C cancels current query
-  • Use ↑↓ arrows for history navigation
-  • Tab completion for SQL keywords
+  • Use arrow keys for history navigation
+  • Tab completion for SQL keywords, tables, and columns
 
-{Colors.BOLD}Examples:{Colors.RESET}
-  {Colors.DIM}SELECT * FROM users WHERE age > 25;{Colors.RESET}
-  {Colors.DIM}\\set table_format markdown{Colors.RESET}
-  {Colors.DIM}\\export csv /tmp/results.csv{Colors.RESET}
-  {Colors.DIM}\\r  # Hot-reload after code changes{Colors.RESET}
+Examples:
+  SELECT * FROM users WHERE age > 25;
+  INSERT INTO users VALUES (1, 'John'); INSERT INTO users VALUES (2, 'Jane');
+  \\set display_mode force_normal
+  \\export csv /tmp/results.csv
+  \\r  # Hot-reload after code changes
 """
         print(help_text)
     
     def _cmd_list_databases(self, args):
         """List all databases with enhanced display"""
-        print(f"{Colors.BOLD}Available Databases:{Colors.RESET}\n")
+        print("Available Databases:\n")
         
         try:
             if not hasattr(db_manager, 'databases') or not db_manager.databases:
-                self._print_warning("No databases found")
+                print("No databases found")
                 return
             
             databases_info = []
@@ -1407,21 +967,21 @@ class EnhancedSQLShell:
                 formatted_table = self.formatter.format_table(databases_info, ['Database', 'Status', 'Size'])
                 print(formatted_table)
             else:
-                self._print_warning("No databases available")
+                print("No databases available")
         
         except Exception as e:
-            self._print_error(f"Failed to list databases: {e}")
+            print(f"Failed to list databases: {e}")
     
     def _cmd_describe_tables(self, args):
         """List tables in current database with enhanced info"""
         try:
             current_db = getattr(db_manager, 'active_db', None)
             if not current_db:
-                self._print_warning("No database selected")
-                print(f"Use {Colors.BOLD}\\c <database_name>{Colors.RESET} to connect to a database")
+                print("No database selected")
+                print("Use \\c <database_name> to connect to a database")
                 return
             
-            print(f"{Colors.BOLD}Tables in current database:{Colors.RESET}\n")
+            print("Tables in current database:\n")
             
             tables_info = []
             for table_name, table_obj in current_db.items():
@@ -1454,60 +1014,194 @@ class EnhancedSQLShell:
                 formatted_table = self.formatter.format_table(tables_info, ['Table', 'Rows', 'Columns', 'Schema'])
                 print(formatted_table)
             else:
-                self._print_info("No tables found in current database")
+                print("No tables found in current database")
 
         except Exception as e:
-            self._print_error(f"Failed to describe tables: {e}")
+            print(f"Failed to describe tables: {e}")
     
     def _cmd_connect(self, args):
         """Connect to a database"""
         if not args:
-            self._print_error("Usage: \\c <database_name>")
+            print("Usage: \\c <database_name>")
             return
         
         db_name = args[0]
         try:
-            print(f"{Colors.BRIGHT_BLUE}Connecting to database '{db_name}'...{Colors.RESET}")
+            print(f"Connecting to database '{db_name}'...")
             self._execute_query(f"USE {db_name}")
         except Exception as e:
-            self._print_error(f"Connection failed: {e}")
+            print(f"Connection failed: {e}")
+    
+    def _cmd_set_normal(self, args):
+        """Set display mode to force normal (persistent)"""
+        self.config.display_mode = 'force_normal'
+        self.config.save_config()
+        print("Display mode set to: force normal (persistent)")
+        
+        # Show last result if available
+        if hasattr(self.config, 'last_result') and self.config.last_result:
+            print("\nRe-displaying last result in normal format:")
+            formatted_table = self.formatter.format_table(self.config.last_result)
+            print(formatted_table)
+    
+    def _cmd_set_auto(self, args):
+        """Set display mode to auto (persistent)"""
+        self.config.display_mode = 'auto'
+        self.config.save_config()
+        print("Display mode set to: auto (persistent)")
+        
+        # Show last result if available
+        if hasattr(self.config, 'last_result') and self.config.last_result:
+            print("\nRe-displaying last result in auto format:")
+            formatted_table = self.formatter.format_table(self.config.last_result)
+            print(formatted_table)
+    
+    def _cmd_wide(self, args):
+        """Show wide table in different formats"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print("No query result available. Run a SELECT query first.")
+            return
+        
+        if not args:
+            print("Usage: \\wide [vertical]")
+            return
+        
+        format_type = args[0].lower()
+        columns = list(self.config.last_result[0].keys()) if self.config.last_result else []
+        
+        if format_type == 'vertical':
+            result = self.formatter._format_wide_table(self.config.last_result, columns)
+            print(result)
+        else:
+            print("Unknown format. Use 'vertical'")
+    
+    def _cmd_cols(self, args):
+        """Show specific columns from last result"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print("No query result available. Run a SELECT query first.")
+            return
+        
+        if not args:
+            # Show available columns
+            columns = list(self.config.last_result[0].keys())
+            print(f"Available columns ({len(columns)} total):")
+            for i, col in enumerate(columns, 1):
+                print(f"{i:3}. {col}")
+            print("\nUsage: \\cols 1,3,5  or  \\cols name,age,email")
+            return
+        
+        # Parse column specification
+        col_spec = ' '.join(args)
+        all_columns = list(self.config.last_result[0].keys())
+        
+        selected_columns = []
+        for spec in col_spec.split(','):
+            spec = spec.strip()
+            if spec.isdigit():
+                # Column number
+                idx = int(spec) - 1
+                if 0 <= idx < len(all_columns):
+                    selected_columns.append(all_columns[idx])
+            elif spec in all_columns:
+                # Column name
+                selected_columns.append(spec)
+        
+        if not selected_columns:
+            print("No valid columns specified")
+            return
+        
+        # Show selected columns
+        formatted_table = self.formatter.format_table(self.config.last_result, selected_columns)
+        print(formatted_table)
+    
+    def _cmd_show_csv_style(self, args):
+        """Show table in CSV format for easy viewing"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print("No query result available. Run a SELECT query first.")
+            return
+        
+        print("CSV-style display:")
+        
+        columns = list(self.config.last_result[0].keys())
+        
+        # Header
+        header = ",".join(columns)
+        print(header)
+        
+        # Data rows
+        for row in self.config.last_result:
+            row_data = []
+            for col in columns:
+                value = self.formatter._format_value(row.get(col))
+                # Escape commas and quotes for CSV
+                if ',' in value or '"' in value:
+                    value = f'"{value.replace('"', '""')}"'
+                row_data.append(value)
+            print(",".join(row_data))
+    
+    def _cmd_show_columns_only(self, args):
+        """Show only the column names and types"""
+        if not hasattr(self.config, 'last_result') or not self.config.last_result:
+            print("No query result available. Run a SELECT query first.")
+            return
+        
+        columns = list(self.config.last_result[0].keys())
+        print(f"Column Names ({len(columns)} total):")
+        
+        for i, col in enumerate(columns, 1):
+            # Try to determine type from first non-null value
+            col_type = "UNKNOWN"
+            for row in self.config.last_result:
+                if row.get(col) is not None:
+                    value = row.get(col)
+                    if isinstance(value, int):
+                        col_type = "INTEGER"
+                    elif isinstance(value, float):
+                        col_type = "REAL"
+                    elif isinstance(value, bool):
+                        col_type = "BOOLEAN"
+                    elif isinstance(value, str):
+                        col_type = "TEXT"
+                    break
+            
+            print(f"{i:3}. {col:30} ({col_type})")
     
     def _cmd_reload(self, args):
         """Hot-reload all SQL engine modules"""
-        print(f"{Colors.BRIGHT_YELLOW}Reloading SQL engine modules...{Colors.RESET}")
+        print("Reloading SQL engine modules...")
         
         try:
             reloaded, failed = reload_modules()
             
             if reloaded:
-                self._print_success(f"Reloaded modules: {', '.join(reloaded)}")
+                print(f"Reloaded modules: {', '.join(reloaded)}")
                 
                 # Re-import updated objects
                 try:
                     global db_manager, Lexer, Parser, execute
                     from engine import db_manager, Lexer, Parser
                     from executor import execute
-                    self._print_info("Updated global references")
+                    print("Updated global references")
                 except Exception as e:
-                    self._print_warning(f"Could not update references: {e}")
+                    print(f"Could not update references: {e}")
             
             if failed:
                 for module, error in failed:
-                    self._print_error(f"Failed to reload {module}: {error}")
+                    print(f"Failed to reload {module}: {error}")
             
             if not reloaded and not failed:
-                self._print_warning("No modules registered for reloading")
+                print("No modules registered for reloading")
         
         except Exception as e:
-            self._print_error(f"Reload failed: {e}")
-            print(f"{Colors.BRIGHT_BLACK}{traceback.format_exc()}{Colors.RESET}")
+            print(f"Reload failed: {e}")
+            print(f"{traceback.format_exc()}")
     
     def _cmd_list_modules(self, args):
         """List loaded modules available for hot-reload"""
-        print(f"{Colors.BOLD}Registered Modules:{Colors.RESET}\n")
+        print("Registered Modules:\n")
         
         if not MODULE_REGISTRY:
-            self._print_warning("No modules registered for hot-reload")
+            print("No modules registered for hot-reload")
             return
         
         modules_info = []
@@ -1538,10 +1232,10 @@ class EnhancedSQLShell:
         self.config.debug_mode = debug_mode
         
         if debug_mode:
-            self._print_success("Debug mode enabled - detailed error reporting active")
+            print("Debug mode enabled - detailed error reporting active")
             self.config.reload_on_error = True
         else:
-            self._print_info("Debug mode disabled")
+            print("Debug mode disabled")
             self.config.reload_on_error = False
         
         self.config.save_config()
@@ -1550,25 +1244,33 @@ class EnhancedSQLShell:
         """Toggle query timing with visual feedback"""
         self.config.timing = not self.config.timing
         if self.config.timing:
-            self._print_success("Query timing enabled")
+            print("Query timing enabled")
         else:
-            self._print_info("Query timing disabled")
+            print("Query timing disabled")
         self.config.save_config()
     
     def _cmd_toggle_echo(self, args):
         """Toggle query echo"""
         self.config.echo_queries = not self.config.echo_queries
         if self.config.echo_queries:
-            self._print_success("Query echo enabled")
+            print("Query echo enabled")
         else:
-            self._print_info("Query echo disabled")
+            print("Query echo disabled")
         self.config.save_config()
     
     def _cmd_set_config(self, args):
         """Set configuration option with validation"""
         if len(args) < 2:
-            self._print_error("Usage: \\set <option> <value>")
-            print(f"{Colors.YELLOW}Available options: table_format, max_column_width, null_display, colorize_output, auto_reload, reload_on_error{Colors.RESET}")
+            print("Usage: \\set <option> <value>")
+            print("Available options:")
+            print("  table_format             ascii, markdown, csv")
+            print("  max_column_width         Maximum width for table columns")
+            print("  null_display             How to display NULL values")
+            print("  auto_detect_wide         Enable/disable wide table detection (true/false)")
+            print("  wide_table_threshold     Column count threshold for wide tables")
+            print("  display_mode            'auto', 'force_normal', 'force_wide'")
+            print("  auto_reload             Auto-reload modules on file changes")
+            print("  reload_on_error         Auto-reload on execution errors")
             return
         
         option, value = args[0], args[1]
@@ -1576,239 +1278,40 @@ class EnhancedSQLShell:
         try:
             if option == 'table_format' and value in ['ascii', 'markdown', 'csv']:
                 self.config.table_format = value
-                self._print_success(f"Table format set to: {value}")
+                print(f"Table format set to: {value}")
             elif option == 'max_column_width':
                 self.config.max_column_width = int(value)
-                self._print_success(f"Max column width set to: {value}")
+                print(f"Max column width set to: {value}")
             elif option == 'null_display':
                 self.config.null_display = value
-                self._print_success(f"NULL display set to: '{value}'")
-            elif option == 'colorize_output':
-                self.config.colorize_output = value.lower() == 'true'
-                self._print_success(f"Color output {'enabled' if self.config.colorize_output else 'disabled'}")
-            elif option == 'auto_reload':
-                self.config.auto_reload = value.lower() == 'true'
-                self._print_success(f"Auto-reload {'enabled' if self.config.auto_reload else 'disabled'}")
-            elif option == 'reload_on_error':
-                self.config.reload_on_error = value.lower() == 'true'
-                self._print_success(f"Reload on error {'enabled' if self.config.reload_on_error else 'disabled'}")
-            else:
-                self._print_error(f"Unknown option: {option}")
-                return
-            
-            self.config.save_config()
-        
-        except ValueError as e:
-            self._print_error(f"Invalid value: {e}")
-    
-    
-    def _cmd_show_normal(self, args):
-        """Force show table in normal format, bypassing all wide table logic"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        print(f"{Colors.CYAN}Forcing normal table display (ignoring all wide table settings)...{Colors.RESET}")
-        
-        # Use the original format_table method directly, not any enhanced version
-        result = self._format_basic_table(self.config.last_result)
-        print(result)
-
-    def _format_basic_table(self, rows):
-        """Basic table formatter that ignores wide table logic - always shows everything"""
-        if not rows:
-            return f"{Colors.BRIGHT_BLACK}Empty result set{Colors.RESET}"
-        
-        columns = list(rows[0].keys())
-        
-        # Calculate column widths (using original logic)
-        col_widths = {}
-        for col in columns:
-            col_widths[col] = len(col)  # Start with column name length
-            
-        # Check all row values for max width
-        for row in rows:
-            for col in columns:
-                value_str = self._format_value_simple(row.get(col))
-                # Use original max_column_width from config, but allow override
-                max_width = self.config.max_column_width
-                col_widths[col] = max(col_widths[col], min(len(value_str), max_width))
-        
-        lines = []
-        
-        # Top border
-        border_parts = []
-        for col in columns:
-            border_parts.append('-' * (col_widths[col] + 2))
-        lines.append('+' + '+'.join(border_parts) + '+')
-        
-        # Header row
-        header_parts = []
-        for col in columns:
-            header_text = col[:col_widths[col]].ljust(col_widths[col])
-            if self.config.colorize_output:
-                header_text = f"{Colors.BOLD}{Colors.CYAN}{header_text}{Colors.RESET}"
-            header_parts.append(f' {header_text} ')
-        lines.append('|' + '|'.join(header_parts) + '|')
-        
-        # Header separator
-        lines.append('+' + '+'.join(border_parts) + '+')
-        
-        # Data rows
-        for row in rows:
-            row_parts = []
-            for col in columns:
-                value = row.get(col)
-                value_str = self._format_value_simple(value)
-                
-                # Truncate if too long
-                if len(value_str) > col_widths[col]:
-                    value_str = value_str[:col_widths[col]-3] + '...'
-                
-                value_str = value_str.ljust(col_widths[col])
-                
-                # Add colors
-                if self.config.colorize_output:
-                    if value is None:
-                        value_str = f"{Colors.BRIGHT_BLACK}{value_str}{Colors.RESET}"
-                    elif isinstance(value, (int, float)):
-                        value_str = f"{Colors.BRIGHT_GREEN}{value_str}{Colors.RESET}"
-                    elif isinstance(value, bool):
-                        value_str = f"{Colors.BRIGHT_MAGENTA}{value_str}{Colors.RESET}"
-                
-                row_parts.append(f' {value_str} ')
-            lines.append('|' + '|'.join(row_parts) + '|')
-        
-        # Bottom border
-        lines.append('+' + '+'.join(border_parts) + '+')
-        
-        return '\n'.join(lines)
-# MODIFY your existing _cmd_set_config method to handle the new settings:
-    def _cmd_show_wide_forced(self, args):
-        """Show table with temporarily increased column width"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        # Temporarily increase max_column_width
-        original_width = self.config.max_column_width
-        original_format = self.config.table_format
-        
-        # Set wider settings temporarily
-        self.config.max_column_width = 30  # Wider columns
-        self.config.table_format = 'ascii'
-        
-        print(f"{Colors.CYAN}Showing with wider columns (temporarily set to 30 chars)...{Colors.RESET}")
-        
-        try:
-            # Use basic formatter
-            result = self._format_basic_table(self.config.last_result)
-            print(result)
-        finally:
-            # Restore original settings
-            self.config.max_column_width = original_width
-            self.config.table_format = original_format
-            
-    def _cmd_show_csv_style(self, args):
-        """Show table in CSV format for easy viewing"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        print(f"{Colors.CYAN}CSV-style display:{Colors.RESET}")
-        
-        columns = list(self.config.last_result[0].keys())
-        
-        # Header
-        if self.config.colorize_output:
-            header = f"{Colors.BOLD}{Colors.CYAN}" + ",".join(columns) + f"{Colors.RESET}"
-        else:
-            header = ",".join(columns)
-        print(header)
-        
-        # Data rows
-        for row in self.config.last_result:
-            row_data = []
-            for col in columns:
-                value = self._format_value_simple(row.get(col))
-                # Escape commas and quotes for CSV
-                if ',' in value or '"' in value:
-                    value = f""" "{value.replace('"', '""')}" """
-                row_data.append(value)
-            print(",".join(row_data))
-            
-    # You can also add a command to show just column headers:
-    def _cmd_show_columns_only(self, args):
-        """Show only the column names and types"""
-        if not hasattr(self.config, 'last_result') or not self.config.last_result:
-            print(f"{Colors.RED}No query result available. Run a SELECT query first.{Colors.RESET}")
-            return
-        
-        columns = list(self.config.last_result[0].keys())
-        print(f"{Colors.BOLD}Column Names ({len(columns)} total):{Colors.RESET}")
-        
-        for i, col in enumerate(columns, 1):
-            # Try to determine type from first non-null value
-            col_type = "UNKNOWN"
-            for row in self.config.last_result:
-                if row.get(col) is not None:
-                    value = row.get(col)
-                    if isinstance(value, int):
-                        col_type = "INTEGER"
-                    elif isinstance(value, float):
-                        col_type = "REAL"
-                    elif isinstance(value, bool):
-                        col_type = "BOOLEAN"
-                    elif isinstance(value, str):
-                        col_type = "TEXT"
-                    break
-            
-            if self.config.colorize_output:
-                print(f"{Colors.BRIGHT_CYAN}{i:3}.{Colors.RESET} {col:30} {Colors.BRIGHT_BLACK}({col_type}){Colors.RESET}")
-            else:        
-                print(f"{i:3}. {col:30} ({col_type})")
-    def _cmd_set_config(self, args):
-        """Set configuration option"""
-        if len(args) < 2:
-            print(f"{Colors.RED}Usage: \\set <option> <value>{Colors.RESET}")
-            print(f"{Colors.YELLOW}Wide table options:{Colors.RESET}")
-            print(f"  auto_detect_wide true/false    - Enable/disable wide table auto-detection")  
-            print(f"  wide_table_threshold <number>  - Set column threshold for wide tables")
-            print(f"{Colors.YELLOW}Other options: table_format, max_column_width, null_display, colorize_output{Colors.RESET}")
-            return
-        
-        option, value = args[0], args[1]
-        
-        try:
-            if option == 'table_format' and value in ['ascii', 'markdown', 'csv']:
-                self.config.table_format = value
-                print(f"Set {option} = {value}")
-            elif option == 'max_column_width':
-                self.config.max_column_width = int(value)
-                print(f"Set {option} = {value}")
-            elif option == 'null_display':
-                self.config.null_display = value
-                print(f"Set {option} = {value}")
-            elif option == 'colorize_output':
-                self.config.colorize_output = value.lower() == 'true'
-                print(f"Set {option} = {value}")
-            elif option == 'auto_detect_wide':  # NEW OPTION
+                print(f"NULL display set to: '{value}'")
+            elif option == 'auto_detect_wide':
                 self.config.auto_detect_wide = value.lower() == 'true'
                 status = "enabled" if self.config.auto_detect_wide else "disabled"
-                print(f"{Colors.GREEN}Wide table auto-detection {status}{Colors.RESET}")
-            elif option == 'wide_table_threshold':  # NEW OPTION
+                print(f"Wide table auto-detection {status}")
+            elif option == 'wide_table_threshold':
                 self.config.wide_table_threshold = int(value)
-                print(f"{Colors.GREEN}Wide table threshold set to {value} columns{Colors.RESET}")
+                print(f"Wide table threshold set to {value} columns")
+            elif option == 'display_mode' and value in ['auto', 'force_normal', 'force_wide']:
+                self.config.display_mode = value
+                print(f"Display mode set to: {value}")
+            elif option == 'auto_reload':
+                self.config.auto_reload = value.lower() == 'true'
+                status = "enabled" if self.config.auto_reload else "disabled"
+                print(f"Auto-reload {status}")
+            elif option == 'reload_on_error':
+                self.config.reload_on_error = value.lower() == 'true'
+                status = "enabled" if self.config.reload_on_error else "disabled"
+                print(f"Reload on error {status}")
             else:
-                print(f"{Colors.RED}Unknown option: {option}{Colors.RESET}")
+                print(f"Unknown option: {option}")
                 return
             
             self.config.save_config()
         
         except ValueError as e:
-            print(f"{Colors.RED}Invalid value: {e}{Colors.RESET}")
-
-    # UPDATE your _cmd_show_config method to show the new settings:
+            print(f"Invalid value: {e}")
+    
     def _cmd_show_config(self, args):
         """Show configuration"""
         if args:
@@ -1817,20 +1320,19 @@ class EnhancedSQLShell:
                 value = getattr(self.config, option)
                 print(f"{option} = {value}")
             else:
-                print(f"{Colors.RED}Unknown option: {option}{Colors.RESET}")
+                print(f"Unknown option: {option}")
         else:
-            print(f"{Colors.BOLD}Current Configuration:{Colors.RESET}")
+            print("Current Configuration:")
             print(f"table_format = {self.config.table_format}")
             print(f"max_column_width = {self.config.max_column_width}")
             print(f"null_display = {self.config.null_display}")
-            print(f"colorize_output = {self.config.colorize_output}")
             print(f"timing = {self.config.timing}")
             print(f"echo_queries = {self.config.echo_queries}")
-            
-            # ADD THESE LINES for wide table settings
-            print(f"{Colors.CYAN}Wide Table Settings:{Colors.RESET}")
-            print(f"auto_detect_wide = {getattr(self.config, 'auto_detect_wide', True)}")
+            print(f"auto_detect_wide = {getattr(self.config, 'auto_detect_wide', False)}")
             print(f"wide_table_threshold = {getattr(self.config, 'wide_table_threshold', 10)}")
+            print(f"display_mode = {getattr(self.config, 'display_mode', 'auto')}")
+            print(f"auto_reload = {getattr(self.config, 'auto_reload', True)}")
+            print(f"reload_on_error = {getattr(self.config, 'reload_on_error', False)}")
     
     def _cmd_show_history(self, args):
         """Show command history with enhanced display"""
@@ -1842,52 +1344,52 @@ class EnhancedSQLShell:
                     history_items.append({'#': i+1, 'Command': entry[:80] + ('...' if len(entry) > 80 else '')})
                 
                 if history_items:
-                    print(f"{Colors.BOLD}Command History:{Colors.RESET}\n")
+                    print("Command History:\n")
                     # Show last 20 items
                     recent_items = history_items[-20:] if len(history_items) > 20 else history_items
                     formatted_table = self.formatter.format_table(recent_items, ['#', 'Command'])
                     print(formatted_table)
                     
                     if len(history_items) > 20:
-                        print(f"\n{Colors.BRIGHT_BLACK}Showing last 20 of {len(history_items)} commands{Colors.RESET}")
+                        print(f"\nShowing last 20 of {len(history_items)} commands")
                 else:
-                    self._print_info("No command history available")
+                    print("No command history available")
             else:
                 # Fallback to readline history
                 try:
                     import readline
-                    print(f"{Colors.BOLD}Command History:{Colors.RESET}\n")
+                    print("Command History:\n")
                     for i in range(max(0, readline.get_current_history_length() - 20), readline.get_current_history_length()):
                         line = readline.get_history_item(i + 1)
                         if line:
                             print(f"{i+1:4}: {line}")
                 except:
-                    self._print_warning("History not available")
+                    print("History not available")
         except Exception as e:
-            self._print_error(f"Could not retrieve history: {e}")
+            print(f"Could not retrieve history: {e}")
     
     def _cmd_clear(self, args):
         """Clear the screen"""
         os.system('cls' if os.name == 'nt' else 'clear')
         # Reprint a minimal banner
-        print(f"{Colors.BRIGHT_GREEN}{Colors.RESET} - {self._get_connection_info()}\n")
+        
     
     def _cmd_export(self, args):
         """Export last query result with enhanced options"""
         if len(args) < 2:
-            self._print_error("Usage: \\export <format> <filename>")
-            print(f"{Colors.YELLOW}Supported formats: csv, json, sql, xlsx{Colors.RESET}")
+            print("Usage: \\export <format> <filename>")
+            print("Supported formats: csv, json, sql, xlsx")
             return
         
         if not self.config.last_result:
-            self._print_error("No query result to export. Run a SELECT query first.")
+            print("No query result to export. Run a SELECT query first.")
             return
         
         format_type = args[0].lower()
         filename = args[1]
         
         try:
-            print(f"{Colors.BRIGHT_BLUE}Exporting {len(self.config.last_result)} rows to {filename}...{Colors.RESET}")
+            print(f"Exporting {len(self.config.last_result)} rows to {filename}...")
             
             if format_type == 'csv':
                 self._export_csv(filename)
@@ -1898,18 +1400,18 @@ class EnhancedSQLShell:
             elif format_type == 'xlsx':
                 self._export_xlsx(filename)
             else:
-                self._print_error(f"Unsupported format: {format_type}")
-                print(f"{Colors.YELLOW}Supported formats: csv, json, sql, xlsx{Colors.RESET}")
+                print(f"Unsupported format: {format_type}")
+                print("Supported formats: csv, json, sql, xlsx")
                 return
             
             row_count = len(self.config.last_result)
             file_size = os.path.getsize(filename) if os.path.exists(filename) else 0
             size_str = f"{file_size:,} bytes" if file_size < 1024 else f"{file_size//1024:,} KB"
             
-            self._print_success(f"Exported {row_count:,} rows to {filename} ({format_type.upper()}, {size_str})")
+            print(f"Exported {row_count:,} rows to {filename} ({format_type.upper()}, {size_str})")
             
         except Exception as e:
-            self._print_error(f"Export failed: {str(e)}")
+            print(f"Export failed: {str(e)}")
     
     def _export_csv(self, filename):
         """Export to CSV format"""
@@ -1964,7 +1466,7 @@ class EnhancedSQLShell:
         with open(filename, 'w', encoding='utf-8') as sqlfile:
             columns = list(self.config.last_result[0].keys())
             
-            # Write enhanced header
+            # Write header
             sqlfile.write(f"-- MyShell SQL Export\n")
             sqlfile.write(f"-- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             sqlfile.write(f"-- Rows: {len(self.config.last_result):,}\n")
@@ -1999,7 +1501,7 @@ class EnhancedSQLShell:
             import openpyxl
             from openpyxl.styles import Font, PatternFill
         except ImportError:
-            self._print_error("Excel export requires openpyxl: pip install openpyxl")
+            print("Excel export requires openpyxl: pip install openpyxl")
             return
         
         if not filename.endswith('.xlsx'):
@@ -2046,17 +1548,17 @@ class EnhancedSQLShell:
     def _cmd_import(self, args):
         """Import SQL file with progress tracking"""
         if not args:
-            self._print_error("Usage: \\import <filename>")
+            print("Usage: \\import <filename>")
             return
         
         filename = args[0]
         
         if not os.path.exists(filename):
-            self._print_error(f"File not found: {filename}")
+            print(f"File not found: {filename}")
             return
         
         try:
-            print(f"{Colors.BRIGHT_BLUE}Importing SQL from {filename}...{Colors.RESET}")
+            print(f"Importing SQL from {filename}...")
             
             with open(filename, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -2065,10 +1567,10 @@ class EnhancedSQLShell:
             statements = [s.strip() for s in content.split(';') if s.strip()]
             
             if not statements:
-                self._print_warning("No SQL statements found in file")
+                print("No SQL statements found in file")
                 return
             
-            print(f"{Colors.BRIGHT_BLACK}Found {len(statements)} statements to execute...{Colors.RESET}")
+            print(f"Found {len(statements)} statements to execute...")
             
             # Execute statements with progress
             successful = 0
@@ -2081,21 +1583,21 @@ class EnhancedSQLShell:
                     else:
                         preview = stmt
                     
-                    print(f"{Colors.DIM}[{i:3}/{len(statements)}] {preview}{Colors.RESET}")
+                    print(f"[{i:3}/{len(statements)}] {preview}")
                     self._execute_query(stmt + ';')
                     successful += 1
                     
                 except Exception as e:
-                    self._print_error(f"Statement {i} failed: {e}")
+                    print(f"Statement {i} failed: {e}")
                     failed += 1
                     
                     # Ask user if they want to continue
                     if failed >= 3:
                         try:
                             if PROMPT_TOOLKIT_AVAILABLE:
-                                continue_import = prompt(f"{Colors.YELLOW}Multiple failures detected. Continue? (y/n): {Colors.RESET}").lower()
+                                continue_import = prompt("Multiple failures detected. Continue? (y/n): ").lower()
                             else:
-                                continue_import = input(f"{Colors.YELLOW}Multiple failures detected. Continue? (y/n): {Colors.RESET}").lower()
+                                continue_import = input("Multiple failures detected. Continue? (y/n): ").lower()
                             
                             if continue_import not in ['y', 'yes']:
                                 break
@@ -2105,12 +1607,12 @@ class EnhancedSQLShell:
             # Summary
             total = successful + failed
             if successful > 0:
-                self._print_success(f"Import completed: {successful}/{total} statements successful")
+                print(f"Import completed: {successful}/{total} statements successful")
             if failed > 0:
-                self._print_warning(f"{failed} statements failed")
+                print(f"{failed} statements failed")
                 
         except Exception as e:
-            self._print_error(f"Import failed: {e}")
+            print(f"Import failed: {e}")
     
     def _cmd_version(self, args):
         """Show comprehensive version information"""
@@ -2118,27 +1620,29 @@ class EnhancedSQLShell:
         
         version_info = f"""
 
-{Colors.BOLD}{Colors.RESET}
-  Version: {Colors.BRIGHT_GREEN}2.1.0{Colors.RESET}
+MySQL Shell CLI
+  Version: 2.1.0
   
-{Colors.BOLD}Runtime Environment{Colors.RESET}
-  Python: {Colors.BRIGHT_BLUE}{python_version}{Colors.RESET}
-  Platform: {Colors.BRIGHT_BLUE}{sys.platform}{Colors.RESET}
+Runtime Environment
+  Python: {python_version}
+  Platform: {sys.platform}
   
-{Colors.BOLD}Features{Colors.RESET}
-  Hot-reload: {Colors.BRIGHT_GREEN}Enabled{Colors.RESET}
-  Enhanced UI: {Colors.BRIGHT_GREEN if PROMPT_TOOLKIT_AVAILABLE else Colors.BRIGHT_RED}{'Available' if PROMPT_TOOLKIT_AVAILABLE else 'Missing (pip install prompt-toolkit)'}{Colors.RESET}
-  Export formats: {Colors.BRIGHT_BLUE}CSV, JSON, SQL, XLSX{Colors.RESET}
+Features
+  Hot-reload: Enabled
+  Enhanced UI: {'Available' if PROMPT_TOOLKIT_AVAILABLE else 'Missing (pip install prompt-toolkit)'}
+  Export formats: CSV, JSON, SQL, XLSX
+  Multi-query support: Enabled
+  Comment support: Enabled (-- syntax)
   
-{Colors.BOLD}Modules Status{Colors.RESET}"""
+Modules Status"""
 
         # Check module status
         module_status = []
         for name in ['database_manager', 'engine', 'executor', 'datatypes']:
             if name in MODULE_REGISTRY:
-                module_status.append(f"  {name}: {Colors.BRIGHT_GREEN}Loaded{Colors.RESET}")
+                module_status.append(f"  {name}: Loaded")
             else:
-                module_status.append(f"  {name}: {Colors.BRIGHT_RED}Missing{Colors.RESET}")
+                module_status.append(f"  {name}: Missing")
         
         version_info += '\n' + '\n'.join(module_status)
         
@@ -2146,9 +1650,10 @@ class EnhancedSQLShell:
         uptime = datetime.now() - self.start_time
         version_info += f"""
 
-{Colors.BOLD}Session Info{Colors.RESET}
-  Uptime: {Colors.BRIGHT_BLUE}{uptime}{Colors.RESET}
-  Queries executed: {Colors.BRIGHT_BLUE}{self.query_count:,}{Colors.RESET}
+Session Info
+  Uptime: {uptime}
+  Queries executed: {self.query_count:,}
+  Display mode: {getattr(self.config, 'display_mode', 'auto')}
 """
         
         print(version_info)
@@ -2164,7 +1669,7 @@ class EnhancedSQLShell:
                 db_name = os.path.basename(current_db)
                 if db_name.endswith('.su'):
                     db_name = db_name[:-3]
-                db_status = f"{Colors.BRIGHT_GREEN}{db_name}{Colors.RESET}"
+                db_status = db_name
                 
                 # Get table count
                 try:
@@ -2173,10 +1678,10 @@ class EnhancedSQLShell:
                 except:
                     db_info = ""
             else:
-                db_status = f"{Colors.BRIGHT_RED}Not connected{Colors.RESET}"
+                db_status = "Not connected"
                 db_info = ""
         except:
-            db_status = f"{Colors.BRIGHT_RED}Database manager unavailable{Colors.RESET}"
+            db_status = "Database manager unavailable"
             db_info = ""
         
         # Memory usage (if available)
@@ -2190,49 +1695,53 @@ class EnhancedSQLShell:
         
         status_info = f"""
 
-{Colors.BOLD}Database Connection{Colors.RESET}
+Database Connection
   Current database: {db_status}{db_info}
-  Available databases: {Colors.BRIGHT_BLUE}{len(getattr(db_manager, 'databases', []))}{Colors.RESET}
+  Available databases: {len(getattr(db_manager, 'databases', []))}
 
-{Colors.BOLD}📈 Session Statistics{Colors.RESET}
-  Queries executed: {Colors.BRIGHT_BLUE}{self.query_count:,}{Colors.RESET}
-  Session uptime: {Colors.BRIGHT_BLUE}{uptime}{Colors.RESET}
-  Memory usage: {Colors.BRIGHT_BLUE}{memory_info}{Colors.RESET}
+Session Statistics
+  Queries executed: {self.query_count:,}
+  Session uptime: {uptime}
+  Memory usage: {memory_info}
 
-{Colors.BOLD}⚙️  Configuration{Colors.RESET}
-  Query timing: {Colors.BRIGHT_GREEN if self.config.timing else Colors.BRIGHT_RED}{'ON' if self.config.timing else 'OFF'}{Colors.RESET}
-  Query echo: {Colors.BRIGHT_GREEN if self.config.echo_queries else Colors.BRIGHT_RED}{'ON' if self.config.echo_queries else 'OFF'}{Colors.RESET}
-  Table format: {Colors.BRIGHT_BLUE}{self.config.table_format}{Colors.RESET}
-  Auto-reload: {Colors.BRIGHT_GREEN if getattr(self.config, 'auto_reload', True) else Colors.BRIGHT_RED}{'ON' if getattr(self.config, 'auto_reload', True) else 'OFF'}{Colors.RESET}
+Configuration
+  Query timing: {'ON' if self.config.timing else 'OFF'}
+  Query echo: {'ON' if self.config.echo_queries else 'OFF'}
+  Table format: {self.config.table_format}
+  Display mode: {getattr(self.config, 'display_mode', 'auto')}
+  Auto-reload: {'ON' if getattr(self.config, 'auto_reload', True) else 'OFF'}
+  Wide table detection: {'ON' if getattr(self.config, 'auto_detect_wide', False) else 'OFF'}
   
-{Colors.BOLD}Hot-Reload Status{Colors.RESET}
-  Registered modules: {Colors.BRIGHT_BLUE}{len(MODULE_REGISTRY)}{Colors.RESET}
-  Last result rows: {Colors.BRIGHT_BLUE}{len(self.config.last_result) if self.config.last_result else 0:,}{Colors.RESET}
+Hot-Reload Status
+  Registered modules: {len(MODULE_REGISTRY)}
+  Last result rows: {len(self.config.last_result) if self.config.last_result else 0:,}
 """
         print(status_info)
 
 
 def main():
-    os.system('cls' if os.name == 'nt' else 'clear')
     """Enhanced main entry point with better argument handling"""
+    os.system('cls' if os.name == 'nt' else 'clear')
+    
     parser = argparse.ArgumentParser(
-        description='',
+        
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   myshell                          # Start interactive shell
   myshell --execute "SELECT * FROM users;"  # Execute query and exit
-  myshell --no-color               # Disable colored output
   myshell --config /path/config.json       # Use custom config file
   
 Hot-reload commands:
   \\r, \\reload                     # Reload SQL engine modules
   \\modules                        # List loaded modules
+  
+Multi-query support:
+  INSERT INTO users VALUES (1, 'John'); INSERT INTO users VALUES (2, 'Jane');
+  Use Ctrl+Enter for new lines within queries
         """
     )
     
-    parser.add_argument('--no-color', action='store_true', 
-                       help='Disable colored output')
     parser.add_argument('--config', 
                        help='Path to config file')
     parser.add_argument('--execute', '-e', 
@@ -2262,22 +1771,19 @@ Hot-reload commands:
         shell = EnhancedSQLShell()
         
         # Apply command line options
-        if args.no_color:
-            shell.config.colorize_output = False
-        
         if args.debug:
             shell.config.debug_mode = True
             shell.config.reload_on_error = True
-            print(f"{Colors.BRIGHT_YELLOW}🐛 Debug mode enabled{Colors.RESET}")
+            print("Debug mode enabled")
         
         if args.config:
             # Load custom config file
             try:
                 shell.config.config_file = Path(args.config)
                 shell.config.load_config()
-                print(f"{Colors.BRIGHT_GREEN}Loaded config from {args.config}{Colors.RESET}")
+                print(f"Loaded config from {args.config}")
             except Exception as e:
-                print(f"{Colors.BRIGHT_RED}Failed to load config: {e}{Colors.RESET}")
+                print(f"Failed to load config: {e}")
         
         # Handle one-time operations
         if args.execute:
@@ -2293,15 +1799,14 @@ Hot-reload commands:
         shell.run()
         
     except KeyboardInterrupt:
-        print(f"\n{Colors.BRIGHT_GREEN}Interrupted by user{Colors.RESET}")
+        print("\nInterrupted by user")
         sys.exit(0)
     except Exception as e:
-        print(f"{Colors.BRIGHT_RED}Fatal error: {e}{Colors.RESET}")
+        print(f"Fatal error: {e}")
         if args.debug:
-            print(f"{Colors.BRIGHT_BLACK}{traceback.format_exc()}{Colors.RESET}")
+            print(f"{traceback.format_exc()}")
         sys.exit(1)
 
 
 if __name__ == '__main__':
     main()
-    
