@@ -1,3 +1,13 @@
+from database_manager import DatabaseManager, Table
+from sql_ast import *
+from database_manager import Table
+import re
+from datatypes import *
+from errors import *
+import random
+db_manager = DatabaseManager()
+
+
 from sql_ast import *
 from database_manager import Table
 import re
@@ -41,6 +51,8 @@ def execute_select_query(ast, database):
     all_ids = []
     for col in ast.columns:
         all_ids.extend(extract_identifiers(col))
+        
+    
     all_where_ids = []
     all_where_ids = extract_identifiers(ast.where)
     for column in all_where_ids:
@@ -452,13 +464,23 @@ def execute_use_statement(ast, database):
         database.save_database_file()
 
 
-
 def extract_identifiers(expr):
     """Recursively extract all column identifiers from an expression object."""
     
     if isinstance(expr, ColumnExpression):
         return [expr.column_name]
-
+    elif isinstance(expr, SelectStatement):
+        # Extract identifiers from subquery
+        ids = []
+        if expr.columns:
+            for col in expr.columns:
+                ids.extend(extract_identifiers(col))
+        if expr.function_columns:
+            for col in expr.function_columns:
+                ids.extend(extract_identifiers(col))
+        if expr.where:
+            ids.extend(extract_identifiers(expr.where))
+        return ids
     elif isinstance(expr, BinaryOperation):
         return extract_identifiers(expr.left) + extract_identifiers(expr.right)
     elif isinstance(expr, ConditionExpr):
@@ -467,9 +489,7 @@ def extract_identifiers(expr):
         ids = []
         ids.extend(extract_identifiers(expr.expression))
         return ids
-
     elif isinstance(expr, Columns):  
-        # in case you want to pass a Columns wrapper
         return extract_identifiers(expr.col_object)
 
     return []  # literals, constants, etc.

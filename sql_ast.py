@@ -2,6 +2,15 @@ import errors
 from datatypes import *
 import math
 import re
+def get_execute_function():
+    from utilities import execute
+    return execute
+
+def get_db_manager():
+    from utilities import db_manager
+    return db_manager
+
+
 
 
 class SelectStatement:
@@ -9,7 +18,7 @@ class SelectStatement:
     __slots__ = ['columns', 'function_columns', 'table', 'where', 'distinct', 
                  'order_by', 'group_by', 'having', 'offset', 'limit']
     
-    def __init__(self, columns = None, function_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None, offset = None, limit = None):
+    def __init__(self, columns = None, function_columns = None, table = None, where = None, distinct = False, order_by = None, group_by = None, having = None, offset = None, limit = None, name = "SELECT_STATEMENT"):
         
         self.columns = columns
         self.function_columns = function_columns
@@ -21,6 +30,21 @@ class SelectStatement:
         self.having = having
         self.offset = offset
         self.limit = limit
+        
+        
+        
+    def evaluate(self, row, schema):
+        execute_fn = get_execute_function()
+        db_mgr = get_db_manager()
+        
+        result = execute_fn(self, db_mgr.active_db)
+        if result and len(result) > 0:
+            if len(result[0]) == 1:
+                first_key = list(result[0].keys())[0]
+                return result[0][first_key]
+            else:
+                return result[0]
+        return None
         
 class Columns:
     def __init__(self, col_object, alias = None):
@@ -449,6 +473,8 @@ class ConditionExpr(Expression):
             if isinstance(other_expr, ColumnExpression):
                 expected_type = schema[other_expr.column_name]
                 return expr.evaluate(row, schema, expected_type)
+        elif isinstance(expr, SelectStatement):
+            return expr.evaluate(row, schema)
         
         return expr.evaluate(row, schema)
 
@@ -952,3 +978,38 @@ class CaseWhen(Expression):
             return self.case_else.evaluate(eval_row, schema)
         
         return None
+    
+class TableReference(Expression):
+    def __init__(self, table_name, alias=None):
+        self.table_name = table_name
+        self.alias = alias  # 'e' for 'employees as e'
+    
+    def evaluate(self):
+        return self.table_name
+        
+        
+class QualifiedColumnExpression(ColumnExpression):
+    def __init__(self, table_name, column_name, alias=None):
+        self.table_name = table_name
+        self.column_name = column_name
+        self.alias = alias
+        
+def evaluate(self, row, schema):
+        # For now, just use column_name (single table)
+        # Later: resolve from specific table in joins
+        return super().evaluate(row, schema)
+    
+    
+class Exists(Expression):
+    def __init__(self, subquery, name = "EXISTS", alias  = None):
+        self.subquery = subquery
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row, schema):
+        
+        res = self.subquery.evaluate(row, schema)
+        if res : return True
+        return False
+        
+        

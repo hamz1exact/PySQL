@@ -1,11 +1,12 @@
 from sql_ast import *
 from executor import execute 
 from datetime import datetime
-from database_manager import DatabaseManager, Table
+# from database_manager import DatabaseManager, Table
+from utilities import db_manager
 from datatypes import *
 
 
-db_manager = DatabaseManager()
+db_manager = db_manager
 
 class Lexer:
     # Keywords and data types
@@ -24,6 +25,10 @@ class Lexer:
     }
     concat = {
         "CONCAT"
+    }
+    
+    exists = {
+        "EXISTS"
     }
     
     between = {
@@ -204,6 +209,9 @@ class Lexer:
                 elif upper_word in Lexer.nullif:
                     self.tokens.append(("NULLIF", "NULLIF"))
                     
+                elif upper_word in Lexer.exists:
+                    self.tokens.append(("EXISTS","EXISTS"))
+                    
                 elif upper_word in Lexer.extract:
                     self.tokens.append(("EXTRACT", "EXTRACT")) 
                     
@@ -300,6 +308,13 @@ class Lexer:
             if char in ' \t\n':
                 self.pos += 1
                 continue
+            if char == '.':
+                if self.tokens[-1][0] == "IDENTIFIER":
+                    ref = self.tokens.pop()[1]
+                    self.tokens.append(("REFERENCE", ref))
+                self.tokens.append(("DOT", "DOT"))
+                self.pos += 1
+                continue
 
             # --- Comma ---
             if char == ',':
@@ -332,7 +347,7 @@ class Lexer:
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         
-        # print(self.tokens)
+        
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -347,7 +362,9 @@ class Lexer:
 
     def getFullInput(self):
         key = ""
-        while self.pos < len(self.query) and (self.query[self.pos].isalnum() or self.query[self.pos] in Lexer.SpecialCharacters):
+        while self.pos < len(self.query) and (self.query[self.pos].isalnum() or self.query[self.pos] in Lexer.SpecialCharacters) :
+            if self.query[self.pos] == '.':
+                break
             key += self.query[self.pos]
             self.pos += 1
         return key
@@ -373,7 +390,7 @@ class Lexer:
 class Parser:
     
     _AGG_FUNCS = {"COUNT", "SUM", "AVG", "MIN", "MAX"}
-    
+
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0 
@@ -396,43 +413,45 @@ class Parser:
             raise SyntaxError(f"Expected token type '{token_type}', got '{actual_type}' at position {self.pos}")
 
     def parse_select_statement(self):
-        where = None
-        unique = False
-        order_in = []
-        group_in = []
-        having_in = None
-        limit, offset = None, None
-        self.eat("SELECT")
-        if self.current_token() and self.current_token()[0] == "DISTINCT":
-            self.eat("DISTINCT")
-            unique = True
-        columns, function_columns = self.parse_columns()
+        expr = self.parse_expression()
+        return expr
+        # where = None
+        # unique = False
+        # order_in = []
+        # group_in = []
+        # having_in = None
+        # limit, offset = None, None
+        # table = None
+        # self.eat("SELECT")
+        # if self.current_token() and self.current_token()[0] == "DISTINCT":
+        #     self.eat("DISTINCT")
+        #     unique = True
+        # columns, function_columns = self.parse_columns()
+        # self.eat("FROM")
+        # table = self.parse_table()
+        # token = self.current_token()
         
-        self.eat("FROM")
-        table = self.parse_table()
-        token = self.current_token()
-        
-        if token and token[0] == "WHERE":
-            self.eat("WHERE")
-            where = self.parse_expression(context = "WHERE")
+        # if token and token[0] == "WHERE":
+        #     self.eat("WHERE")
+        #     where = self.parse_expression(context = "WHERE")
             
             
-        if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
-            group_in = self.group_by()
-            if self.current_token() and self.current_token()[0] == "HAVING":
-                self.eat("HAVING")
-                having_in = self.parse_expression(context = "HAVING")
+        # if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
+        #     group_in = self.group_by()
+        #     if self.current_token() and self.current_token()[0] == "HAVING":
+        #         self.eat("HAVING")
+        #         having_in = self.parse_expression(context = "HAVING")
                 
-        if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
-            order_in = self.order_by()
-        if self.current_token() and self.current_token()[0] == "OFFSET":
-            raise ValueError("The OFFSET clause must be used with a LIMIT clause.")
-        if self.current_token() and self.current_token()[0] == "LIMIT":
-            limit = self.eat("LIMIT")[1]
-            if self.current_token() and self.current_token()[0] == "OFFSET":
-                offset = self.eat("OFFSET")[1]
-        self.eat("SEMICOLON")
-        return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
+        # if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
+        #     order_in = self.order_by()
+        # if self.current_token() and self.current_token()[0] == "OFFSET":
+        #     raise ValueError("The OFFSET clause must be used with a LIMIT clause.")
+        # if self.current_token() and self.current_token()[0] == "LIMIT":
+        #     limit = self.eat("LIMIT")[1]
+        #     if self.current_token() and self.current_token()[0] == "OFFSET":
+        #         offset = self.eat("OFFSET")[1]
+        # self.eat("SEMICOLON")
+        # return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
 
               
     def parse_columns(self):
@@ -442,7 +461,6 @@ class Parser:
         self._select_aliases = {}
         while True:
             expr = self.parse_addition(context=None)
-            
             if self.current_token() and self.current_token()[0] == "AS":
                 self.eat("AS")
                 alias_name = (self.eat(self.current_token()[0])[1]).lower()
@@ -461,29 +479,22 @@ class Parser:
                 break
         
         return columns, function_columns
+    
+    
+    def parse_table(self):
+        table_name = self.eat("IDENTIFIER")[1]
+        alias = None
+        if self.current_token() and self.current_token()[0] == "AS":
+            self.eat("AS")
+            alias = self.eat("IDENTIFIER")[1]
+        elif self.current_token() and self.current_token()[0] == "IDENTIFIER":
+            alias = self.eat("IDENTIFIER")[1]
+            
+        return TableReference(table_name, alias)
+            
+            
+        
 
-    def parse_special_columns(self):
-        is_unique = False
-        if self.current_token() and self.current_token()[0] == "FUNC":
-            func_name = self.eat("FUNC")[1]
-            self.eat("OPEN_PAREN")
-            if self.current_token() and self.current_token()[0] == "DISTINCT":
-                self.eat("DISTINCT")
-                is_unique = True
-            if self.current_token() and self.current_token()[0] == "STAR":
-                arg = self.eat("STAR")[1]
-            else:
-                arg = self.eat("IDENTIFIER")[1]
-            self.eat("CLOSE_PAREN")
-            if self.current_token() and self.current_token()[0] == "AS":
-                self.eat("AS")
-                if self.current_token()[0] == "STRING": col_alias = self.eat("STRING")[1]
-                elif self.current_token()[0] == "IDENTIFIER": col_alias = self.eat("IDENTIFIER")[1]
-                else:
-                    raise SyntaxError(f"Invalid alias '{self.current_token()[1]}'. Aliases must be identifiers or strings.")
-            else:
-                col_alias = f"{func_name}({arg})"
-            return FunctionCall(func_name, arg, alias=col_alias, distinct=is_unique)
             
 
     def group_by(self):
@@ -595,8 +606,6 @@ class Parser:
             return left_node
 
 
-    def parse_table(self):
-        return self.eat("IDENTIFIER")[1]
     
     
 
@@ -907,7 +916,6 @@ class Parser:
             # Skip comma if present
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
-            print(col_name)
 
         self.eat("CLOSE_PAREN")  # )
         self.eat("SEMICOLON")
@@ -1041,6 +1049,7 @@ class Parser:
     
     
     def parse_factor(self, context = None):
+
         
         token = self.current_token()
         
@@ -1130,8 +1139,6 @@ class Parser:
             return Extract(expression, part)
             
 
-            
-        
         elif token[0] == "COALESCE":
             expressions = []
             self.eat("COALESCE")
@@ -1190,9 +1197,74 @@ class Parser:
             self.eat("CASE_WHEN")
             return CaseWhen(expressions, actions, case_else=case_else)            
                     
-            
-            
 
+        elif token[0] == "SELECT":
+            self._requested_pointer = None
+            self._pointers = {}
+            where = None
+            unique = False
+            order_in = []
+            group_in = []
+            having_in = None
+            limit, offset = None, None
+            table_ref = None
+            self.eat("SELECT")
+            if self.current_token() and self.current_token()[0] == "DISTINCT":
+                self.eat("DISTINCT")
+                unique = True
+            columns, function_columns = self.parse_columns()
+            if self.current_token()[0] == "FROM":
+                self.eat("FROM")
+                table_ref = self.parse_table()
+                if table_ref.alias:
+                    if self._requested_pointer is not None and table_ref.alias != self._requested_pointer:
+                        raise ValueError(f"""invalid reference to FROM-clause entry for table "{table_ref.table_name}"\nPerhaps you meant to reference the table alias '{table_ref.alias}'.""")
+                    self._pointers[table_ref.alias] = table_ref.table_name
+                elif table_ref.alias is None and self._requested_pointer is not None:
+                    raise ValueError(f""" missing FROM-clause alias for table {table_ref.table_name} """)
+                
+            if self.current_token() and self.current_token()[0] == "WHERE":
+                self.eat("WHERE")
+                where = self.parse_expression(context = "WHERE")
+                
+            if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
+                group_in = self.group_by()
+                if self.current_token() and self.current_token()[0] == "HAVING":
+                    self.eat("HAVING")
+                    having_in = self.parse_expression(context = "HAVING")
+                    
+            if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
+                order_in = self.order_by()
+            if self.current_token() and self.current_token()[0] == "OFFSET":
+                raise ValueError("The OFFSET clause must be used with a LIMIT clause.")
+            if self.current_token() and self.current_token()[0] == "LIMIT":
+                limit = self.eat("LIMIT")[1]
+                if self.current_token() and self.current_token()[0] == "OFFSET":
+                    offset = self.eat("OFFSET")[1]
+            if context is None:
+                self.eat("SEMICOLON")
+            
+            return SelectStatement(columns, function_columns, table_ref, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
+            
+        elif token[0] == "REFERENCE":
+            table_alias = self.eat("REFERENCE")[1]
+            self._requested_pointer = table_alias
+            self.eat("DOT")
+            table_name = self.eat(self.current_token()[0])[1]
+            actual_table = self._pointers.get(table_alias, table_alias)
+            return QualifiedColumnExpression(actual_table, table_name)
+                
+                
+        elif token[0] == "EXISTS":
+            self.eat("EXISTS")
+            if context != "WHERE":
+                raise ValueError("EXISTS Function Works Only With WHERE Clause")
+            subquery = self.parse_expression("WHERE")
+            if not isinstance(subquery, SelectStatement):
+                raise ValueError('EXISTS function works only with subqueries')
+            return Exists(subquery)
+                
+    
         
         elif token[0] == "FUNC":
             distinct = False
