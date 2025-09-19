@@ -4,12 +4,13 @@ import msgpack
 from datatypes import datatypes, SERIAL # assuming Lexer.datatypes contains your SQLType classes
 import random
 class Table:
-    def __init__(self, name, schema, defaults=None, auto=None):
+    def __init__(self, name, schema, defaults=None, auto=None, constraints = None):
         self.name = name
         self.schema = schema                  # dict[col_name] = SQLType class
         self.defaults = defaults or {}        # dict[col_name] = SQLType instance
         self.auto = auto or {}                # dict[col_name] = SQLType instance (SERIAL)
         self.rows = []                       # list of dicts with parsed Python values
+        self.constraints = constraints or {}
 
 class DatabaseManager:
     def __init__(self):
@@ -92,6 +93,8 @@ class DatabaseManager:
 
                 # Reconstruct auto values
                 auto = {col: schema[col](tbl_dict["auto"][col]) for col in tbl_dict.get("auto", {})}
+                
+                constraints = {col: schema[col](tbl_dict["constraints"][col]) for col in tbl_dict.get("constraints", {})}
 
                 # Reconstruct rows
                 rows = []
@@ -99,7 +102,7 @@ class DatabaseManager:
                     row = {col: schema[col](row_dict[col]) for col in row_dict}
                     rows.append(row)
 
-                table = Table(tbl_name, schema, defaults, auto)
+                table = Table(tbl_name, schema, defaults, auto, constraints)
                 table.rows = rows
 
                 # ✅ Fix SERIAL counters
@@ -140,6 +143,7 @@ class DatabaseManager:
                 # Serialize default and auto values
                 "defaults": {col: serialize_value(table.defaults[col]) for col in table.defaults},
                 "auto": {col: serialize_value(table.auto[col]) for col in table.auto},
+                "constraints": {col: serialize_value(table.constraints[col]) for col in table.constraints},
                 "rows": [
                     {col: serialize_value(row[col]) for col in row}
                     for row in table.rows

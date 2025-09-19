@@ -66,10 +66,14 @@ class LogicalCondition:
         self.right = right
 
 class InsertStatement:
-    def __init__(self, table, columns, values):
+    def __init__(self, table, columns, values, conflict = False, conflict_targets = None, action = None, update_cols = None):
         self.table = table
         self.columns = columns
         self.values = values
+        self.conflict = conflict
+        self.conflict_targets = conflict_targets
+        self.action = action
+        self.update_cols = update_cols
         
 class UpdateStatement:
     def __init__(self, table, columns, where):
@@ -87,11 +91,12 @@ class CreateDatabseStatement:
         self.database_name = database_name
         
 class CreateTableStatement:
-    def __init__(self, table_name, schema, defaults, auto):
+    def __init__(self, table_name, schema, defaults, auto, constraints):
         self.table_name = table_name
         self.schema = schema
         self.defaults = defaults
         self.auto = auto
+        self.constraints = constraints
 
 class UseStatement:
     def __init__(self, database_name):

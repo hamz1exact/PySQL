@@ -374,40 +374,54 @@ def execute_insert_query(ast, database):
     table_name = ast.table
     columns = ast.columns
     values = ast.values
+    
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
+    
     table_obj = database[table_name]
     table_rows = table_obj.rows
     table_schema = table_obj.schema
     table_default = table_obj.defaults
     table_auto = table_obj.auto
+    table_constraints = getattr(table_obj, 'constraints', {})
     
     if len(values) != len(columns):
         raise ValueError(
             f"Number of values ({len(values)}) does not match number of columns ({len(columns)}). "
             f"Columns: {columns}, Values: {values}"
         )
+    
+    # Build new row
     new_row = {}
+    temp_auto_values = {}
     for col_object, col_val in table_schema.items():
         if col_object in columns:
             idx = columns.index(col_object)
             val = values[idx]
             new_row[col_object] = table_schema[col_object](val)
-        elif col_object in table_auto:
-            new_row[col_object] = table_auto[col_object].next()
+        elif col_object in table_auto: 
+            temp_auto_values[col_object] = table_auto[col_object].current
+            new_row[col_object] = temp_auto_values[col_object]
         elif col_object in table_default:
-            if isinstance(table_default[col_object], TIMESTAMP):
-                new_row[col_object] =  datetime.now() 
-            elif isinstance(table_default[col_object], DATE):
-                new_row[col_object] = date.today()
-            elif isinstance(table_default[col_object], TIME):
-                new_row[col_object] = datetime.now().time().strftime("%H:%M:%S")
+            default_expr = table_default[col_object]
+            if hasattr(default_expr, 'evaluate'):
+                raw_value = default_expr.evaluate()
+                new_row[col_object] = table_schema[col_object](raw_value)
             else:
-                new_row[col_object] = table_default[col_object]
+                # Backwards compatibility for non-Expression defaults
+                new_row[col_object] = default_expr
         else:
-            new_row[col_object] = None     
-    table_rows.append(new_row)
-    print(f"Row successfully inserted into table '{table_name}'")
+            new_row[col_object] = None
+    violation = find_constraint_violation(table_obj, new_row)
+    should_insert = handle_conflict_resolution(ast, violation, table_obj, new_row)
+    
+    for col, val in temp_auto_values.items():
+        table_auto[col].current += 1
+
+    if should_insert:
+        table_rows.append(new_row)
+        print(f"Row successfully inserted into table '{table_name}'")
+
     
 def execute_update_query(ast, database):
     table_name = ast.table
@@ -460,7 +474,8 @@ def execute_create_database_statement(ast, database):
         database.use_database(ast.database_name)
         
 def execute_create_table_statement(ast, database):
-        table = Table(ast.table_name, ast.schema, ast.defaults, ast.auto)
+        print(ast.constraints)
+        table = Table(ast.table_name, ast.schema, ast.defaults, ast.auto, ast.constraints)
         database.active_db[ast.table_name] = table
         database.save_database_file()
         
@@ -530,7 +545,47 @@ def get_expr_output_name(expr):
         right = get_expr_output_name(expr.right)
         return f"{left}{expr.operator}{right}"
     
-
+def check_duplicate_constraint_violation(table_obj, new_row, columns_being_inserted):
+    """
+    Check if inserting new_row would violate PRIMARY KEY or UNIQUE constraints.
+    
+    Args:
+        table_obj: Table object with schema, constraints, and rows
+        new_row: Dictionary of column_name -> value for the row being inserted
+        columns_being_inserted: List of column names that are being explicitly inserted
+    
+    Returns:
+        True if duplicate found (violation), False if no violation
+    """
+    
+    # Check each column that has constraints
+    for col_name, constraint in table_obj.constraints.items():
+        if constraint in ["PRIMARY KEY", "UNIQUE"]:
+            
+            # Get the value that will be inserted for this column
+            new_value = new_row.get(col_name)
+            
+            # Skip NULL values - they don't violate uniqueness constraints
+            if new_value is None:
+                continue
+            
+            # Extract the actual value if it's wrapped in SQLType
+            if hasattr(new_value, 'value'):
+                new_value = new_value.value
+            
+            # Check against existing rows
+            for existing_row in table_obj.rows:
+                existing_value = existing_row.get(col_name)
+                
+                # Extract actual value if wrapped in SQLType
+                if hasattr(existing_value, 'value'):
+                    existing_value = existing_value.value
+                
+                # Compare values
+                if existing_value == new_value:
+                    return True  # Duplicate found - violation!
+    
+    return False  # No violations found
 def get_expr_name(expr):
     call_id = str(id(expr))
     call_id = call_id[-5:]
@@ -683,3 +738,99 @@ def expressions_are_equivalent(expr1, expr2):
     else:
         # Fallback: compare string representations
         return str(expr1) == str(expr2)
+
+
+def handle_conflict_resolution(ast, violation, table_obj, new_row):
+    """
+    Handle ON CONFLICT logic
+    Returns True if row should be inserted, False if it should be skipped
+    """
+    if not violation:
+        return True  # No conflict, proceed with insert
+        
+    conflict_col, constraint_type, duplicate_value = violation
+    
+    if not ast.conflict:
+        # No ON CONFLICT clause specified, raise error
+        raise ValueError(f"Duplicate value '{duplicate_value}' for {constraint_type} column '{conflict_col}'")
+    
+    # Validate conflict targets if specified
+    if ast.conflict_targets:
+        if conflict_col not in ast.conflict_targets:
+            raise ValueError(f"There is no unique constraint matching the ON CONFLICT specification. "
+                           f"Constraint violation on '{conflict_col}' but targets are {ast.conflict_targets}")
+    else:
+        # If no specific targets, ON CONFLICT applies to any unique/primary key violation
+        pass
+    
+    # Handle conflict actions
+    if ast.action == "NOTHING":
+        print(f"Row ignored due to ON CONFLICT DO NOTHING: "
+              f"Duplicate value '{duplicate_value}' for {constraint_type} column '{conflict_col}'")
+        return False  # Don't insert
+        
+    elif ast.action == "UPDATE":
+        if not ast.update_cols:
+            raise ValueError("ON CONFLICT DO UPDATE requires SET clause")
+            
+        # Update the conflicting row instead of inserting new one
+        table_rows = table_obj.rows
+        table_schema = table_obj.schema
+        
+        # Find the existing row that conflicts
+        for existing_row in table_rows:
+            existing_value = existing_row.get(conflict_col)
+            if hasattr(existing_value, 'value'):
+                existing_value = existing_value.value
+                
+            if existing_value == duplicate_value:
+                # Update this row
+                for col, value in ast.update_cols.items():
+                    if col not in table_schema:
+                        raise ValueError(f"Unknown column '{col}' in ON CONFLICT DO UPDATE SET")
+                    existing_row[col] = table_schema[col](value)
+                
+                print(f"Row updated due to ON CONFLICT DO UPDATE: "
+                      f"Updated existing row with {constraint_type} '{conflict_col}' = '{duplicate_value}'")
+                return False  # Don't insert new row, we updated existing
+        
+        # This shouldn't happen if our constraint detection is correct
+        raise ValueError("Internal error: Could not find conflicting row for update")
+    
+    return True
+
+
+def find_constraint_violation(table_obj, new_row):
+    """
+    Returns (column_name, constraint_type, duplicate_value) if violation found, None otherwise
+    """
+    table_constraints = getattr(table_obj, 'constraints', {})
+    table_rows = table_obj.rows
+    
+    for col_name, constraint in table_constraints.items():
+        # Get constraint value (handle both string and object constraints)
+        constraint_value = constraint.value if hasattr(constraint, 'value') else constraint
+        
+        if constraint_value not in ["PRIMARY KEY", "UNIQUE"]:
+            continue
+            
+        # Get new value
+        new_value = new_row.get(col_name)
+        if hasattr(new_value, 'value'):
+            new_value = new_value.value
+            
+        # Skip NULL values (NULL doesn't violate uniqueness in most SQL systems)
+        if new_value is None:
+            continue
+            
+        # Check against existing rows
+        for existing_row in table_rows:
+            existing_value = existing_row.get(col_name)
+            if hasattr(existing_value, 'value'):
+                existing_value = existing_value.value
+                
+            if existing_value == new_value:
+                constraint_type = "primary key" if constraint_value == "PRIMARY KEY" else "unique"
+                return col_name, constraint_type, new_value
+    
+    return None

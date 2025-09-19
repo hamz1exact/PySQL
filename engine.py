@@ -14,6 +14,8 @@ class Lexer:
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT")
+    
+    constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
         "NONE", "NULL", "EMPTY"
     } 
@@ -130,8 +132,10 @@ class Lexer:
         "MAX",
         "MIN",
         "AVG"
-        
         }
+    conflict_keywords = {
+        "ON", "CONFLICT", "DO"
+    }
     datatypes = {
         
         "INT": INT,
@@ -184,19 +188,42 @@ class Lexer:
                 word = self.getFullInput()
                 upper_word = word.upper()
                 if upper_word in Lexer.keywords:
-                    self.tokens.append((upper_word, upper_word))
+                    if len(self.tokens)>1 and self.tokens[-1][1] == "DO":
+                        self.tokens.append(("ACTION", upper_word))
+                    else:
+                        self.tokens.append((upper_word, upper_word))
                     
                 elif upper_word in Lexer.date_and_time:
                     self.tokens.append(("DATE_AND_TIME", upper_word)) 
                 elif upper_word in Lexer.limit_keys:
                     self.tokens.append(("LIMIT", "LIMIT"))
                     
+                elif upper_word in Lexer.constraints:
+                    if upper_word == "NULL":
+                        if self.tokens[-1][0] == "NOT" and self.tokens[len(self.tokens)-2][1] != "IS":
+                            self.tokens.pop()
+                            self.tokens.append(("CONST", "NOT NULL"))
+                        else:
+                            self.tokens.append(("NULL", None))
+                    elif upper_word == "KEY":
+                        if self.tokens[-1][1] == "PRIMARY":
+                            self.tokens.pop()
+                            self.tokens.append(("CONST", "PRIMARY KEY"))
+                        else:
+                            raise ValueError("Perhaps You miss PRIMARY key word")
+                    else:
+                        self.tokens.append(("CONST", upper_word))
+                            
+                    
                 elif upper_word in Lexer.case_when:
                     self.tokens.append(("CASE_WHEN", upper_word))
                  
                 elif upper_word in Lexer.coalesce:
                     self.tokens.append(("COALESCE", "COALESCE"))
-                    
+                
+                elif upper_word in Lexer.conflict_keywords:
+                    self.tokens.append(("CONF", upper_word))
+            
                 elif upper_word in Lexer.concat:
                     self.tokens.append(("CONCAT", "CONCAT"))
                     
@@ -292,7 +319,11 @@ class Lexer:
                     self.tokens.append(("FUNC", upper_word))
                     
                 else:
-                    self.tokens.append(("IDENTIFIER", word))
+                    if self.tokens[-1][1] == "DO":
+                        
+                        self.tokens.append(("ACTION", word.upper()))
+                    else:
+                        self.tokens.append(("IDENTIFIER", word))
                 continue
 
             # --- Strings ---
@@ -354,7 +385,7 @@ class Lexer:
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         
-        # print(self.tokens)
+        print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -540,14 +571,34 @@ class Parser:
     
 
     def parse_insert_statement(self):
+        conflict = False
+        conflict_targets = None
+        action = None
+        update_cols = None
         self.eat("INSERT")
         self.eat("INTO")
         table = self.parse_insert_table()
         columns = self.parse_insert_columns()
         self.eat("VALUES")
         values = self.parse_insert_values()
+        if self.current_token() and self.current_token()[0] == "CONF":
+            self.eat("CONF")
+            self.eat("CONF")
+            conflict = True
+            if self.current_token() and self.current_token()[1] == '(':
+                self.eat("OPEN_PAREN")
+                conflict_target = self.eat("IDENTIFIER")[1]
+                self.eat("CLOSE_PAREN")
+            self.eat("CONF")
+            action = self.eat("ACTION")[1]
+            if action == "UPDATE":
+                self.eat("SET")
+                update_cols = self.parse_update_columns()
         self.eat("SEMICOLON")
-        return InsertStatement(table, columns, values)
+
+        return InsertStatement(table, columns, values, conflict, conflict_targets, action, update_cols)
+    
+    
     
     def parse_insert_table(self):
         return self.eat("IDENTIFIER")[1]
@@ -555,6 +606,7 @@ class Parser:
     
 
     def parse_insert_columns(self):
+        
         self.eat("OPEN_PAREN")
         columns = []
         while self.current_token() and  (self.current_token()[0] == "IDENTIFIER" or self.current_token()[0] == "COMMA"):
@@ -667,7 +719,9 @@ class Parser:
         schema = {}
         auto = {}
         defaults = {} 
+        constraints = {}
         is_serial = False
+        is_default = False
         while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
             # Column name
             col_name = self.eat("IDENTIFIER")[1]
@@ -691,6 +745,7 @@ class Parser:
                     raise ValueError(f"Invalid DEFAULT for column '{col_name}', SERIAL columns cannot have explicit default values.")
                 
                 self.eat("DEFAULT")
+                is_default = True
                 if self.current_token()[0] in ("=", "=="):
                     self.eat("LOW_PRIORITY_OPERATOR")[1]
                     
@@ -709,14 +764,22 @@ class Parser:
                     else:
                         default_value = self.eat(token_type)[1]
                         defaults[col_name] = schema[col_name](default_value)
-                    
+            else:
+                is_default = False
+            if self.current_token() and self.current_token()[0] == "CONST":
+                
+                contr = self.eat("CONST")[1]
+                if contr == "NOT NULL" and is_default:
+                    raise ValueError("if a Column has DEFAULT VALUE it cannot inheritance  NOT NULL constraints")
+                constraints[col_name] = contr
             # Skip comma if present
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")
 
         self.eat("CLOSE_PAREN")  # )
         self.eat("SEMICOLON")
-        return CreateTableStatement(table_name, schema, defaults, auto)
+        print(constraints)
+        return CreateTableStatement(table_name, schema, defaults, auto, constraints)
         
 
 

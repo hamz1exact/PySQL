@@ -322,6 +322,11 @@ class SERIAL(SQLType):
         val = self.current
         self.current += 1
         return val
+    
+    def prev(self):
+        val = self.current
+        self.current -= 1
+        return val
 
     def __str__(self):
         return str(self.current)
