@@ -192,8 +192,10 @@ class DatabaseManager:
             
             
 
+from datetime import datetime, date, time
+
 def serialize_value(value):
-    """Generic serialization that handles any object structure"""
+    """Enhanced serialization that properly handles all object types"""
     if value is None:
         return None
     elif isinstance(value, (str, int, float, bool, list)):
@@ -201,14 +203,28 @@ def serialize_value(value):
     elif isinstance(value, dict):
         # Recursively serialize dictionary values
         return serialize_dict(value)
+    elif isinstance(value, type):
+        # Handle type objects (like INT, VARCHAR classes) - store as reference
+        return {
+            '__type__': 'type_reference',
+            '__name__': value.__name__,
+            '__module__': getattr(value, '__module__', 'builtins')
+        }
     elif isinstance(value, (datetime, date, time)):
         return {
             '__type__': 'datetime_obj',
             '__class__': value.__class__.__name__,
             '__value__': value.isoformat()
         }
+    elif callable(value):
+        # Handle functions/methods - store as string
+        return {
+            '__type__': 'callable_fallback',
+            '__value__': str(value),
+            '__name__': getattr(value, '__name__', 'unknown')
+        }
     elif hasattr(value, '__dict__'):
-        # Handle any custom object with attributes (like ConditionExpr)
+        # Handle custom objects with attributes (like ConditionExpr)
         return {
             '__type__': 'custom_object',
             '__class__': value.__class__.__name__,
@@ -228,10 +244,9 @@ def serialize_dict(data):
     for key, value in data.items():
         result[key] = serialize_value(value)
     return result
-from datetime import datetime, date, time
 
 def deserialize_value(value):
-    """Generic deserialization"""
+    """Enhanced deserialization that properly handles all object types"""
     if not isinstance(value, dict):
         return value
     
@@ -244,17 +259,48 @@ def deserialize_value(value):
     
     value_type = value['__type__']
     
-    if value_type == 'datetime_obj':
+    if value_type == 'type_reference':
+        # Recreate type references (like INT, VARCHAR)
+        type_name = value['__name__']
+        module_name = value.get('__module__', 'builtins')
+        
+        try:
+            if module_name == 'builtins':
+                return getattr(__builtins__, type_name, str)
+            else:
+                # Try to get from datatypes first (for your SQL types)
+                if 'datatypes' in globals() and type_name in datatypes:
+                    return datatypes[type_name]
+                
+                # Try importing the module
+                module = __import__(module_name, fromlist=[type_name])
+                return getattr(module, type_name, str)
+        except (ImportError, AttributeError):
+            print(f"Warning: Could not find type {type_name}, using str as fallback")
+            return str
+    
+    elif value_type == 'datetime_obj':
         # Recreate datetime objects
         class_name = value['__class__']
         iso_value = value['__value__']
         
-        if class_name == 'datetime':
-            return datetime.fromisoformat(iso_value)
-        elif class_name == 'date':
-            return datetime.fromisoformat(iso_value).date()
-        elif class_name == 'time':
-            return datetime.fromisoformat(f"1970-01-01T{iso_value}").time()
+        try:
+            if class_name == 'datetime':
+                return datetime.fromisoformat(iso_value)
+            elif class_name == 'date':
+                return datetime.fromisoformat(iso_value).date()
+            elif class_name == 'time':
+                return datetime.fromisoformat(f"1970-01-01T{iso_value}").time()
+        except ValueError:
+            print(f"Warning: Could not parse datetime {iso_value}")
+            return iso_value
+    
+    elif value_type == 'callable_fallback':
+        # Can't recreate callables, return a placeholder
+        return value['__value__']
+    
+    elif value_type == 'string_fallback':
+        return value['__value__']
     
     elif value_type == 'custom_object':
         # Recreate custom objects like ConditionExpr
@@ -268,45 +314,69 @@ def deserialize_value(value):
             deserialized_data[key] = deserialize_value(val)
         
         # Try to recreate the object
+        cls = None
+        
         try:
-            if module_name and module_name != '__main__':
-                module = __import__(module_name, fromlist=[class_name])
-                cls = getattr(module, class_name)
-            else:
-                # Try to find the class in globals (for classes defined in main script)
+            # Try different ways to find the class
+            if module_name == 'builtins':
+                cls = getattr(__builtins__, class_name, None)
+            elif module_name and module_name != '__main__':
+                try:
+                    module = __import__(module_name, fromlist=[class_name])
+                    cls = getattr(module, class_name, None)
+                except ImportError:
+                    pass
+            
+            # Try to find in current modules
+            if not cls:
                 import sys
-                cls = None
                 for module in sys.modules.values():
-                    if hasattr(module, class_name):
+                    if module and hasattr(module, class_name):
                         cls = getattr(module, class_name)
                         break
-                
-                if not cls:
-                    # Last resort: try to import from common places
-                    try:
-                        from sql_ast import ConditionExpr  # adjust this import as needed
-                        if class_name == 'ConditionExpr':
-                            cls = ConditionExpr
-                    except ImportError:
-                        pass
             
-            if cls:
-                # Create instance and set attributes
-                obj = cls.__new__(cls)
-                for key, val in deserialized_data.items():
-                    setattr(obj, key, val)
-                return obj
-            else:
-                print(f"Warning: Could not find class {class_name}, returning raw data")
-                return deserialized_data
+            # Specific imports for common classes
+            if not cls:
+                try:
+                    if class_name == 'ConditionExpr':
+                        # Adjust this import to match your project structure
+                        try:
+                            from sql_ast import ConditionExpr
+                            cls = ConditionExpr
+                        except ImportError:
+                            try:
+                                from ast_nodes import ConditionExpr
+                                cls = ConditionExpr
+                            except ImportError:
+                                pass
+                    # Add more specific class imports here as needed
+                except ImportError:
+                    pass
+            
+            # Try to create the object
+            if cls and hasattr(cls, '__new__'):
+                try:
+                    # Prevent trying to instantiate `type` directly
+                    if cls is type:
+                        print(f"Warning: Skipping direct instantiation of 'type', returning raw data")
+                        return deserialized_data
+
+                    obj = cls.__new__(cls)
+                    for key, val in deserialized_data.items():
+                        setattr(obj, key, val)
+                    
+                    # Call __setstate__ if it exists
+                    if hasattr(obj, '__setstate__'):
+                        obj.__setstate__(deserialized_data)
+                    
+                    return obj
+                except Exception as e:
+                    print(f"Warning: Could not create {class_name}: {e}")
+                    return deserialized_data
                 
         except Exception as e:
-            print(f"Warning: Could not recreate {class_name}: {e}")
-            # Return the raw data as fallback
+            print(f"Warning: Error recreating {class_name}: {e}")
             return deserialized_data
-    
-    elif value_type == 'string_fallback':
-        return value['__value__']
     
     # Default: return as-is
     return value
