@@ -1,8 +1,8 @@
 import os
 import platform
 import msgpack
-from datatypes import datatypes, SERIAL  # assuming Lexer.datatypes contains your SQLType classes
-
+from datatypes import datatypes, SERIAL # assuming Lexer.datatypes contains your SQLType classes
+import random
 class Table:
     def __init__(self, name, schema, defaults=None, auto=None):
         self.name = name
@@ -78,40 +78,45 @@ class DatabaseManager:
 
     # ---------------- Table I/O ----------------
     def load_database_file(self):
-        with open(self.active_db_name, "rb") as f:
-            db_data = msgpack.unpack(f)
+        try:
+            with open(self.active_db_name, "rb") as f:
+                db_data = msgpack.unpack(f)
 
-        self.active_db = {}
-        for tbl_name, tbl_dict in db_data.items():
-            # Reconstruct schema classes
-            schema = {col: datatypes[tbl_dict["schema"][col]] for col in tbl_dict["schema"]}
+            self.active_db = {}
+            for tbl_name, tbl_dict in db_data.items():
+                # Reconstruct schema classes
+                schema = {col: datatypes[tbl_dict["schema"][col]] for col in tbl_dict["schema"]}
+                
+                # Reconstruct defaults using SQLType parse
+                defaults = {col: schema[col](tbl_dict["defaults"][col]) for col in tbl_dict.get("defaults", {})}
+
+                # Reconstruct auto values
+                auto = {col: schema[col](tbl_dict["auto"][col]) for col in tbl_dict.get("auto", {})}
+
+                # Reconstruct rows
+                rows = []
+                for row_dict in tbl_dict.get("rows", []):
+                    row = {col: schema[col](row_dict[col]) for col in row_dict}
+                    rows.append(row)
+
+                table = Table(tbl_name, schema, defaults, auto)
+                table.rows = rows
+
+                # ✅ Fix SERIAL counters
+                for col, col_type in schema.items():
+                    if col_type == SERIAL:  # check if this column is SERIAL
+                        max_val = 0
+                        for row in rows:
+                            if row[col] is not None:
+                                max_val = max(max_val, int(row[col].value))
+                        if col in table.auto:
+                            table.auto[col].current = max_val + 1  # resume from last
+
+                self.active_db[tbl_name] = table
+        except:
+            print('You Database is damaged, we create a new one for your, you can  DROP IT anything')
+            self.create_database(f"test({random.randint(1,1000)})")
             
-            # Reconstruct defaults using SQLType parse
-            defaults = {col: schema[col](tbl_dict["defaults"][col]) for col in tbl_dict.get("defaults", {})}
-
-            # Reconstruct auto values
-            auto = {col: schema[col](tbl_dict["auto"][col]) for col in tbl_dict.get("auto", {})}
-
-            # Reconstruct rows
-            rows = []
-            for row_dict in tbl_dict.get("rows", []):
-                row = {col: schema[col](row_dict[col]) for col in row_dict}
-                rows.append(row)
-
-            table = Table(tbl_name, schema, defaults, auto)
-            table.rows = rows
-
-            # ✅ Fix SERIAL counters
-            for col, col_type in schema.items():
-                if col_type == SERIAL:  # check if this column is SERIAL
-                    max_val = 0
-                    for row in rows:
-                        if row[col] is not None:
-                            max_val = max(max_val, int(row[col].value))
-                    if col in table.auto:
-                        table.auto[col].current = max_val + 1  # resume from last
-
-            self.active_db[tbl_name] = table
 
     def save_database_file(self):
         db_data = {}

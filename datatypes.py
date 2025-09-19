@@ -10,6 +10,7 @@ from datetime import datetime, time
 #         else:
 #             self.value = self.parse(value)
 #             self.sqltype = self.Sqltype()
+# from sql_ast import CurrentDate, NowFunction
 class SQLType:
     def __init__(self, value=None):
         if value is not None:
@@ -182,9 +183,39 @@ class TEXT(SQLType):
 
 from datetime import datetime, date
 
+
+class CurrentDate():
+    def __init__(self, name = "CURRENT_DATE", alias = None):
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row = None, schema= None):
+        return date.today()
+
+
+class NowFunction():
+    def __init__(self, name = "NOW", alias = None):
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(row = None, schema = None):
+        return datetime.now()
+    
+class CurrentTime():
+    def __init__(self,name = "CURRENT_TIME", alias = None):
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row = None, schema = None):
+        return datetime.now().time().strftime("%H:%M:%S")
+
+
 class DATE(SQLType):
     def parse(self, value):
         # If the value is already a date, just return it
+        if value == "CURRENT_DATE":
+            return date.today()
+            
         if isinstance(value, date):
             return value
         # If it’s a string, try to parse
@@ -199,13 +230,60 @@ class DATE(SQLType):
     def validate(self, value):
         # Validation just calls parse (raises error if invalid)
         self.parse(value)
+        
+    def evaluate(self):
+        return date.today()
     def Sqltype(self):
         return "<class 'date'>"
+    
             
+class TIMESTAMP(SQLType):
+    def parse(self, value):
+        if value == "NOW":
+            return datetime.now() 
+    
+        
+        if isinstance(value, datetime):
+            return value
+
+        # Already a TIMESTAMP instance
+        if isinstance(value, TIMESTAMP):
+            return value.value
+
+        # String input
+        if isinstance(value, str):
+            for fmt in ("%Y-%m-%d %H:%M:%S.%f",
+                        "%Y-%m-%d %H:%M:%S",
+                        "%Y-%m-%dT%H:%M:%S.%f",  # ISO 8601 with microseconds
+                        "%Y-%m-%dT%H:%M:%S"):
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+            raise ValueError(
+                f"Invalid TIMESTAMP format: {value}. "
+                "Expected YYYY-MM-DD HH:MM:SS[.ffffff]"
+            )
+
+        raise ValueError(f"Cannot convert {value} ({type(value)}) to TIMESTAMP.")
+
+    def validate(self, value):
+        self.parse(value)
+        
+    def evaluate(self):
+        return datetime.now()
+    def Sqltype(self):
+            return "<class 'timestamp'>" 
+    
+            
+
 
 class TIME(SQLType):
     def parse(self, value):
         # If already a time object → keep it
+        if value == "CURRENT_TIME":
+            value = datetime.now().time().strftime("%H:%M:%S") 
+
         if isinstance(value, time):
             return value
         
@@ -222,8 +300,12 @@ class TIME(SQLType):
     def validate(self, value):
         if not isinstance(value, time):
             raise ValueError(f"TIME expects a datetime.time object, got {value} ({type(value)})")
+        
+    def evaluate(self):
+        return datetime.now().time().strftime("%H:%M:%S")
     def Sqltype(self):
         return "<class 'time'>"
+    
         
 class SERIAL(SQLType):
     def __init__(self, value=None):
@@ -280,5 +362,6 @@ datatypes = {
     "SERIAL": SERIAL,
     "DATE": DATE,
     "TIME": TIME,
-    "NONE": NULLVALUE
+    "NONE": NULLVALUE,
+    "TIMESTAMP": TIMESTAMP
 }

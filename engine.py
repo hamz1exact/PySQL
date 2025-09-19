@@ -3,7 +3,7 @@ from executor import execute
 from datetime import datetime
 # from database_manager import DatabaseManager, Table
 from utilities import db_manager
-from datatypes import *
+from datatypes import * 
 
 
 db_manager = db_manager
@@ -57,7 +57,8 @@ class Lexer:
         "SECOND",
         "CURRENT_DATE",
         "NOW",
-        "DATEDIFF"
+        "DATEDIFF",
+        "CURRENT_TIME"
     }
     
     
@@ -144,6 +145,7 @@ class Lexer:
         "SERIAL": SERIAL,
         "DATE": DATE,
         "TIME": TIME,
+        "TIMESTAMP":TIMESTAMP,
         
     }
     Comparison_Operators = ("=", "!", "<", ">")
@@ -170,7 +172,12 @@ class Lexer:
                     self.tokens.pop()
                     self.tokens.append(("OFFSET", number))
                 else:
-                    self.tokens.append(("NUMBER", number))
+                    if self.tokens[-1][1] == "-" and self.tokens[len(self.tokens)-2][0] != "IDENTIFIER":
+                        
+                        self.tokens.pop()
+                        self.tokens.append(("NUMBER", -number))
+                    else:
+                        self.tokens.append(("NUMBER", number))
                 continue
             # --- Identifiers, keywords, booleans, datatypes ---
             if char.isalpha():
@@ -347,7 +354,7 @@ class Lexer:
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
         
-        
+        # print(self.tokens)
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -415,45 +422,7 @@ class Parser:
     def parse_select_statement(self):
         expr = self.parse_expression()
         return expr
-        # where = None
-        # unique = False
-        # order_in = []
-        # group_in = []
-        # having_in = None
-        # limit, offset = None, None
-        # table = None
-        # self.eat("SELECT")
-        # if self.current_token() and self.current_token()[0] == "DISTINCT":
-        #     self.eat("DISTINCT")
-        #     unique = True
-        # columns, function_columns = self.parse_columns()
-        # self.eat("FROM")
-        # table = self.parse_table()
-        # token = self.current_token()
-        
-        # if token and token[0] == "WHERE":
-        #     self.eat("WHERE")
-        #     where = self.parse_expression(context = "WHERE")
-            
-            
-        # if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
-        #     group_in = self.group_by()
-        #     if self.current_token() and self.current_token()[0] == "HAVING":
-        #         self.eat("HAVING")
-        #         having_in = self.parse_expression(context = "HAVING")
-                
-        # if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
-        #     order_in = self.order_by()
-        # if self.current_token() and self.current_token()[0] == "OFFSET":
-        #     raise ValueError("The OFFSET clause must be used with a LIMIT clause.")
-        # if self.current_token() and self.current_token()[0] == "LIMIT":
-        #     limit = self.eat("LIMIT")[1]
-        #     if self.current_token() and self.current_token()[0] == "OFFSET":
-        #         offset = self.eat("OFFSET")[1]
-        # self.eat("SEMICOLON")
-        # return SelectStatement(columns, function_columns, table, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
-
-              
+                  
     def parse_columns(self):
         columns = []
         function_columns = []
@@ -466,7 +435,7 @@ class Parser:
                 alias_name = (self.eat(self.current_token()[0])[1]).lower()
                 self._select_aliases[alias_name] = expr
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) or isinstance(expr, CurrentDate) or isinstance(expr, DateDIFF) or isinstance(expr, CaseWhen):
+                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) or isinstance(expr, CurrentDate) or isinstance(expr, DateDIFF) or isinstance(expr, CaseWhen) or isinstance(expr, LiteralExpression):
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -491,11 +460,7 @@ class Parser:
             alias = self.eat("IDENTIFIER")[1]
             
         return TableReference(table_name, alias)
-            
-            
-        
 
-            
 
     def group_by(self):
         self.eat("GROUP_BY_KEY")  # GROUP
@@ -567,43 +532,8 @@ class Parser:
                 
         return order
     
-    def parse_having_expression(self):
+
         
-        if self.current_token() and self.current_token()[0] == "FUNC":
-            node = InpType(type="FUNC", content = self.parse_special_columns())
-            
-        elif self.current_token() and self.current_token()[0] == "IDENTIFIER":
-            col = self.eat("IDENTIFIER")[1]
-            node = InpType(type="ID", content=col)
-            
-        elif self.current_token() and self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):
-            val = self.eat(self.current_token()[0])[1]
-            node = InpType(type = "VALUE", content = val)
-            
-        else:
-            raise ValueError("Second argument must be an aggregate function, a value, or a column from the GROUP BY clause.")
-        
-        return node
-            
-        
-        
-    def parse_having(self):
-        if self.current_token()[1] == "(":
-            self.eat("OPEN_PAREN")
-            left_node = self.parse_having()
-            self.eat("CLOSE_PAREN")
-        else:
-            left = self.parse_having_expression()
-            low_operator = self.eat("LOW_PRIORITY_OPERATOR")[1]
-            right = self.parse_having_expression()
-            left_node = HavingCondition(left, low_operator, right)
-                
-        if self.current_token() and self.current_token()[0] == "HIGH_PRIORITY_OPERATOR":
-            high_operator = self.eat("HIGH_PRIORITY_OPERATOR")[1]
-            right_node = self.parse_having()
-            return HavingLogicalCondition(left_node, high_operator, right_node)
-        else:
-            return left_node
 
 
     
@@ -660,153 +590,7 @@ class Parser:
         return values
 
 
-    def parse_condition_tree(self):
-        
-        if self.current_token()[1] == "(":
-            self.eat("OPEN_PAREN")
-            left_node = self.parse_condition_tree()
-            self.eat("CLOSE_PAREN")
-            
-        if self.current_token()[0] == "IDENTIFIER":
-            col = self.eat("IDENTIFIER")[1]  
-        not_in_Membership = False
-        not_in_between = False
-        not_in_like = False
-        
-        
-        if self.current_token()[0] == "NULLCHECK":
-            
-            self.eat("NULLCHECK")
-            if self.current_token()[0] == "NULLCHECK":
-                if self.current_token()[1].upper() != "NOT":
-                    raise ValueError("Invalid Keyword for this Operation")
-                self.eat("NULLCHECK")
-                left_node = CheckNullColumn(col, isNull=False)
-            else:
-                left_node = CheckNullColumn(col, isNull=True)
-            self.eat("NULL")
-            
-                    
-        elif self.current_token()[0] == "MEMBERSHIP":
-            args = set()
-            not_in_membership = False  # Default to IN, not NOT IN
-            
-            self.eat("MEMBERSHIP")  # Consume first MEMBERSHIP token (likely "NOT" or "IN")
-            
-            # Check if this is a NOT IN scenario
-            if self.current_token() and self.current_token()[0] == "MEMBERSHIP":
-                if self.current_token()[1] == "IN":
-                    self.eat("MEMBERSHIP")  # Consume the "IN" token
-                    not_in_membership = True  # This was "NOT IN"
-                else:
-                    # Handle unexpected token after first MEMBERSHIP
-                    raise ValueError(f"Expected 'IN' after 'NOT', but got '{self.current_token()[1]}'")
-            # If no second MEMBERSHIP token, then this is just "IN"
-            
-            self.eat("OPEN_PAREN")  # Consume opening parenthesis
-            
-            # Parse the values inside parentheses
-            while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
-                token_type, token_value = self.current_token()
-                
-                if token_type in ("STRING", "BOOLEAN", "NUMBER"):
-                    self.eat(token_type)
-                    # Normalize string values to lowercase for consistency
-                    if isinstance(token_value, str):
-                        token_value = token_value.lower()
-                    args.add(token_value)
-                    
-                    # Check for comma (LOW_PRIORITY_OPERATORional for last element)
-                    if self.current_token() and self.current_token()[0] == "COMMA":
-                        self.eat("COMMA")
-                    elif self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
-                        raise ValueError(f"Expected ',' or ')' after value, but got '{self.current_token()[1]}'")
-                        
-                elif token_type == "COMMA":
-                    # Handle case where there are consecutive commas or leading comma
-                    raise ValueError("Unexpected comma in membership list")
-                else:
-                    raise ValueError(f"Invalid token '{token_value}' in membership list")
-            
-            if not self.current_token() or self.current_token()[0] != "CLOSE_PAREN":
-                raise ValueError("Expected closing parenthesis ')' for membership list")
-            
-            self.eat("CLOSE_PAREN")  # Consume closing parenthesis
-            
-            if not args:
-                raise ValueError("Empty membership list is not allowed")
-            
-            # Create the membership node with correct IN/NOT IN logic
-            left_node = Membership(col, args, IN=not not_in_membership)
-        
-
-        elif self.current_token()[0] =="NegationCondition":
-            self.eat("NegationCondition")
-            self.eat("OPEN_PAREN")
-            col = self.eat("IDENTIFIER")[1]
-            op = self.eat("LOW_PRIORITY_OPERATOR")[1]
-            if self.current_token()[0] in ("STRING", "BOOLEAN", "NUMBER"):
-                token, token_val = self.current_token()
-                val = token_val
-                self.eat(token)
-                left_node = NegationCondition(Condition(col, op, val))
-            self.eat("CLOSE_PAREN")
-
-        elif self.current_token()[0] == "BETWEEN":
-            arg1 = None
-            arg2 = None
-            self.eat("BETWEEN")
-            if self.current_token()[0] == "BETWEEN":
-                if self.current_token()[1] != "BETWEEN":
-                    raise ValueError(f"Expected 'BETWEEN' after 'NOT', but got '{self.current_token()[1]}'")
-                else:
-                    self.eat("BETWEEN")
-                    not_in_between = True
-            if self.current_token()[0] in ("STRING", "NUMBER"):
-                arg1 = self.eat(self.current_token()[0])[1]
-                if self.current_token()[1] != "AND":
-                    raise ValueError("Missed 'AND' Operator in BETWEEN Comparison")
-                self.eat("HIGH_PRIORITY_OPERATOR")
-                arg2 = self.eat(self.current_token()[0])[1]
-                if type(arg1) != type(arg2):
-                    raise ValueError(
-                    f"Type mismatch: '{arg1}' (type {type(arg1).__name__}) cannot be compared with '{arg2}' (type {type(arg2).__name__}). Please use values of the same data type for BETWEEN."
-                        )
-                else:
-                    left_node = BetweenCondition(col, arg1, arg2, NOT=not_in_between)
-            else:
-                raise ValueError("Unsupported Data type for BETWEEN Comparison")
-      
-        elif self.current_token()[0] == "LIKE":
-            self.eat("LIKE")
-            if self.current_token()[0] == "LIKE":
-                if self.current_token()[1] != "LIKE":
-                    raise ValueError(f"Expected 'LIKE' after 'NOT', but got '{self.current_token()[1]}'")
-                else:
-                    self.eat("LIKE")
-                    not_in_like = True
-            arg = self.eat(self.current_token()[0])[1]
-            left_node = LikeCondition(col, arg, NOT = not_in_like)
-                     
-        elif self.current_token()[0] == "LOW_PRIORITY_OPERATOR":
-            op = self.eat("LOW_PRIORITY_OPERATOR")[1]
-            if self.current_token()[0] in ("STRING", "NUMBER", "BOOLEAN"):
-                token,  value = self.current_token()
-                self.eat(token)
-                val = value
-                left_node = Condition(col, op, val)
-            else:
-                raise ValueError (f"Expected Valid Datatype for Where Clause but got {self.current_token()[1]}")
-        
-        # --- Check for logical operator (AND/OR) ---
-        if self.current_token() and self.current_token()[0] == "HIGH_PRIORITY_OPERATOR":
-            operator = self.eat("HIGH_PRIORITY_OPERATOR")[1]
-            # Recursively parse the right side of the condition
-            right_node = self.parse_condition_tree()
-            return LogicalCondition(left_node, operator, right_node)
-        else:
-            return left_node
-        
+   
         
         
     def parse_update_statement(self):
@@ -899,6 +683,7 @@ class Parser:
                 is_serial = True
             else:
                 is_serial = False
+                     
 
             # Handle DEFAULT values
             if self.current_token() and self.current_token()[0] == "DEFAULT":
@@ -906,13 +691,25 @@ class Parser:
                     raise ValueError(f"Invalid DEFAULT for column '{col_name}', SERIAL columns cannot have explicit default values.")
                 
                 self.eat("DEFAULT")
-                LOW_PRIORITY_OPERATOR = self.eat("LOW_PRIORITY_OPERATOR")[1]
-                if LOW_PRIORITY_OPERATOR not in ("=", "=="):
-                    raise ValueError("Syntax error in DEFAULT clause: expected '=' or '==' after DEFAULT keyword")
+                if self.current_token()[0] in ("=", "=="):
+                    self.eat("LOW_PRIORITY_OPERATOR")[1]
+                    
                 token_type, token_value = self.current_token()
                 if token_type:
-                    default_value = self.eat(token_type)[1]
-                    defaults[col_name] = schema[col_name](default_value)
+                    if token_type == "DATE_AND_TIME":
+                        if token_value == "CURRENT_DATE":
+                            self.eat("DATE_AND_TIME")
+                            defaults[col_name] = schema[col_name]("CURRENT_DATE")
+                        elif token_value == "NOW":
+                            self.eat("DATE_AND_TIME")
+                            defaults[col_name] = schema[col_name]("NOW")
+                        elif token_value == "CURRENT_TIME":
+                            self.eat("DATE_AND_TIME")
+                            defaults[col_name] = schema[col_name]("CURRENT_TIME")
+                    else:
+                        default_value = self.eat(token_type)[1]
+                        defaults[col_name] = schema[col_name](default_value)
+                    
             # Skip comma if present
             if self.current_token() and self.current_token()[0] == "COMMA":
                 self.eat("COMMA")

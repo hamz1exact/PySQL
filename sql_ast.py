@@ -188,8 +188,10 @@ class ColumnExpression(Expression):
         return {self.column_name}
 
 class LiteralExpression(Expression):
-    def __init__(self, value):
+    def __init__(self, value, alias = None, name = "LiteralExpression"):
         self.value = value
+        self.alias = alias
+        self.name = name
     
     def evaluate(self, row, schema, expected_type = None):
         
@@ -854,9 +856,18 @@ class NowFunction(Expression):
         self.name = name
         self.alias = alias
         
-    def evaluate(self, row = None, schema = None):
-        return datetime.datetime.now()
+    def evaluate(row = None, schema = None):
+        return datetime.now()
     
+class CurrentTime(Expression):
+    def __init__(self, name = "CURRENT_TIME", alias = None):
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(row = None, schema = None):
+        return datetime.now().time().strftime("%H:%M:%S")
+
+
 class Extract(Expression):
     def __init__(self, expression, part, name = "EXTRACT", alias = None):
         self.expression = expression
@@ -1009,7 +1020,7 @@ class Exists(Expression):
     def evaluate(self, row, schema):
         
         res = self.subquery.evaluate(row, schema)
-        if res : return True
+        if res: return True
         return False
         
         

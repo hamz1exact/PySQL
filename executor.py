@@ -4,6 +4,7 @@ import re
 from datatypes import *
 from errors import *
 import random
+from datatypes import CurrentDate as cd, NowFunction as nw
 def execute(ast, database):
     
     if isinstance(ast, SelectStatement):
@@ -30,12 +31,22 @@ def execute(ast, database):
     
 
 def execute_select_query(ast, database):
+    if not ast.table:
+        res_row = {}
+        for col in ast.columns:
+            col_id = str(id(col))
+            col_id = f"?col?.id({col_id[-5:]})"
+            res_row[col.alias if col.alias else col_id] = col.evaluate({}, {})
+        return [res_row]
+    
+    
     
     table_name = ast.table.evaluate()
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
 
     table = database[table_name].rows
+    
     table_schema = database[table_name].schema
     filtered_rows = []
     all_ids = []
@@ -381,12 +392,18 @@ def execute_insert_query(ast, database):
         if col_object in columns:
             idx = columns.index(col_object)
             val = values[idx]
-            print(val)
             new_row[col_object] = table_schema[col_object](val)
         elif col_object in table_auto:
             new_row[col_object] = table_auto[col_object].next()
         elif col_object in table_default:
-            new_row[col_object] = table_default[col_object]
+            if isinstance(table_default[col_object], TIMESTAMP):
+                new_row[col_object] =  datetime.now() 
+            elif isinstance(table_default[col_object], DATE):
+                new_row[col_object] = date.today()
+            elif isinstance(table_default[col_object], TIME):
+                new_row[col_object] = datetime.now().time().strftime("%H:%M:%S")
+            else:
+                new_row[col_object] = table_default[col_object]
         else:
             new_row[col_object] = None     
     table_rows.append(new_row)
