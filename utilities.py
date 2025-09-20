@@ -686,3 +686,28 @@ def expressions_are_equivalent(expr1, expr2):
     else:
         # Fallback: compare string representations
         return str(expr1) == str(expr2)
+    
+
+def print_table(rows):
+    if not rows:
+        print("Empty result")
+        return
+
+    # Get columns from the first row
+    columns = list(rows[0].keys())
+
+    # Calculate column widths
+    col_widths = {col: len(col) for col in columns}
+    for row in rows:
+        for col in columns:
+            col_widths[col] = max(col_widths[col], len(str(row[col])))
+
+    # Print header
+    header = " | ".join(col.ljust(col_widths[col]) for col in columns)
+    print(header)
+    print("-" * len(header))
+
+    # Print rows
+    for row in rows:
+        line = " | ".join(str(row[col]).ljust(col_widths[col]) for col in columns)
+        print(line)

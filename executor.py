@@ -484,7 +484,7 @@ def execute_create_database_statement(ast, database):
         
 def execute_create_table_statement(ast, database):
 
-        table = Table(ast.table_name, ast.schema, ast.defaults, ast.auto, ast.constraints, ast.restrictions)
+        table = Table(ast.table_name, ast.schema, ast.defaults, ast.auto, ast.constraints, ast.restrictions, ast.private_constraints, ast.constraints_ptr)
         database.active_db[ast.table_name] = table
         database.save_database_file()
         

@@ -4,7 +4,7 @@ import msgpack
 from datatypes import datatypes, SERIAL # assuming Lexer.datatypes contains your SQLType classes
 import random
 class Table:
-    def __init__(self, name, schema, defaults=None, auto=None, constraints = None, restrictions = None):
+    def __init__(self, name, schema, defaults=None, auto=None, constraints = None, restrictions = None, private_constraints = None, constraints_ptr = None):
         self.name = name
         self.schema = schema                  # dict[col_name] = SQLType class
         self.defaults = defaults or {}        # dict[col_name] = SQLType instance
@@ -12,6 +12,8 @@ class Table:
         self.rows = []                       # list of dicts with parsed Python values
         self.constraints = constraints or {}
         self.restrictions = restrictions or {}
+        self.private_constraints = private_constraints or {}
+        self.constraints_ptr = constraints_ptr or {}
 
 class DatabaseManager:
     def __init__(self):
@@ -127,6 +129,19 @@ class DatabaseManager:
                     raw_value = tbl_data["restrictions"][col]
                     deserialized_value = deserialize_value(raw_value)
                     restrictions[col] = deserialized_value
+                private_constraints = {}
+                for col in tbl_data.get("private_constraints", {}):
+                    raw_value = tbl_data["private_constraints"][col]
+                    deserialized_value = deserialize_value(raw_value)
+                    private_constraints[col] = deserialized_value
+                
+                constraints_ptr = {}
+                for col in tbl_data.get("constraints_ptr", {}):
+                    raw_value = tbl_data["constraints_ptr"][col]
+                    deserialized_value = deserialize_value(raw_value)
+                    constraints_ptr[col] = deserialized_value
+                
+
 
                 # Reconstruct rows
                 rows = []
@@ -144,7 +159,7 @@ class DatabaseManager:
                             row[col] = deserialized_value
                     rows.append(row)
 
-                table = Table(tbl_name, schema, defaults, auto, constraints, restrictions)
+                table = Table(tbl_name, schema, defaults, auto, constraints, restrictions, private_constraints, constraints_ptr)
                 table.rows = rows
 
                 # ✅ Fix SERIAL counters
@@ -176,6 +191,8 @@ class DatabaseManager:
                     "auto": {col: serialize_value(table.auto[col]) for col in table.auto},
                     "constraints": {col: serialize_value(table.constraints[col]) for col in table.constraints},
                     "restrictions": {col: serialize_value(table.restrictions[col]) for col in table.restrictions},
+                    "private_constraints": {col: serialize_value(table.private_constraints[col]) for col in table.private_constraints},
+                    "constraints_ptr": {col: serialize_value(table.constraints_ptr[col]) for col in table.constraints_ptr},
                     "rows": [
                         {col: serialize_value(row[col]) for col in row}
                         for row in table.rows

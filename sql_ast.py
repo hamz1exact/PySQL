@@ -1,7 +1,8 @@
-import errors
+from errors import *
 from datatypes import *
 import math
 import re
+
 def get_execute_function():
     from utilities import execute
     return execute
@@ -33,18 +34,20 @@ class SelectStatement:
         
         
         
-    def evaluate(self, row, schema):
+    def evaluate(self, row = None, schema = None, runner_context=None):
         execute_fn = get_execute_function()
         db_mgr = get_db_manager()
         
         result = execute_fn(self, db_mgr.active_db)
-        if result and len(result) > 0:
-            if len(result[0]) == 1:
-                first_key = list(result[0].keys())[0]
-                return result[0][first_key]
-            else:
-                return result[0]
-        return None
+        # if runner_context is None:
+        return result
+        # if result and len(result) > 0:
+        #     if len(result[0]) == 1:
+        #         first_key = list(result[0].keys())[0]
+        #         return result[0][first_key]
+        #     else:
+        #         return result[0]
+        # return None
         
 class Columns:
     def __init__(self, col_object, alias = None):
@@ -91,13 +94,15 @@ class CreateDatabseStatement:
         self.database_name = database_name
         
 class CreateTableStatement:
-    def __init__(self, table_name, schema, defaults, auto, constraints, restrictions):
+    def __init__(self, table_name, schema, defaults, auto, constraints, restrictions, private_constraints, constraints_ptr):
         self.table_name = table_name
         self.schema = schema
         self.defaults = defaults
         self.auto = auto
         self.constraints = constraints
         self.restrictions = restrictions
+        self.private_constraints = private_constraints
+        self.constraints_ptr = constraints_ptr
 
 class UseStatement:
     def __init__(self, database_name):
@@ -556,8 +561,14 @@ class LikeCondition(Expression):
         self.pattern_expression = pattern_expression
         self.is_not = is_not
         # Pre-compile the regex pattern for efficiency (if pattern is constant)
-        # Note: We can't compile here if pattern_expression is column reference
         self._compiled_regex = None
+        self._cached_pattern = None
+
+    def __setstate__(self, state):
+        """Called after deserialization to reset non-serializable attributes"""
+        # Reset regex-related attributes after deserialization
+        self._compiled_regex = None
+        self._cached_pattern = None
 
     def _pattern_to_regex(self, pattern):
         if not isinstance(pattern, str):
@@ -599,9 +610,12 @@ class LikeCondition(Expression):
         # Convert pattern to regex
         regex_pattern = self._pattern_to_regex(pattern_value)
         
-        # Compile regex (with cache for efficiency if needed)
-        if self._compiled_regex is None or self._compiled_regex.pattern != regex_pattern:
+        # Cache compiled regex for efficiency, but handle deserialization issues
+        if (self._compiled_regex is None or 
+            self._cached_pattern != regex_pattern or 
+            not hasattr(self._compiled_regex, 'pattern')):
             self._compiled_regex = re.compile(regex_pattern)
+            self._cached_pattern = regex_pattern
         
         # Perform the match and apply NOT if needed
         match_result = self._compiled_regex.match(str(current_value)) is not None
@@ -1028,5 +1042,96 @@ class Exists(Expression):
         res = self.subquery.evaluate(row, schema)
         if res: return True
         return False
+        
+
+class ShowConstraints(Expression):
+    def __init__(self, table_name, col = None ,name = "REQUEST_CONSTRAINTS", alias = None):
+        self.table_name = table_name
+        self.name = name
+        self.alias = alias
+        self.col = col
+        
+    def evaluate(self):
+        database = get_db_manager().active_db
+        if self.table_name not in database:
+            raise TableNotFoundError(self.table_name)
+        else:
+            if not database[self.table_name].private_constraints:
+                raise ValueError('Your table has no constraints, use ALTER <table_name> ADD <constraint>* <column_name>')
+            private_constraints = database[self.table_name].private_constraints
+            if not self.col:
+                return [private_constraints]
+            else:
+                row = {}
+                for c, v in  private_constraints.items():
+                    if self.col == c:
+                       row[self.col] = v
+                       return [row]
+            return None
+                    
+            
+class UnionExpression(Expression):
+    def __init__(self, left, right, context="UNION"):
+            self.left = left
+            self.right = right
+            self.context = context
+            
+    def evaluate(self, row=None, schema=None):
+        """
+        Evaluate UNION - combines results from two SELECT statements
+        and removes duplicates (unlike UNION ALL)
+        """
+        # Get results from both SELECT statements
+        left_result = self.left.evaluate(row, schema) if hasattr(self.left, 'evaluate') else self.left
+        right_result = self.right.evaluate(row, schema) if hasattr(self.right, 'evaluate') else self.right
+        
+        # Ensure we have lists of dictionaries
+        if not isinstance(left_result, list):
+            left_result = [left_result] if left_result else []
+        if not isinstance(right_result, list):
+            right_result = [right_result] if right_result else []
+            
+        # Get column names from left table (UNION uses left table's column names)
+        if not left_result:
+            return right_result  # If left is empty, return right
+        if not right_result:
+            return left_result   # If right is empty, return left
+            
+        left_columns = list(left_result[0].keys())
+        
+        # Validate that both results have the same number of columns
+        if right_result and len(left_columns) != len(list(right_result[0].keys())):
+            raise ValueError(f"UNION requires same number of columns. "
+                        f"Left has {len(left_columns)}, right has {len(list(right_result[0].keys()))}")
+        
+        # Align right table columns to match left table column names
+        aligned_right_result = []
+        for row in right_result:
+            right_values = list(row.values())
+            aligned_row = {left_columns[i]: right_values[i] for i in range(len(left_columns))}
+            aligned_right_result.append(aligned_row)
+        
+        # Combine results
+        combined_result = left_result + aligned_right_result
+        
+        # Remove duplicates for UNION (keep for UNION ALL)
+        if self.context == "UNION":
+            unique_result = []
+            seen = set()
+            
+            for row in combined_result:
+                # Create a hashable representation of the row for duplicate detection
+                row_tuple = tuple(sorted(row.items()))
+                if row_tuple not in seen:
+                    seen.add(row_tuple)
+                    unique_result.append(row)
+            
+            return unique_result
+        else:  # UNION ALL
+            return combined_result
+        
+                
+                
+        
         
         

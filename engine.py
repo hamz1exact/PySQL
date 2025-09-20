@@ -13,7 +13,7 @@ class Lexer:
     keywords = (
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
-        "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT")
+        "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION", "ALL")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
@@ -32,6 +32,7 @@ class Lexer:
     exists = {
         "EXISTS"
     }
+    
     
     between = {
         "BETWEEN"
@@ -570,7 +571,27 @@ class Parser:
     
 
         
-
+    def parse_request_statement(self):
+        self.eat("SHOW")
+        col = None
+        if self.current_token()[1] != "CONSTRAINTS":
+            raise ValueError("SHOW Must be followed by CONSTRAINTS")
+        self.eat("IDENTIFIER")
+        if self.current_token()[0] == "OPEN_PAREN":
+            self.eat("OPEN_PAREN")
+            table_name = self.eat(self.current_token()[0])[1]
+            if self.current_token() and self.current_token()[0] == "DOT":
+                self.eat("DOT")
+                col = self.eat("IDENTIFIER")[1]
+            self.eat("CLOSE_PAREN")
+        elif self.current_token()[0] == "STAR":
+            self.eat("STAR")
+            table_name = self.eat(self.current_token()[0])[1]
+            if self.current_token() and self.current_token()[0] == "DOT":
+                self.eat("DOT")
+                col = self.eat("IDENTIFIER")[1]
+        return ShowConstraints(table_name, col=col)
+        
 
     
     
@@ -592,7 +613,7 @@ class Parser:
             conflict = True
             if self.current_token() and self.current_token()[1] == '(':
                 self.eat("OPEN_PAREN")
-                conflict_target = self.eat("IDENTIFIER")[1]
+                conflict_targets = self.eat("IDENTIFIER")[1]
                 self.eat("CLOSE_PAREN")
             self.eat("CONF")
             action = self.eat("ACTION")[1]
@@ -726,6 +747,9 @@ class Parser:
         defaults = {} 
         constraints = {}
         restrictions = {}
+        private_constraints = {}
+        constraints_ptr = {}
+        
         is_serial = False
         is_default = False
         while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
@@ -777,11 +801,29 @@ class Parser:
                 if contr == "NOT NULL" and is_default:
                     raise ValueError("if a Column has DEFAULT VALUE it cannot inheritance  NOT NULL constraints")
                 constraints[col_name] = contr
+                constr_id = None
+                if contr == "PRIMARY KEY":
+                    constr_id = 'pkey'
+                elif contr == "NOT NULL":
+                    constr_id = '!null'
+                elif contr == "UNIQUE":
+                    constr_id = 'ukey'
+                key = f"{table_name}_{col_name}_{constr_id}"
+                if col_name not in private_constraints:
+                    private_constraints[col_name] = set()
+                private_constraints[col_name].add(key)
+                constraints_ptr[key] = contr
+                
             
             if self.current_token() and self.current_token()[0] == "RESTS":
                 self.eat("RESTS")
                 expr = self.parse_expression(context=None)
                 restrictions[col_name] = expr
+                key = f"{table_name}_{col_name}_'check'"
+                if col_name not in private_constraints:
+                    private_constraints[col_name] = set()
+                private_constraints[col_name].add(key)
+                constraints_ptr[key] = 'CHECK'
                 
             # Skip comma if present
             if self.current_token() and self.current_token()[0] == "COMMA":
@@ -789,8 +831,8 @@ class Parser:
 
         self.eat("CLOSE_PAREN")  # )
         self.eat("SEMICOLON")
-        print(constraints)
-        return CreateTableStatement(table_name, schema, defaults, auto, constraints, restrictions)
+    
+        return CreateTableStatement(table_name, schema, defaults, auto, constraints, restrictions, private_constraints, constraints_ptr)
         
 
 
@@ -870,7 +912,25 @@ class Parser:
             self.eat("HIGH_PRIORITY_OPERATOR")
             upper = self.parse_factor(context)
             return Between(expression, lower, upper, is_not = is_nott)
-        
+        while self.current_token() and self.current_token()[0] == "UNION":
+            self.eat("UNION")
+            union_type = "UNION"
+            if self.current_token() and self.current_token()[0] == "ALL":
+                self.eat("ALL")
+                union_type = "UNION ALL"
+            
+            right_expression = self.parse_select_statement()  # Parse second SELECT
+            
+            # Validate that both sides are SELECT statements or UNION expressions
+            valid_left = isinstance(expression, (SelectStatement, UnionExpression))
+            valid_right = isinstance(right_expression, (SelectStatement, UnionExpression))
+            
+            if not (valid_left and valid_right):
+                raise ValueError("UNION requires SELECT statements on both sides")
+            
+            expression = UnionExpression(expression, right_expression, union_type)
+
+                
         return expression
     
     def parse_condition(self, context):
@@ -879,6 +939,7 @@ class Parser:
         while self.current_token() and self.current_token()[1] in ["=", "!=", ">", "<", ">=", "<="]:
             operator = self.eat(self.current_token()[0])[1]
             right = self.parse_addition(context)
+            
             
             if context == "WHERE":
                 self.validate_no_aggregate_in_where(left)
@@ -1068,7 +1129,7 @@ class Parser:
             self.eat("CASE_WHEN")
             return CaseWhen(expressions, actions, case_else=case_else)            
                     
-
+        
         elif token[0] == "SELECT":
             self._requested_pointer = None
             self._pointers = {}
@@ -1113,8 +1174,8 @@ class Parser:
                 if self.current_token() and self.current_token()[0] == "OFFSET":
                     offset = self.eat("OFFSET")[1]
             if context is None:
-                self.eat("SEMICOLON")
-            
+                if self.current_token() and self.current_token()[0] != "UNION":
+                    self.eat("SEMICOLON")
             return SelectStatement(columns, function_columns, table_ref, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
             
         elif token[0] == "REFERENCE":
@@ -1135,7 +1196,6 @@ class Parser:
                 raise ValueError('EXISTS function works only with subqueries')
             return Exists(subquery)
                 
-    
         
         elif token[0] == "FUNC":
             distinct = False
@@ -1161,6 +1221,7 @@ class Parser:
             expr = self.parse_expression(context)
             
             return NegationCondition(expr)
+
         
         else:
             raise ValueError(f"Unexpected token in expression: {token}")

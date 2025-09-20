@@ -702,8 +702,12 @@ class EnhancedSQLShell:
             
             # Parse and execute based on query type
             if token_type == "SELECT":
+                from sql_ast import UnionExpression
                 ast = parser.parse_select_statement()
-                result = execute(ast, database)
+                if isinstance(ast, UnionExpression):
+                    result = ast.evaluate()
+                else:
+                    result = execute(ast, database)
                 self._handle_select_result(result, start_time)
                 
             elif token_type == "INSERT":
@@ -723,7 +727,11 @@ class EnhancedSQLShell:
                 result = execute(ast, database)
                 db_manager.save_database_file()
                 self._handle_modify_result("DELETE", start_time)
-                
+            
+            elif token_type == "SHOW":
+                result =  parser.parse_request_statement().evaluate()
+                self._handle_select_result(result, start_time)
+            
             elif token_type == "CREATE":
                 if next_token_type == "DATABASE":
                     ast = parser.parse_create_database()
