@@ -13,7 +13,7 @@ class Lexer:
     keywords = (
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
-        "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION", "ALL")
+        "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION", "ALL", "INTERSECT", "EXCEPT")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
@@ -457,8 +457,86 @@ class Parser:
             raise SyntaxError(f"Expected token type '{token_type}', got '{actual_type}' at position {self.pos}")
 
     def parse_select_statement(self):
-        expr = self.parse_expression()
-        return expr
+        # Parse the full SELECT statement first
+        stmt = self.parse_single_select()
+        
+        # Now check for UNION/INTERSECT at this level
+        while self.current_token() and self.current_token()[0] in ("UNION", "INTERSECT", "EXCEPT"):
+            if self.current_token()[0] == "UNION":
+                self.eat("UNION")
+                union_type = "UNION"
+                if self.current_token() and self.current_token()[0] == "ALL":
+                    self.eat("ALL")
+                    union_type = "UNION ALL"
+                
+                # Parse the next SELECT statement
+                right_stmt = self.parse_single_select()
+                stmt = UnionExpression(stmt, right_stmt, union_type)
+                
+            elif self.current_token()[0] == "INTERSECT":
+                self.eat("INTERSECT")
+                right_stmt = self.parse_single_select()
+                stmt = IntersectExpression(stmt, right_stmt)
+            
+            elif self.current_token()[0] == "EXCEPT":
+                self.eat("EXCEPT")
+                right_stmt = self.parse_single_select()
+                stmt = ExceptExpression(stmt, right_stmt)
+            
+        return stmt
+    
+    def parse_single_select(self):
+        """Parse a single SELECT statement without UNION/INTERSECT"""
+        self._requested_pointer = None
+        self._pointers = {}
+        where = None
+        unique = False
+        order_in = []
+        group_in = []
+        having_in = None
+        limit, offset = None, None
+        table_ref = None
+        
+        self.eat("SELECT")
+        if self.current_token() and self.current_token()[0] == "DISTINCT":
+            self.eat("DISTINCT")
+            unique = True
+        columns, function_columns = self.parse_columns()
+        
+        if self.current_token() and self.current_token()[0] == "FROM":
+            self.eat("FROM")
+            table_ref = self.parse_table()
+            if table_ref.alias:
+                if self._requested_pointer is not None and table_ref.alias != self._requested_pointer:
+                    raise ValueError(f"""invalid reference to FROM-clause entry for table "{table_ref.table_name}"\nPerhaps you meant to reference the table alias '{table_ref.alias}'.""")
+                self._pointers[table_ref.alias] = table_ref.table_name
+            elif table_ref.alias is None and self._requested_pointer is not None:
+                raise ValueError(f""" missing FROM-clause alias for table {table_ref.table_name} """)
+        
+        if self.current_token() and self.current_token()[0] == "WHERE":
+            self.eat("WHERE")
+            where = self.parse_expression(context="WHERE")
+        
+        if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
+            group_in = self.group_by()
+            if self.current_token() and self.current_token()[0] == "HAVING":
+                self.eat("HAVING")
+                having_in = self.parse_expression(context="HAVING")
+        
+        if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
+            order_in = self.order_by()
+        
+        if self.current_token() and self.current_token()[0] == "OFFSET":
+            raise ValueError("The OFFSET clause must be used with a LIMIT clause.")
+        
+        if self.current_token() and self.current_token()[0] == "LIMIT":
+            limit = self.eat("LIMIT")[1]
+            if self.current_token() and self.current_token()[0] == "OFFSET":
+                offset = self.eat("OFFSET")[1]
+        
+        return SelectStatement(columns, function_columns, table_ref, where, 
+                             distinct=unique, order_by=order_in, group_by=group_in, 
+                             having=having_in, limit=limit, offset=offset)
                   
     def parse_columns(self):
         columns = []
@@ -537,6 +615,7 @@ class Parser:
     def order_by(self):
         self.eat("ORDER_BY_KEY")  # ORDER
         self.eat("ORDER_BY_KEY")  # BY
+        
         order = []
         
         while True:
@@ -566,7 +645,7 @@ class Parser:
                 self.eat("COMMA")
             else:
                 break
-                
+
         return order
     
 
@@ -865,6 +944,7 @@ class Parser:
     
     def parse_condition_engine(self, context):
         expression = self.parse_condition(context)
+        
         while self.current_token() and self.current_token()[0] == "LIKE":
             is_not = False
             if self.current_token()[1] == "NOT":
@@ -881,9 +961,7 @@ class Parser:
                 is_null = False
             self.eat("NULL")
             return IsNullCondition(expression, is_null=is_null)
-
-        
-        
+    
         while self.current_token() and self.current_token()[0] == "MEMBERSHIP":
             args = []
             is_nott = False
@@ -902,33 +980,16 @@ class Parser:
                     break
             return Membership(expression, args, is_not=is_nott)
         while self.current_token() and self.current_token()[0] == "BETWEEN":
-            is_nott = False
-            if self.current_token()[1] == "NOT":
-                self.eat("BETWEEN")
-                is_nott = True
-            if self.current_token() and self.current_token()[0] == "BETWEEN":
-                self.eat("BETWEEN")
-            lower = self.parse_factor(context)
-            self.eat("HIGH_PRIORITY_OPERATOR")
-            upper = self.parse_factor(context)
-            return Between(expression, lower, upper, is_not = is_nott)
-        while self.current_token() and self.current_token()[0] == "UNION":
-            self.eat("UNION")
-            union_type = "UNION"
-            if self.current_token() and self.current_token()[0] == "ALL":
-                self.eat("ALL")
-                union_type = "UNION ALL"
-            
-            right_expression = self.parse_select_statement()  # Parse second SELECT
-            
-            # Validate that both sides are SELECT statements or UNION expressions
-            valid_left = isinstance(expression, (SelectStatement, UnionExpression))
-            valid_right = isinstance(right_expression, (SelectStatement, UnionExpression))
-            
-            if not (valid_left and valid_right):
-                raise ValueError("UNION requires SELECT statements on both sides")
-            
-            expression = UnionExpression(expression, right_expression, union_type)
+                    is_nott = False
+                    if self.current_token()[1] == "NOT":
+                        self.eat("BETWEEN")
+                        is_nott = True
+                    if self.current_token() and self.current_token()[0] == "BETWEEN":
+                        self.eat("BETWEEN")
+                    lower = self.parse_factor(context)
+                    self.eat("HIGH_PRIORITY_OPERATOR")
+                    upper = self.parse_factor(context)
+                    return Between(expression, lower, upper, is_not = is_nott)
 
                 
         return expression
@@ -1130,54 +1191,6 @@ class Parser:
             return CaseWhen(expressions, actions, case_else=case_else)            
                     
         
-        elif token[0] == "SELECT":
-            self._requested_pointer = None
-            self._pointers = {}
-            where = None
-            unique = False
-            order_in = []
-            group_in = []
-            having_in = None
-            limit, offset = None, None
-            table_ref = None
-            self.eat("SELECT")
-            if self.current_token() and self.current_token()[0] == "DISTINCT":
-                self.eat("DISTINCT")
-                unique = True
-            columns, function_columns = self.parse_columns()
-            if self.current_token()[0] == "FROM":
-                self.eat("FROM")
-                table_ref = self.parse_table()
-                if table_ref.alias:
-                    if self._requested_pointer is not None and table_ref.alias != self._requested_pointer:
-                        raise ValueError(f"""invalid reference to FROM-clause entry for table "{table_ref.table_name}"\nPerhaps you meant to reference the table alias '{table_ref.alias}'.""")
-                    self._pointers[table_ref.alias] = table_ref.table_name
-                elif table_ref.alias is None and self._requested_pointer is not None:
-                    raise ValueError(f""" missing FROM-clause alias for table {table_ref.table_name} """)
-                
-            if self.current_token() and self.current_token()[0] == "WHERE":
-                self.eat("WHERE")
-                where = self.parse_expression(context = "WHERE")
-                
-            if self.current_token() and self.current_token()[0] == "GROUP_BY_KEY":
-                group_in = self.group_by()
-                if self.current_token() and self.current_token()[0] == "HAVING":
-                    self.eat("HAVING")
-                    having_in = self.parse_expression(context = "HAVING")
-                    
-            if self.current_token() and self.current_token()[0] == "ORDER_BY_KEY":
-                order_in = self.order_by()
-            if self.current_token() and self.current_token()[0] == "OFFSET":
-                raise ValueError("The OFFSET clause must be used with a LIMIT clause.")
-            if self.current_token() and self.current_token()[0] == "LIMIT":
-                limit = self.eat("LIMIT")[1]
-                if self.current_token() and self.current_token()[0] == "OFFSET":
-                    offset = self.eat("OFFSET")[1]
-            if context is None:
-                if self.current_token() and self.current_token()[0] != "UNION":
-                    self.eat("SEMICOLON")
-            return SelectStatement(columns, function_columns, table_ref, where, distinct = unique, order_by = order_in, group_by = group_in, having = having_in, limit=limit, offset=offset)
-            
         elif token[0] == "REFERENCE":
             table_alias = self.eat("REFERENCE")[1]
             self._requested_pointer = table_alias
@@ -1222,7 +1235,6 @@ class Parser:
             
             return NegationCondition(expr)
 
-        
         else:
             raise ValueError(f"Unexpected token in expression: {token}")
         
