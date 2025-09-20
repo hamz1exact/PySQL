@@ -702,9 +702,9 @@ class EnhancedSQLShell:
             
             # Parse and execute based on query type
             if token_type == "SELECT":
-                from sql_ast import UnionExpression
+                from sql_ast import UnionExpression, IntersectExpression, ExceptExpression
                 ast = parser.parse_select_statement()
-                if isinstance(ast, UnionExpression):
+                if isinstance(ast, (UnionExpression, IntersectExpression, ExceptExpression)):
                     result = ast.evaluate()
                 else:
                     result = execute(ast, database)

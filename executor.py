@@ -420,7 +420,8 @@ def execute_insert_query(ast, database):
         
         if col_object in table_restrictions:
             if not table_restrictions[col_object].evaluate(new_row, table_schema):
-                raise ValueError(f"new row for relation '{table_name}' violates check constraint")
+                
+                raise ValueError(f"new row for relation '{table_name}' violates check constraint of column <{col_object}>")
     violation = find_constraint_violation(table_obj, new_row)
     should_insert = handle_conflict_resolution(ast, violation, table_obj, new_row)
     

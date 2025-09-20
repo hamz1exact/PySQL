@@ -39,15 +39,7 @@ class SelectStatement:
         db_mgr = get_db_manager()
         
         result = execute_fn(self, db_mgr.active_db)
-        # if runner_context is None:
         return result
-        # if result and len(result) > 0:
-        #     if len(result[0]) == 1:
-        #         first_key = list(result[0].keys())[0]
-        #         return result[0][first_key]
-        #     else:
-        #         return result[0]
-        # return None
         
 class Columns:
     def __init__(self, col_object, alias = None):
@@ -1111,7 +1103,6 @@ class UnionExpression(Expression):
             aligned_row = {left_columns[i]: right_values[i] for i in range(len(left_columns))}
             aligned_right_result.append(aligned_row)
         
-        # Combine results
         combined_result = left_result + aligned_right_result
         
         # Remove duplicates for UNION (keep for UNION ALL)
@@ -1120,8 +1111,9 @@ class UnionExpression(Expression):
             seen = set()
             
             for row in combined_result:
-                # Create a hashable representation of the row for duplicate detection
+                
                 row_tuple = tuple(sorted(row.items()))
+                
                 if row_tuple not in seen:
                     seen.add(row_tuple)
                     unique_result.append(row)
@@ -1132,6 +1124,93 @@ class UnionExpression(Expression):
         
                 
                 
+class IntersectExpression(Expression):
+    def __init__(self, left, right, name="INTERSECT", alias=None):
+        self.left = left
+        self.right = right
+        self.name = name
+        self.alias = alias
+
+    def evaluate(self, row=None, schema=None):
+        # Evaluate left and right expressions
+        left_result = self.left.evaluate(row, schema) if hasattr(self.left, "evaluate") else self.left
+        right_result = self.right.evaluate(row, schema) if hasattr(self.right, "evaluate") else self.right
+
+        # Normalize to lists of dicts
+        if not isinstance(left_result, list):
+            left_result = [left_result] if left_result else []
+        if not isinstance(right_result, list):
+            right_result = [right_result] if right_result else []
+
+        if not left_result or not right_result:
+            return []
+
+        # Ensure both sides have same number of columns
+        left_columns = list(left_result[0].keys())
+        right_columns = list(right_result[0].keys())
+        if len(left_columns) != len(right_columns):
+            raise ValueError(
+                f"INTERSECT requires same number of columns. "
+                f"Left has {len(left_columns)}, right has {len(right_columns)}"
+            )
+
+        aligned_right_result = []
+        for row in right_result:
+            right_values = list(row.values())
+            aligned_row = {left_columns[i]: right_values[i] for i in range(len(left_columns))}
+            aligned_right_result.append(aligned_row)
+
+        
+        left_set = {tuple(row.items()) for row in left_result}
+        right_set = {tuple(row.items()) for row in aligned_right_result}
+
+        intersected = left_set & right_set
+        
+        return [dict(row) for row in intersected]
+    
+    
+   
+class ExceptExpression(Expression):
+    def __init__(self, left, right, name="EXCEPT", alias=None):
+        self.left = left
+        self.right = right
+        self.name = name
+        self.alias = alias
+        
+    def evaluate(self, row=None, schema=None):
+        # Evaluate left and right expressions
+        left_result = self.left.evaluate(row, schema) if hasattr(self.left, "evaluate") else self.left
+        right_result = self.right.evaluate(row, schema) if hasattr(self.right, "evaluate") else self.right
+
+        # Normalize to lists of dicts
+        if not isinstance(left_result, list):
+            left_result = [left_result] if left_result else []
+        if not isinstance(right_result, list):
+            right_result = [right_result] if right_result else []
+
+        if not left_result or not right_result:
+            return []
+
+        # Ensure both sides have same number of columns
+        left_columns = list(left_result[0].keys())
+        right_columns = list(right_result[0].keys())
+        if len(left_columns) != len(right_columns):
+            raise ValueError(
+                f"EXCEPT requires same number of columns. "
+                f"Left has {len(left_columns)}, right has {len(right_columns)}"
+            )
+
+        aligned_right_result = []
+        for row in right_result:
+            right_values = list(row.values())
+            aligned_row = {left_columns[i]: right_values[i] for i in range(len(left_columns))}
+            aligned_right_result.append(aligned_row)
+
+        
+        left_set = {tuple(row.items()) for row in left_result}
+        right_set = {tuple(row.items()) for row in aligned_right_result}
+    
+        diff = left_set - right_set
         
         
-        
+        return [dict(row) for row in diff]
