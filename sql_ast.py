@@ -35,11 +35,20 @@ class SelectStatement:
         
         
     def evaluate(self, row = None, schema = None, runner_context=None):
-        execute_fn = get_execute_function()
-        db_mgr = get_db_manager()
+            execute_fn = get_execute_function()
+            db_mgr = get_db_manager()
         
-        result = execute_fn(self, db_mgr.active_db)
-        return result
+            result = execute_fn(self, db_mgr.active_db)
+
+            return result
+    
+class InsertExpression():
+    def __init__(self, values, columns = None):
+        self.columns = columns or []
+        self.values = values
+        
+    
+
         
 class Columns:
     def __init__(self, col_object, alias = None):
@@ -61,14 +70,14 @@ class LogicalCondition:
         self.right = right
 
 class InsertStatement:
-    def __init__(self, table, columns, values, conflict = False, conflict_targets = None, action = None, update_cols = None):
+    def __init__(self, table, insertion_data, conflict = False, conflict_targets = None, action = None, update_cols = None, returned_cols = None):
         self.table = table
-        self.columns = columns
-        self.values = values
+        self.insertion_data = insertion_data
         self.conflict = conflict
         self.conflict_targets = conflict_targets
         self.action = action
         self.update_cols = update_cols
+        self.returned_cols = returned_cols
         
 class UpdateStatement:
     def __init__(self, table, columns, where):
@@ -1214,3 +1223,45 @@ class ExceptExpression(Expression):
         
         
         return [dict(row) for row in diff]
+
+
+class ReturningClause:
+    def __init__(self, columns, table_name):
+        self.columns = columns
+        self.table_name = table_name
+    
+    def evaluate(self, inserted_rows, database):
+        """Evaluate RETURNING clause with all inserted row data"""
+        if not inserted_rows:
+            return []
+            
+        result_rows = []
+        
+        for inserted_row in inserted_rows:
+            result_row = {}
+            
+            for column_expr in self.columns:
+                if isinstance(column_expr, ColumnExpression):
+                    if column_expr.column_name == "*":
+                        # Return all columns from this row
+                        for col, value in inserted_row.items():
+                            if isinstance(value, SQLType):
+                                result_row[col] = value.value
+                            else:
+                                result_row[col] = value
+                    else:
+                        # Return specific column
+                        col_name = column_expr.column_name
+                        if col_name in inserted_row:
+                            value = inserted_row[col_name]
+                            if isinstance(value, SQLType):
+                                result_row[col_name] = value.value
+                            else:
+                                result_row[col_name] = value
+                # Handle other expression types (literals, functions, etc.)
+                elif isinstance(column_expr, LiteralExpression):
+                    alias = getattr(column_expr, 'alias', 'literal')
+                    result_row[alias] = column_expr.evaluate({}, {})
+                        
+            result_rows.append(result_row)  
+        return result_rows

@@ -13,7 +13,8 @@ class Lexer:
     keywords = (
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
-        "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION", "ALL", "INTERSECT", "EXCEPT")
+        "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
+        "ALL", "INTERSECT", "EXCEPT", "RETURNING")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
@@ -550,7 +551,7 @@ class Parser:
                 alias_name = (self.eat(self.current_token()[0])[1]).lower()
                 self._select_aliases[alias_name] = expr
                 # Attach alias to expr
-                if isinstance(expr, ColumnExpression) or isinstance(expr, BinaryOperation) or isinstance(expr, Function) or isinstance(expr, MathFunction) or isinstance(expr, StringFunction) or isinstance(expr, Replace) or isinstance(expr, Concat) or isinstance(expr, Cast) or isinstance(expr, CoalesceFunction) or isinstance(expr, Extract) or isinstance(expr, CurrentDate) or isinstance(expr, DateDIFF) or isinstance(expr, CaseWhen) or isinstance(expr, LiteralExpression):
+                if isinstance(expr, (ColumnExpression, BinaryOperation, Function, MathFunction, StringFunction, Replace, Concat, Cast, CoalesceFunction, Extract, CurrentDate, DateDIFF, CaseWhen, LiteralExpression)):
                     expr.alias = alias_name
             if self._contains_aggregates(expr):
                 function_columns.append(expr)
@@ -648,7 +649,6 @@ class Parser:
 
         return order
     
-
         
     def parse_request_statement(self):
         self.eat("SHOW")
@@ -672,20 +672,17 @@ class Parser:
         return ShowConstraints(table_name, col=col)
         
 
-    
-    
 
     def parse_insert_statement(self):
         conflict = False
         conflict_targets = None
         action = None
         update_cols = None
+        returned_columns = None
         self.eat("INSERT")
         self.eat("INTO")
         table = self.parse_insert_table()
-        columns = self.parse_insert_columns()
-        self.eat("VALUES")
-        values = self.parse_insert_values()
+        insertion_data = self.parse_insert_cols_vals()
         if self.current_token() and self.current_token()[0] == "CONF":
             self.eat("CONF")
             self.eat("CONF")
@@ -699,10 +696,47 @@ class Parser:
             if action == "UPDATE":
                 self.eat("SET")
                 update_cols = self.parse_update_columns()
+            
+        if self.current_token() and self.current_token()[0] == "RETURNING":
+            returned_columns = ReturningClause(columns=self.parse_returning_columns(), table_name=table)
         self.eat("SEMICOLON")
-
-        return InsertStatement(table, columns, values, conflict, conflict_targets, action, update_cols)
+        return InsertStatement(table, insertion_data, conflict, conflict_targets, action, update_cols, returned_cols=returned_columns)
     
+    
+    def parse_insert_cols_vals(self):
+        res = []
+        cols = []
+        if self.current_token()[0] == "OPEN_PAREN":
+            cols = self.parse_insert_columns()
+        if self.current_token()[0] == "VALUES":
+            self.eat("VALUES")
+            while True: 
+                vals = []
+                self.eat("OPEN_PAREN")
+                while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
+                    if self.current_token()[0] == "COMMA":
+                        self.eat("COMMA")
+                        continue
+
+                    # Accept type-aware values
+                    token_type, token_value = self.current_token()
+                    if token_type in ("NUMBER", "STRING", "BOOLEAN"):
+                        val = self.eat(token_type)[1]
+                    else:
+                        raise SyntaxError(
+                            f"Unexpected token type '{token_type}' in VALUES clause. Must be NUMBER, STRING, or BOOLEAN."
+                        )
+                    vals.append(val)
+                
+                res.append(InsertExpression(columns=cols, values=vals))
+                self.eat("CLOSE_PAREN")
+                if self.current_token() and self.current_token()[0] == 'COMMA':
+                    self.eat("COMMA")
+                else:
+                    break
+        return res
+                
+
     
     
     def parse_insert_table(self):
@@ -711,7 +745,6 @@ class Parser:
     
 
     def parse_insert_columns(self):
-        
         self.eat("OPEN_PAREN")
         columns = []
         while self.current_token() and  (self.current_token()[0] == "IDENTIFIER" or self.current_token()[0] == "COMMA"):
@@ -726,7 +759,6 @@ class Parser:
     def parse_insert_values(self):
         self.eat("OPEN_PAREN")  # (
         values = []
-
         while self.current_token() and self.current_token()[0] != "CLOSE_PAREN":
             # Skip commas
             if self.current_token()[0] == "COMMA":
@@ -747,7 +779,17 @@ class Parser:
         return values
 
 
-   
+    def parse_returning_columns(self):
+        self.eat("RETURNING")
+        
+        returned_columns, returned_function_columns = self.parse_columns()
+        if returned_function_columns:
+            raise ValueError('Aggregation Function is not allowed in RETURNING statement')
+        return returned_columns
+            
+        
+        
+            
         
         
     def parse_update_statement(self):
