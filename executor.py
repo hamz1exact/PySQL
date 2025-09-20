@@ -455,32 +455,36 @@ def execute_update_query(ast, database):
         if column not in table_schema:
             raise ValueError(f"Column '{column}' does not exist")
 
-    # Loop through rows
+    inserted_rows = []
     for row in table_rows:
-        if ast.where is None or ast.where(row, table_schema):
+        if ast.where is None or ast.where.evaluate(row, table_schema):
             for col, expression in ast.columns.items():
                 row[col] = expression.evaluate(row ,table_schema)
+                inserted_rows.append(row)
                 cnt += 1
+            
     print(f"{cnt} row(s) updated in '{table_name}'")
+    return inserted_rows
     
 def execute_delete_query(ast, database):
     if ast.table not in database:
         raise ValueError(f"Table '{ast.table}' does not exist")
     if ast.where == None:
-        n = len(database[ast.table])
-        del database[ast.table][:]
-        print(f"{n} rows Deleted")
-        return
+        raise ValueError('Deleting all rows using DELETE statement is NOT allowed, use TRUNCATE <table_name> instead')
     table_obg = database[ast.table]
     table_rows = table_obg.rows
     table_schema = table_obg.schema
     n = 0
+    deleted_rows = []
     for i in range(len(table_rows) - 1, -1, -1):  # start from last data row
         row = table_rows[i]
-        if where_condition_evaluation(ast.where, row, table_schema):
+        if ast.where.evaluate(row, table_schema):
+            deleted_rows.append(table_rows[i])
             del table_rows[i]
             n += 1
-    print(f"{n} rows deleted")
+    print(deleted_rows)
+    print(f"{n} rows were deleted")
+    return deleted_rows
     
     
 def serialize_row(row):

@@ -711,25 +711,30 @@ class EnhancedSQLShell:
                 self._handle_select_result(result, start_time)
                 
             elif token_type == "INSERT":
-                from sql_ast import SelectStatement
+                from sql_ast import SelectStatement, UpdateStatement
                 ast = parser.parse_insert_statement()
                 result = execute(ast, database)
                 if ast.returned_cols:
-                
                     returning_result = ast.returned_cols.evaluate(result, database)
                     self._handle_select_result(returning_result, start_time)
-                    db_manager.save_database_file()
+                db_manager.save_database_file()
                 self._handle_modify_result("INSERT", start_time)
                 
             elif token_type == "UPDATE":
                 ast = parser.parse_update_statement()
                 result = execute(ast, database)
+                if ast.returned_columns:
+                    returning_result = ast.returned_columns.evaluate(result, database)
+                    self._handle_select_result(returning_result, start_time)
                 db_manager.save_database_file()
                 self._handle_modify_result("UPDATE", start_time)
                 
             elif token_type == "DELETE":
                 ast = parser.parse_delete_statement()
                 result = execute(ast, database)
+                if ast.returned_columns:
+                    returning_result = ast.returned_columns.evaluate(result, database)
+                    self._handle_select_result(returning_result, start_time)
                 db_manager.save_database_file()
                 self._handle_modify_result("DELETE", start_time)
             

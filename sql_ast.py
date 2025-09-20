@@ -80,15 +80,17 @@ class InsertStatement:
         self.returned_cols = returned_cols
         
 class UpdateStatement:
-    def __init__(self, table, columns, where):
+    def __init__(self, table, columns, where = None, returned_columns = None):
         self.table = table
         self.columns = columns
         self.where = where
+        self.returned_columns = returned_columns
 
 class DeleteStatement:
-    def __init__(self, table, where = None):
+    def __init__(self, table, where = None, returned_columns = None):
         self.table = table
         self.where = where
+        self.returned_columns = returned_columns
         
 class CreateDatabseStatement:
     def __init__(self, database_name):
@@ -1226,8 +1228,8 @@ class ExceptExpression(Expression):
 
 
 class ReturningClause:
-    def __init__(self, columns, table_name):
-        self.columns = columns
+    def __init__(self, columns , table_name = None):
+        self.columns = columns 
         self.table_name = table_name
     
     def evaluate(self, inserted_rows, database):

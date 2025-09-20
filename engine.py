@@ -786,27 +786,29 @@ class Parser:
         if returned_function_columns:
             raise ValueError('Aggregation Function is not allowed in RETURNING statement')
         return returned_columns
-            
-        
-        
-            
+
         
         
     def parse_update_statement(self):
         self.eat("UPDATE")
         table_name = self.eat("IDENTIFIER")[1]
         self.eat("SET")
-        columns = self.parse_update_columns()
+        columns_to_values = self.parse_update_columns()
         where = None
+        returned_columns = None
         curr_token  = self.current_token()
         if curr_token and curr_token[0] == "WHERE":
             self.eat("WHERE")
-            where = self.parse_condition_tree()
+            where = self.parse_expression()
+        if self.current_token() and self.current_token()[0] == "RETURNING":
+
+            returned_columns = ReturningClause(self.parse_returning_columns(), table_name)
         self.eat("SEMICOLON")
-        return UpdateStatement(table_name, columns, where)
+        
+        return UpdateStatement(table_name, columns_to_values, where, returned_columns)
 
     def parse_update_columns(self):
-        columns = {}
+        columns_to_values = {}
 
         while self.current_token() and self.current_token()[0] != "SEMICOLON" and self.current_token()[0] not in Lexer.keywords:
             # Skip commas
@@ -821,19 +823,10 @@ class Parser:
             LOW_PRIORITY_OPERATOR = self.eat("LOW_PRIORITY_OPERATOR")[1]
             if LOW_PRIORITY_OPERATOR not in ("=", "=="):
                 raise SyntaxError(f"Invalid assignment operator '{LOW_PRIORITY_OPERATOR}' for column '{col}'. Use '=' or '=='.")
+            val = self.parse_addition(context= None)
+            columns_to_values[col] = val
 
-            # Value token (type-aware)
-            token_type, token_value = self.current_token()
-            if token_type in ("NUMBER", "STRING", "BOOLEAN"):
-                val = self.eat(token_type)[1]
-            else:
-                raise SyntaxError(
-                    f"Unexpected token type '{token_type}' as value for column '{col}' in UPDATE statement."
-                )
-
-            columns[col] = val
-
-        return columns
+        return columns_to_values
 
     def parse_delete_statement(self):
         self.eat("DELETE")
@@ -841,11 +834,14 @@ class Parser:
         table = self.eat("IDENTIFIER")[1]
         token = self.current_token()
         where = None
+        returned_columns = None
         if token and token[0] == "WHERE":
             self.eat("WHERE")
-            where = self.parse_condition_tree()
+            where = self.parse_expression()
+        if self.current_token() and self.current_token()[0] == "RETURNING":
+            returned_columns = ReturningClause(self.parse_returning_columns(), table_name=table)
         self.eat("SEMICOLON")
-        return DeleteStatement(table, where)
+        return DeleteStatement(table, where, returned_columns=returned_columns)
     
     
     def parse_create_database(self):
