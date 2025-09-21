@@ -15,7 +15,7 @@ class Lexer:
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
         "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL",
-          "DATA", "WITH", "NO", "VIEWS")
+          "DATA", "WITH", "NO", "VIEWS", "MATIRALIZED")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {

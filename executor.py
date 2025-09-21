@@ -55,6 +55,7 @@ def execute_select_query(ast, database):
         raise ValueError(f"Table '{table_name}' does not exist")
 
     table = database[table_name].rows
+
     
     table_schema = database[table_name].schema
     filtered_rows = []

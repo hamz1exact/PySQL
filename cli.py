@@ -195,35 +195,36 @@ class SQLCompleter(Completer):
             # DDL
             'CREATE', 'DROP', 'ALTER', 'TABLE', 'DATABASE', 'INDEX', 'VIEW', 'TRIGGER',
             # Constraints
-            'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'UNIQUE', 'NOT', 'NULL', 'DEFAULT',
+            'PRIMARY', 'KEY', 'UNIQUE', 'NOT', 'NULL', 'DEFAULT',
             'CHECK', 'CONSTRAINT',
             # Data Types
-            'INT', 'INTEGER', 'VARCHAR', 'CHAR', 'TEXT', 'BLOB', 'REAL', 'NUMERIC', 'DECIMAL',
+            'INT', 'INTEGER', 'VARCHAR', 'CHAR', 'TEXT',
             'DATE', 'TIME', 'TIMESTAMP', 'BOOLEAN', 'FLOAT', 'DOUBLE',
             # Operators and Functions
-            'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN', 'IS', 'EXISTS', 'CASE', 'WHEN', 'THEN',
-            'ELSE', 'END', 'AS', 'DISTINCT', 'ALL', 'ANY', 'SOME',
-            # Joins
-            'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'ON', 'USING',
+            'AND', 'OR', 'IN', 'LIKE', 'BETWEEN', 'IS', 'EXISTS', 'CASE', 'WHEN', 'THEN',
+            'ELSE', 'END', 'AS', 'DISTINCT',
             # Grouping and Ordering
-            'ORDER', 'BY', 'GROUP', 'HAVING', 'ASC', 'DESC', 'NULLS', 'FIRST', 'LAST',
+            'ORDER', 'BY', 'GROUP', 'HAVING', 'ASC', 'DESC',
             # Aggregate Functions
-            'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'TOTAL', 'GROUP_CONCAT',
+            'COUNT', 'SUM', 'AVG', 'MIN', 'MAX',
             # String Functions
-            'LENGTH', 'SUBSTR', 'SUBSTRING', 'UPPER', 'LOWER', 'TRIM', 'LTRIM', 'RTRIM',
+            'LENGTH', 'SUBSTR', 'SUBSTRING', 'UPPER', 'LOWER',
+            
             'REPLACE', 'CONCAT',
             # Numeric Functions
-            'ABS', 'ROUND', 'CEIL', 'CEILING', 'FLOOR', 'MOD', 'POWER', 'SQRT',
+            'ABS', 'ROUND', 'CEIL', 'CEILING', 'FLOOR',
             # Date Functions
-            'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'DATE', 'TIME',
+            'NOW', 'CURRENT_DATE', 'CURRENT_TIME',
+            
             'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND',
             # Other Keywords
-            'USE', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'UNION', 'EXCEPT', 'INTERSECT',
-            'WITH', 'RECURSIVE', 'LIMIT', 'OFFSET', 'FETCH', 'FIRST', 'ROWS', 'ONLY',
-            'COMMIT', 'ROLLBACK', 'TRANSACTION', 'BEGIN', 'START', 'SAVEPOINT',
-            'GRANT', 'REVOKE', 'PRIVILEGES', 'TO', 'FROM', 'PUBLIC',
-            'TRUE', 'FALSE', 'UNKNOWN', "RETURNING", "CONSTRANTS", "SHOW", "UNION",
-            "ALL", "INTERSECT", "EXCEPT"
+            'USE', 'SHOW', 'DESC', 'UNION', 'EXCEPT', 'INTERSECT',
+            
+            'WITH',  'LIMIT', 'OFFSET', 'FETCH',
+            
+            'GRANT', 'REVOKE', 'PRIVILEGES', 'TO', 'PUBLIC',
+            
+            'TRUE', 'FALSE', 'UNKNOWN', 'RETURNING', 'CONSTRANTS', "VIEWS"
         ]
     
     def get_completions(self, document, complete_event):
@@ -751,7 +752,6 @@ class EnhancedSQLShell:
             elif token_type == "CALL":
                 ast = parser.parse_calling_expression()
                 result = execute(ast, db_manager)
-
                 self._handle_select_result(result.evaluate(), start_time)
                 
             
