@@ -53,18 +53,23 @@ def execute_select_query(ast, db_manager):
             res_row[col.alias if col.alias else col_id] = col.evaluate({}, {})
         return [res_row]
     
-
-    table_name = ast.table.evaluate()
-    
-    database = db_manager.active_db
-    if table_name not in database and table_name not in db_manager.views:
-        raise ValueError(f"Table '{table_name}' does not exist")
-    elif table_name in database:
-        table = database[table_name].rows
-        table_schema = database[table_name].schema
-    elif table_name in db_manager.views:
-        table = db_manager.views[table_name].evaluate()
+    if isinstance(ast.table.table_name, SelectStatement):
+        table_name = ast.table.alias if ast.table.alias else "?table?"
+        table = ast.table.table_name.evaluate()
         table_schema = generate_schema(table)
+    else:
+
+        table_name = ast.table.evaluate()
+        
+        database = db_manager.active_db
+        if table_name not in database and table_name not in db_manager.views:
+            raise ValueError(f"Table '{table_name}' does not exist")
+        elif table_name in database:
+            table = database[table_name].rows
+            table_schema = database[table_name].schema
+        elif table_name in db_manager.views:
+            table = db_manager.views[table_name].evaluate()
+            table_schema = generate_schema(table)
     
     
     filtered_rows = []

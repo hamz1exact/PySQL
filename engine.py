@@ -567,15 +567,23 @@ class Parser:
     
     
     def parse_table(self):
-        table_name = self.eat("IDENTIFIER")[1]
+        expr = None
+        if self.current_token()[0] == "IDENTIFIER":
+            expr =  self.parse_expression(context=None)
+        else:
+            if self.current_token()[0] == "OPEN_PAREN":
+                self.eat("OPEN_PAREN")
+                table = self.parse_single_select()
+                self.eat("CLOSE_PAREN")
+        if isinstance(expr, ColumnExpression):
+            table = expr.column_name
         alias = None
         if self.current_token() and self.current_token()[0] == "AS":
             self.eat("AS")
             alias = self.eat("IDENTIFIER")[1]
         elif self.current_token() and self.current_token()[0] == "IDENTIFIER":
             alias = self.eat("IDENTIFIER")[1]
-            
-        return TableReference(table_name, alias)
+        return TableReference(table, alias)
 
 
     def group_by(self):
