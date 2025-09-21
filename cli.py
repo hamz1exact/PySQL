@@ -701,7 +701,7 @@ class EnhancedSQLShell:
             
             token_type = lexer.tokens[0][0]
             next_token_type = lexer.tokens[1][0] if len(lexer.tokens) > 1 else None
-            
+                        
             # Parse and execute based on query type
             if token_type == "SELECT":
                 from sql_ast import UnionExpression, IntersectExpression, ExceptExpression
@@ -753,7 +753,10 @@ class EnhancedSQLShell:
                 ast = parser.parse_calling_expression()
                 result = execute(ast, db_manager)
                 self._handle_select_result(result.evaluate(), start_time)
-                
+              
+            elif token_type == "REFRESH":
+                ast = parser.parse_refresh_mv()
+                result = execute(ast, db_manager)
             
             elif token_type == "CREATE":
                 if next_token_type == "DATABASE":
@@ -765,10 +768,12 @@ class EnhancedSQLShell:
                     execute(ast, db_manager)
                     db_manager.save_database_file()
                     self._handle_ddl_result("CREATE TABLE", start_time)
-                elif next_token_type == "VIEW":
+                elif next_token_type == "HIGH_PRIORITY_OPERATOR" or next_token_type == "VIEW" or next_token_type == "MATERIALIZED":
                     ast = parser.create_view()
                     result = execute(ast, db_manager)
+                    db_manager.save_database_file()
                 else:
+                    
                     print("Unsupported CREATE statement")
                     
             elif token_type == "DROP":

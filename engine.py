@@ -15,7 +15,7 @@ class Lexer:
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
         "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL",
-          "DATA", "WITH", "NO", "VIEWS", "MATIRALIZED")
+          "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
@@ -958,12 +958,20 @@ class Parser:
         return CreateTableStatement(table_name, schema, defaults, auto, constraints, restrictions, private_constraints, constraints_ptr)
         
     def create_view(self):
+        can_be_replaced = False
         self.eat("CREATE")
-        self.eat("VIEW")
-        view_name = self.eat("IDENTIFIER")[1]
-        self.eat("AS")
-        expr = self.parse_single_select()
-        return CreateView(view_name, query=expr)
+        if self.current_token()[1] in Lexer.MainOperators:
+            self.eat(self.current_token()[0])
+            self.eat("REPLACE")
+            can_be_replaced = True
+        if self.current_token()[0] == "MATERIALIZED":
+            return self.parse_cmv()
+        else:
+            self.eat("VIEW")
+            view_name = self.eat("IDENTIFIER")[1]
+            self.eat("AS")
+            expr = self.parse_single_select()
+            return CreateView(view_name, query=expr, can_be_replaced=can_be_replaced)
     
     def parse_calling_expression(self):
         self.eat("CALL")
@@ -993,6 +1001,21 @@ class Parser:
                 with_data = False
             self.eat("DATA")
         return CTA(table_name, query=expr, with_data=with_data)
+        
+    def parse_cmv(self):
+        self.eat("MATERIALIZED")
+        self.eat("VIEW")
+        mt_table_name = self.eat("IDENTIFIER")[1]
+        self.eat("AS")
+        expr = self.parse_single_select()
+        return CreateMaterializedView(table_name=mt_table_name, query=expr)
+        
+    def parse_refresh_mv(self):
+        self.eat("REFRESH")
+        self.eat("MATERIALIZED")
+        self.eat("VIEW")
+        mv_name = self.eat(self.current_token()[0])[1]
+        return RefreshMaterializedView(mt_view_name=mv_name)
         
         
         

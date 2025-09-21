@@ -1217,9 +1217,10 @@ class ReturningClause:
         return result_rows
     
 class CreateView:
-    def __init__(self, view_name, query, rows):
+    def __init__(self, view_name, query, can_be_replaced = False):
         self.view_name = view_name
         self.query = query
+        self.can_be_replaced = can_be_replaced
             
 class CallView:
     def __init__(self, view_name):
@@ -1234,4 +1235,13 @@ class CTA:
     
  
     
+class CreateMaterializedView:
+    def __init__(self, table_name, query, with_data = True):
+        self.table_name = table_name
+        self.query = query
+        self.with_data = True
+
+class RefreshMaterializedView:
+    def __init__(self, mt_view_name):
+        self.mt_view_name = mt_view_name
     
