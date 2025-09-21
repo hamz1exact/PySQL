@@ -1217,10 +1217,10 @@ class ReturningClause:
         return result_rows
     
 class CreateView:
-    def __init__(self, view_name, query):
+    def __init__(self, view_name, query, rows):
         self.view_name = view_name
         self.query = query
-    
+            
 class CallView:
     def __init__(self, view_name):
         self.view_name = view_name

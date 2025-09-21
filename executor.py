@@ -39,7 +39,7 @@ def execute(ast, database):
     
     
 
-def execute_select_query(ast, database):
+def execute_select_query(ast, db_manager):
     
     if not ast.table:
         res_row = {}
@@ -51,13 +51,18 @@ def execute_select_query(ast, database):
     
 
     table_name = ast.table.evaluate()
-    if table_name not in database:
-        raise ValueError(f"Table '{table_name}' does not exist")
-
-    table = database[table_name].rows
-
     
-    table_schema = database[table_name].schema
+    database = db_manager.active_db
+    if table_name not in database and table_name not in db_manager.views:
+        raise ValueError(f"Table '{table_name}' does not exist")
+    elif table_name in database:
+        table = database[table_name].rows
+        table_schema = database[table_name].schema
+    elif table_name in db_manager.views:
+        table = db_manager.views[table_name].evaluate()
+        table_schema = generate_schema(table)
+    
+    
     filtered_rows = []
     all_ids = []
     for col in ast.columns:
@@ -978,3 +983,42 @@ def execute_CTA(ast, database):
     for col, sql_type in schema.items():
         print(f"  {col}: {sql_type.__name__}")
     
+def generate_schema(rows):
+    schema = {}
+    column_samples = {}
+    
+    # Collect samples from all rows to better determine types
+    for row in rows:
+        for col, val in row.items():
+            if col not in column_samples:
+                column_samples[col] = []
+            if val is not None:  # Only collect non-null samples
+                column_samples[col].append(val)
+    
+    # Determine schema based on samples
+    for col, samples in column_samples.items():
+        if not samples:  # All values were None
+            schema[col] = VARCHAR
+            continue
+            
+        # Check the first few non-null values to determine type
+        sample_val = samples[0]
+        
+        # Important: Check bool BEFORE int because isinstance(True, int) returns True in Python!
+        if isinstance(sample_val, bool):
+            schema[col] = BOOLEAN
+        elif isinstance(sample_val, int):
+            schema[col] = INT
+        elif isinstance(sample_val, float):
+            schema[col] = FLOAT
+        elif isinstance(sample_val, str):
+            schema[col] = VARCHAR
+        elif isinstance(sample_val, datetime):
+            schema[col] = TIMESTAMP
+        elif isinstance(sample_val, date):
+            schema[col] = DATE
+        elif isinstance(sample_val, time):
+            schema[col] = TIME
+        else:
+            schema[col] = VARCHAR
+    return schema

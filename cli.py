@@ -709,7 +709,7 @@ class EnhancedSQLShell:
                 if isinstance(ast, (UnionExpression, IntersectExpression, ExceptExpression)):
                     result = ast.evaluate()
                 else:
-                    result = execute(ast, database)
+                    result = execute(ast, db_manager)
                 self._handle_select_result(result, start_time)
                 
             elif token_type == "INSERT":
