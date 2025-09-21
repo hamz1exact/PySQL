@@ -111,59 +111,7 @@ class UseStatement:
     def __init__(self, database_name):
         self.database_name = database_name
         
-        
-class FunctionCall:
-    def __init__(self, function_name, arg, distinct = False, alias = "?column?"):
-        self.function_name = function_name
-        self.alias = alias
-        self.arg = arg
-        self.distinct = distinct
-        
-class CheckNullColumn:
-    def __init__(self, column, isNull = True):
-        self.column = column
-        self.isNull = isNull
-
-class Membership:
-    def __init__(self, col, args, IN = True):
-        self.col = col
-        self.IN = IN
-        self.args = args
-
-class NegationCondition:
-    def __init__(self, expression):
-        self.expression = expression
-        
-class BetweenCondition:
-    def __init__(self, col, arg1, arg2, NOT = False):
-        self.col = col
-        self.NOT = NOT
-        self.arg1 = arg1
-        self.arg2 = arg2
-
-class LikeCondition:
-    def __init__(self, col, arg, NOT = False):
-        self.col = col
-        self.arg = arg
-        self.NOT = NOT
-        
-class HavingCondition:
-    def __init__(self, left, low_operator, right):
-        self.left = left
-        self.low_operator = low_operator
-        self.right = right
-        
-class HavingLogicalCondition:
-    def __init__(self, left_expression, high_operator, right_expression):
-        self.left_expression = left_expression
-        self.high_operator = high_operator
-        self.right_expression = right_expression
-        
-class InpType:
-    def __init__(self, type, content):
-        self.type = type
-        self.content = content
-
+ 
       
 
 class Expression:
@@ -1267,3 +1215,13 @@ class ReturningClause:
                         
             result_rows.append(result_row)  
         return result_rows
+    
+class CreateView:
+    def __init__(self, view_name, query):
+        self.view_name = view_name
+        self.query = query
+    
+class CallView:
+    def __init__(self, view_name):
+        self.view_name = view_name
+    

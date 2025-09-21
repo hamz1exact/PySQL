@@ -28,6 +28,12 @@ def execute(ast, database):
     elif isinstance(ast, UseStatement):
         return execute_use_statement(ast, database)
     
+    elif isinstance(ast, CreateView):
+        return create_new_view(ast, database)
+    
+    elif isinstance(ast, CallView):
+        return call_view(ast, database)
+    
     
 
 def execute_select_query(ast, database):
@@ -40,8 +46,7 @@ def execute_select_query(ast, database):
             res_row[col.alias if col.alias else col_id] = col.evaluate({}, {})
         return [res_row]
     
-    
-    
+
     table_name = ast.table.evaluate()
     if table_name not in database:
         raise ValueError(f"Table '{table_name}' does not exist")
@@ -53,6 +58,7 @@ def execute_select_query(ast, database):
     all_ids = []
     for col in ast.columns:
         all_ids.extend(extract_identifiers(col))
+    print(all_ids)
     all_where_ids = []
     all_where_ids = extract_identifiers(ast.where)
     for column in all_where_ids:
@@ -85,6 +91,7 @@ def execute_select_query(ast, database):
     
     for col in ast.columns:
         all_ids.extend(extract_identifiers(col))
+    print(all_ids)
     
     
     if table_has_asterisk and ast.function_columns:
@@ -94,8 +101,8 @@ def execute_select_query(ast, database):
     function_args = []
     
     for col in ast.function_columns:
-        
         function_args.extend(extract_identifiers(col))
+    print(function_args)
     
     
     for col in function_args:
@@ -525,6 +532,12 @@ def extract_identifiers(expr):
     elif isinstance(expr, Columns):  
         # in case you want to pass a Columns wrapper
         return extract_identifiers(expr.col_object)
+    
+    elif isinstance(expr, MathFunction):
+        return extract_identifiers(expr.expression)
+    
+    elif isinstance(expr, StringFunction):
+        return extract_identifiers(expr.expression)
 
     return []  # literals, constants, etc.
 
@@ -856,3 +869,17 @@ def find_constraint_violation(table_obj, new_row):
                 return col_name, constraint_type, new_value
     
     return None
+
+
+def call_view(ast, database):
+    if ast.view_name not in database.views:
+        raise ValueError (f"There is no view with name <{ast.view_name}>")
+    return database.views[ast.view_name]
+    
+def create_new_view(ast, db_manager):
+    if ast.view_name in db_manager.views:
+        print(f"Error: View '{ast.view_name}' already exists")
+    else:
+        db_manager.views[ast.view_name] = ast.query
+        print(f"View '{ast.view_name}' created successfully")
+        db_manager.save_database_file()

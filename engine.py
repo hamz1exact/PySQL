@@ -14,7 +14,7 @@ class Lexer:
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
-        "ALL", "INTERSECT", "EXCEPT", "RETURNING")
+        "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
@@ -799,7 +799,7 @@ class Parser:
         curr_token  = self.current_token()
         if curr_token and curr_token[0] == "WHERE":
             self.eat("WHERE")
-            where = self.parse_expression()
+            where = self.parse_expression(context="WHERE")
         if self.current_token() and self.current_token()[0] == "RETURNING":
 
             returned_columns = ReturningClause(self.parse_returning_columns(), table_name)
@@ -837,7 +837,7 @@ class Parser:
         returned_columns = None
         if token and token[0] == "WHERE":
             self.eat("WHERE")
-            where = self.parse_expression()
+            where = self.parse_expression(context="WHERE")
         if self.current_token() and self.current_token()[0] == "RETURNING":
             returned_columns = ReturningClause(self.parse_returning_columns(), table_name=table)
         self.eat("SEMICOLON")
@@ -951,7 +951,36 @@ class Parser:
     
         return CreateTableStatement(table_name, schema, defaults, auto, constraints, restrictions, private_constraints, constraints_ptr)
         
-
+    def create_view(self):
+        
+        self.eat("CREATE")
+        self.eat("VIEW")
+        view_name = self.eat("IDENTIFIER")[1]
+        self.eat("AS")
+        expr = self.parse_single_select()
+        return CreateView(view_name, query=expr)
+    
+    def parse_calling_expression(self):
+        self.eat("CALL")
+        if self.current_token()[0] == "VIEW":
+            self.eat("VIEW")
+            if self.current_token()[0] == "STAR":
+                self.eat("STAR")
+                view_name = self.eat("IDENTIFIER")[1]
+            elif self.current_token()[0] == "OPEN_PAREN":
+                self.eat("OPEN_PAREN")
+                view_name = self.eat("IDENTIFIER")[1]
+                self.eat("CLOSE_PAREN")
+            else:
+                view_name = self.eat("IDENTIFIER")[1]
+                
+                
+            
+        return CallView(view_name)
+        
+        
+        
+        
 
     def parse_use_statement(self):
         self.eat("USE")
@@ -1076,7 +1105,6 @@ class Parser:
             left = BinaryOperation(left, operator, right)
         
         return left
-    
     
     
     def parse_factor(self, context = None):

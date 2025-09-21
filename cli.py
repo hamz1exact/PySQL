@@ -222,7 +222,8 @@ class SQLCompleter(Completer):
             'WITH', 'RECURSIVE', 'LIMIT', 'OFFSET', 'FETCH', 'FIRST', 'ROWS', 'ONLY',
             'COMMIT', 'ROLLBACK', 'TRANSACTION', 'BEGIN', 'START', 'SAVEPOINT',
             'GRANT', 'REVOKE', 'PRIVILEGES', 'TO', 'FROM', 'PUBLIC',
-            'TRUE', 'FALSE', 'UNKNOWN'
+            'TRUE', 'FALSE', 'UNKNOWN', "RETURNING", "CONSTRANTS", "SHOW", "UNION",
+            "ALL", "INTERSECT", "EXCEPT"
         ]
     
     def get_completions(self, document, complete_event):
@@ -741,6 +742,13 @@ class EnhancedSQLShell:
             elif token_type == "SHOW":
                 result =  parser.parse_request_statement().evaluate()
                 self._handle_select_result(result, start_time)
+                
+            elif token_type == "CALL":
+                ast = parser.parse_calling_expression()
+                result = execute(ast, db_manager)
+
+                self._handle_select_result(result.evaluate(), start_time)
+                
             
             elif token_type == "CREATE":
                 if next_token_type == "DATABASE":
@@ -752,6 +760,9 @@ class EnhancedSQLShell:
                     execute(ast, db_manager)
                     db_manager.save_database_file()
                     self._handle_ddl_result("CREATE TABLE", start_time)
+                elif next_token_type == "VIEW":
+                    ast = parser.create_view()
+                    result = execute(ast, db_manager)
                 else:
                     print("Unsupported CREATE statement")
                     
