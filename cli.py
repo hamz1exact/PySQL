@@ -740,8 +740,13 @@ class EnhancedSQLShell:
                 self._handle_modify_result("DELETE", start_time)
             
             elif token_type == "SHOW":
-                result =  parser.parse_request_statement().evaluate()
-                self._handle_select_result(result, start_time)
+                from sql_ast import ShowConstraints
+                ast = parser.parse_request_statement()
+                if isinstance(ast, ShowConstraints):
+                    result = ast.evaluate()
+                    self._handle_select_result(result, start_time)
+                else:
+                    result = ast
                 
             elif token_type == "CALL":
                 ast = parser.parse_calling_expression()

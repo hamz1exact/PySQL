@@ -14,7 +14,8 @@ class Lexer:
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
-        "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL", "DATA", "WITH", "NO")
+        "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL",
+          "DATA", "WITH", "NO", "VIEWS")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
@@ -392,7 +393,6 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
-        
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -652,24 +652,28 @@ class Parser:
         
     def parse_request_statement(self):
         self.eat("SHOW")
-        col = None
-        if self.current_token()[1] != "CONSTRAINTS":
-            raise ValueError("SHOW Must be followed by CONSTRAINTS")
-        self.eat("IDENTIFIER")
-        if self.current_token()[0] == "OPEN_PAREN":
-            self.eat("OPEN_PAREN")
-            table_name = self.eat(self.current_token()[0])[1]
-            if self.current_token() and self.current_token()[0] == "DOT":
-                self.eat("DOT")
-                col = self.eat("IDENTIFIER")[1]
-            self.eat("CLOSE_PAREN")
-        elif self.current_token()[0] == "STAR":
-            self.eat("STAR")
-            table_name = self.eat(self.current_token()[0])[1]
-            if self.current_token() and self.current_token()[0] == "DOT":
-                self.eat("DOT")
-                col = self.eat("IDENTIFIER")[1]
-        return ShowConstraints(table_name, col=col)
+        if self.current_token() and self.current_token()[0] == "VIEWS":
+            self.parse_list_viws()
+            self.eat("SEMICOLON")
+        else:
+            col = None
+            if self.current_token()[1] != "CONSTRAINTS":
+                raise ValueError("SHOW Must be followed by CONSTRAINTS")
+            self.eat("IDENTIFIER")
+            if self.current_token()[0] == "OPEN_PAREN":
+                self.eat("OPEN_PAREN")
+                table_name = self.eat(self.current_token()[0])[1]
+                if self.current_token() and self.current_token()[0] == "DOT":
+                    self.eat("DOT")
+                    col = self.eat("IDENTIFIER")[1]
+                self.eat("CLOSE_PAREN")
+            elif self.current_token()[0] == "STAR":
+                self.eat("STAR")
+                table_name = self.eat(self.current_token()[0])[1]
+                if self.current_token() and self.current_token()[0] == "DOT":
+                    self.eat("DOT")
+                    col = self.eat("IDENTIFIER")[1]
+            return ShowConstraints(table_name, col=col)
         
 
 
@@ -992,7 +996,9 @@ class Parser:
         
         
         
-        
+    def parse_list_viws(self):
+        self.eat("VIEWS")
+        return db_manager.list_views()
         
 
     def parse_use_statement(self):
