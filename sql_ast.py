@@ -37,10 +37,21 @@ class SelectStatement:
     def evaluate(self, row = None, schema = None, runner_context=None):
             execute_fn = get_execute_function()
             db_mgr = get_db_manager()
-        
+            
             result = execute_fn(self, db_mgr.active_db)
-
-            return result
+            if runner_context is None:
+                return result
+            elif runner_context == "ONE_VALUE":
+                if len(result) > 1:
+                    raise ValueError ("Subquery must return only one value")
+                first_key = list(result[0].keys())[0]
+                return result[0][first_key]
+            else:
+                if len(result)>=1 and len(result[0]) > 1:
+                    raise ValueError("Subquery must return only one value")
+                else:
+                    return result if len(result)>=1 else []
+                
     
 class InsertExpression():
     def __init__(self, values, columns = None):
@@ -304,7 +315,6 @@ class ConditionExpr(Expression):
             left = left.lower()
             right = right.lower()
         
-        # Comparison operations - MUST return boolean values
         if self.operator == '=': 
             result = left == right
         elif self.operator == ">": 
@@ -438,8 +448,9 @@ class ConditionExpr(Expression):
                 expected_type = schema[other_expr.column_name]
                 return expr.evaluate(row, schema, expected_type)
         elif isinstance(expr, SelectStatement):
-            return expr.evaluate(row, schema)
-        
+            exp = expr.evaluate(row, schema, runner_context="ONE_VALUE")
+            return exp
+                
         return expr.evaluate(row, schema)
 
 class Between(Expression):
@@ -454,22 +465,32 @@ class Between(Expression):
             expected_type = schema[self.expression.column_name]
         else:
             expected_type = None
-        
-        if isinstance(self.lower, LiteralExpression):
+
+        # --- Lower bound ---
+        if isinstance(self.lower, SelectStatement):
+            lower_value = self.lower.evaluate(row, schema, runner_context="ONE_VALUE")
+        elif isinstance(self.lower, LiteralExpression):
             lower_value = self.lower.evaluate(row, schema, expected_type)
-        else: lower_value = self.lower.evaluate(row, schema)  
-        
-        if isinstance(self.upper, LiteralExpression):
+        else:
+            lower_value = self.lower.evaluate(row, schema)
+
+        # --- Upper bound ---
+        if isinstance(self.upper, SelectStatement):
+            upper_value = self.upper.evaluate(row, schema, runner_context="ONE_VALUE")
+        elif isinstance(self.upper, LiteralExpression):
             upper_value = self.upper.evaluate(row, schema, expected_type)
-        else: upper_value = self.upper.evaluate(row, schema)
-        
+        else:
+            upper_value = self.upper.evaluate(row, schema)
+
+        # --- Expression value ---
         expr_value = self.expression.evaluate(row, schema)
-        
+
         if expr_value is None or lower_value is None or upper_value is None:
             return False
+
         if not self.is_not:
-            return lower_value<=self.expression.evaluate(row, schema)<=upper_value
-        return not lower_value<=self.expression.evaluate(row, schema)<=upper_value
+            return lower_value <= expr_value <= upper_value
+        return not (lower_value <= expr_value <= upper_value)
 
 class Membership(Expression):
     def __init__(self, col ,args, is_not = False):
@@ -481,10 +502,22 @@ class Membership(Expression):
         
     def evaluate(self, row, schema):
         value = self.col.evaluate(row, schema)
+        out = []
         if self.argset:
             result = value in self.argset
         else:
-            result = value in [arg.evaluate(row, schema) for arg in self.args]
+            for arg in self.args:
+                if isinstance(arg, SelectStatement):
+                    exp = arg.evaluate(row, schema, runner_context="ANY")
+                    seen = set()
+                    for row in exp:
+                        for v in row.values():
+                            if v not in seen:
+                                seen.add(v)
+                                out.append(v)
+                else:
+                    out.append(arg.evaluate(row, schema))
+        result = value in out                    
         return not result if self.is_not else result
 
 class NegationCondition(Expression):
@@ -492,7 +525,6 @@ class NegationCondition(Expression):
         self.expression = expression
     
     def evaluate(self, row, schema):
-        
         return not(self.expression.evaluate(row, schema))
 
 class IsNullCondition(Expression):
@@ -501,9 +533,13 @@ class IsNullCondition(Expression):
         self.expression = expression
         
     def evaluate(self, row, schema):
+        if isinstance(self.expression, SelectStatement):
+            expr = self.expression.evaluate(row, schema, runner_context="ONE_VALUE")
+        else:
+            expr = self.expression.evaluate(row, schema)
         if self.is_null:
-            return self.expression.evaluate(row, schema) is None
-        return self.expression.evaluate(row, schema) is not None
+            return expr is None
+        return expr is not None
         
 
 class LikeCondition(Expression):
@@ -989,7 +1025,7 @@ class Exists(Expression):
         self.alias = alias
         
     def evaluate(self, row, schema):
-        
+
         res = self.subquery.evaluate(row, schema)
         if res: return True
         return False

@@ -1271,6 +1271,9 @@ class Parser:
             self.eat("CLOSE_PAREN")
             return NullIF(expr, number)
                 
+        elif token[0] == "SELECT":
+            return self.parse_single_select()
+        
         elif token[0] == "CAST":
             self.eat("CAST")
             self.eat("OPEN_PAREN")
