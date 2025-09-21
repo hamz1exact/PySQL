@@ -97,7 +97,7 @@ class CreateDatabseStatement:
         self.database_name = database_name
         
 class CreateTableStatement:
-    def __init__(self, table_name, schema, defaults, auto, constraints, restrictions, private_constraints, constraints_ptr):
+    def __init__(self, table_name, schema, defaults = None, auto = None, constraints = None, restrictions = None, private_constraints = None, constraints_ptr = None):
         self.table_name = table_name
         self.schema = schema
         self.defaults = defaults
@@ -1224,4 +1224,13 @@ class CreateView:
 class CallView:
     def __init__(self, view_name):
         self.view_name = view_name
+        
+        
+class CTA:
+    def __init__(self, table_name, query, with_data = True):
+        self.table_name = table_name
+        self.query = query
+        self.with_data = with_data
+    
+    
     

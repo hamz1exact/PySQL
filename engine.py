@@ -14,7 +14,7 @@ class Lexer:
         "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
         "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
         "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
-        "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL")
+        "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL", "DATA", "WITH", "NO")
     
     constraints = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
     AbsenceOfValue = {
@@ -856,6 +856,8 @@ class Parser:
     def parse_create_table(self):
         self.eat("CREATE")
         self.eat("TABLE")
+        if self.current_token()[0] == "AS":
+            return self.parse_cta()
         table_name = self.eat("IDENTIFIER")[1]
         table_name = table_name.strip()
         self.eat("OPEN_PAREN")  # (
@@ -952,7 +954,6 @@ class Parser:
         return CreateTableStatement(table_name, schema, defaults, auto, constraints, restrictions, private_constraints, constraints_ptr)
         
     def create_view(self):
-        
         self.eat("CREATE")
         self.eat("VIEW")
         view_name = self.eat("IDENTIFIER")[1]
@@ -974,9 +975,21 @@ class Parser:
             else:
                 view_name = self.eat("IDENTIFIER")[1]
                 
-                
-            
         return CallView(view_name)
+    
+    def parse_cta(self):
+        with_data = True
+        self.eat("AS")
+        table_name = self.eat("IDENTIFIER")[1]
+        expr = self.parse_single_select()
+        if self.current_token() and self.current_token()[0] == "WITH":
+            self.eat("WITH")
+            if self.current_token()[0] == "NO":
+                self.eat("NO")
+                with_data = False
+            self.eat("DATA")
+        return CTA(table_name, query=expr, with_data=with_data)
+        
         
         
         
