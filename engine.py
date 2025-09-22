@@ -567,23 +567,29 @@ class Parser:
     
     
     def parse_table(self):
-        expr = None
+        """Parse table reference which can be a table name or subquery"""
         if self.current_token()[0] == "IDENTIFIER":
-            expr =  self.parse_expression(context=None)
+            table_name = self.eat("IDENTIFIER")[1]
+            table_ref = TableReference(table_name)
+        elif self.current_token()[0] == "OPEN_PAREN":
+            # This is a subquery in FROM clause
+            self.eat("OPEN_PAREN")
+            subquery = self.parse_select_statement()  # Use full SELECT parser for nested queries
+            self.eat("CLOSE_PAREN")
+            table_ref = TableReference(subquery)
         else:
-            if self.current_token()[0] == "OPEN_PAREN":
-                self.eat("OPEN_PAREN")
-                table = self.parse_single_select()
-                self.eat("CLOSE_PAREN")
-        if isinstance(expr, ColumnExpression):
-            table = expr.column_name
+            raise SyntaxError(f"Expected table name or subquery, got {self.current_token()}")
+        
+        # Handle alias
         alias = None
         if self.current_token() and self.current_token()[0] == "AS":
             self.eat("AS")
             alias = self.eat("IDENTIFIER")[1]
         elif self.current_token() and self.current_token()[0] == "IDENTIFIER":
             alias = self.eat("IDENTIFIER")[1]
-        return TableReference(table, alias)
+        
+        table_ref.alias = alias
+        return table_ref
 
 
     def group_by(self):

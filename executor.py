@@ -43,6 +43,8 @@ def execute(ast, database):
         return refresh_meterialized_view(ast, database)
     
 
+
+    
 def execute_select_query(ast, db_manager):
     
     if not ast.table:
@@ -53,15 +55,17 @@ def execute_select_query(ast, db_manager):
             res_row[col.alias if col.alias else col_id] = col.evaluate({}, {})
         return [res_row]
     
+    # Handle different types of table references
     if isinstance(ast.table.table_name, SelectStatement):
-        table_name = ast.table.alias if ast.table.alias else "?table?"
+        # Subquery in FROM clause
+        table_name = ast.table.alias if ast.table.alias else "subquery"
         table = ast.table.table_name.evaluate()
         table_schema = generate_schema(table)
-    else:
-
-        table_name = ast.table.evaluate()
-        
+    elif isinstance(ast.table.table_name, str):
+        # Regular table name or view
+        table_name = ast.table.table_name
         database = db_manager.active_db
+        
         if table_name not in database and table_name not in db_manager.views:
             raise ValueError(f"Table '{table_name}' does not exist")
         elif table_name in database:
@@ -70,7 +74,20 @@ def execute_select_query(ast, db_manager):
         elif table_name in db_manager.views:
             table = db_manager.views[table_name].evaluate()
             table_schema = generate_schema(table)
-    
+    else:
+        # Handle other cases (like direct table references)
+        table_name = str(ast.table.table_name)
+        database = db_manager.active_db
+        
+        if table_name not in database and table_name not in db_manager.views:
+            raise ValueError(f"Table '{table_name}' does not exist")
+        elif table_name in database:
+            table = database[table_name].rows
+            table_schema = database[table_name].schema
+        elif table_name in db_manager.views:
+            table = db_manager.views[table_name].evaluate()
+            table_schema = generate_schema(table)
+
     
     filtered_rows = []
     all_ids = []
@@ -133,11 +150,27 @@ def execute_select_query(ast, db_manager):
     if ast.group_by:
         for col in ast.group_by:
             group_by_cols.extend(extract_identifiers(col))
-    
-    if ast.group_by and ast.columns and ast.function_columns:
+        
+    if ast.group_by and (ast.columns or ast.function_columns):
+        print(f"DEBUG: Validating GROUP BY constraints...")
+        
         for col in all_ids:
-            if col not in group_by_cols:
-                raise ValueError(f"Column '{col}' must appear in the GROUP BY clause or be used in an aggregate function")
+            if col != "*":  # Skip wildcard
+                print(f"DEBUG: Checking column '{col}' - in GROUP BY: {col in group_by_cols}")
+                
+                # The key insight: if a column appears in both SELECT and GROUP BY, it's valid
+                # Only flag error if it's in SELECT but NOT in GROUP BY and NOT an aggregate
+                if col not in group_by_cols:
+                    # Check if this column is from a regular (non-function) SELECT
+                    is_regular_column = False
+                    for select_expr in ast.columns:
+                        expr_cols = extract_identifiers(select_expr)
+                        if col in expr_cols:
+                            is_regular_column = True
+                            break
+                    
+                    if is_regular_column:
+                        raise ValueError(f"Column '{col}' must appear in the GROUP BY clause or be used in an aggregate function")
     
     # Filter rows based on WHERE clause
 

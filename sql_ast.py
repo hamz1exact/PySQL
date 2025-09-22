@@ -4,7 +4,7 @@ import math
 import re
 
 def get_execute_function():
-    from utilities import execute
+    from executor import execute
     return execute
 
 def get_db_manager():
@@ -37,8 +37,7 @@ class SelectStatement:
     def evaluate(self, row = None, schema = None, runner_context=None):
             execute_fn = get_execute_function()
             db_mgr = get_db_manager()
-            
-            result = execute_fn(self, db_mgr.active_db)
+            result = execute_fn(self, db_mgr)
             if runner_context is None:
                 return result
             elif runner_context == "ONE_VALUE":
@@ -274,40 +273,40 @@ class GroupBy(Expression):
     def __init__(self, expressions):
         self.expressions = expressions
 
-
 class ConditionExpr(Expression):
-    def __init__(self, left, operator, right, context = None):
+    def __init__(self, left, operator, right, context=None):
         self.left = left
         self.operator = operator
         self.right = right
         self.context = context
-        
 
     def evaluate(self, row_or_rows, schema):
         if self.context == "HAVING":
-            # For HAVING, we need to handle aggregates vs regular columns differently
             left = self._evaluate_having_expr(self.left, row_or_rows, schema)
             right = self._evaluate_having_expr(self.right, row_or_rows, schema)
         elif self.context == "WHERE":
-            # For WHERE, evaluate normally with single row
             left = self._evaluate_where_expr(self.left, row_or_rows, schema)
             right = self._evaluate_where_expr(self.right, row_or_rows, schema)
         else:
-            left = self.left.evaluate(row_or_rows, schema)
-            right = self.right.evaluate(row_or_rows, schema)
-
-        # Debug print to see what values we're getting
+            # Handle subqueries in any context
+            if isinstance(self.left, SelectStatement):
+                left = self.left.evaluate(row_or_rows, schema, runner_context="ONE_VALUE")
+            else:
+                left = self.left.evaluate(row_or_rows, schema)
+                
+            if isinstance(self.right, SelectStatement):
+                right = self.right.evaluate(row_or_rows, schema, runner_context="ONE_VALUE")
+            else:
+                right = self.right.evaluate(row_or_rows, schema)
 
         # Handle NULL values first
         if left is None or right is None:
             if self.operator in ["AND", "OR"]:
-                # For logical operators with NULL
                 if self.operator == "AND":
                     return False if (left is False or right is False) else None
                 else:  # OR
                     return True if (left is True or right is True) else None
             else:
-                # For comparison operators with NULL
                 return False
         
         # Convert string comparisons to lowercase for case-insensitive comparison
@@ -315,6 +314,7 @@ class ConditionExpr(Expression):
             left = left.lower()
             right = right.lower()
         
+        # Apply operator
         if self.operator == '=': 
             result = left == right
         elif self.operator == ">": 
@@ -328,14 +328,11 @@ class ConditionExpr(Expression):
         elif self.operator == "!=": 
             result = left != right
         elif self.operator == "AND": 
-            # Ensure boolean conversion
             result = bool(left) and bool(right)
         elif self.operator == "OR": 
-            # Ensure boolean conversion
             result = bool(left) or bool(right)
         else:
             raise ValueError(f"Unknown operator: {self.operator}")
-        
         
         return result
     
@@ -503,11 +500,13 @@ class Membership(Expression):
     def evaluate(self, row, schema):
         value = self.col.evaluate(row, schema)
         out = []
+        
         if self.argset:
             result = value in self.argset
         else:
             for arg in self.args:
                 if isinstance(arg, SelectStatement):
+                    
                     exp = arg.evaluate(row, schema, runner_context="ANY")
                     seen = set()
                     for row in exp:
@@ -516,8 +515,10 @@ class Membership(Expression):
                                 seen.add(v)
                                 out.append(v)
                 else:
+                    
                     out.append(arg.evaluate(row, schema))
-        result = value in out                    
+        
+            result = value in out                    
         return not result if self.is_not else result
 
 class NegationCondition(Expression):
@@ -989,20 +990,52 @@ class CaseWhen(Expression):
             eval_row = row
         
         for i, expr in enumerate(self.expressions):
-            if expr.evaluate(eval_row, schema):
-                return self.actions[i].evaluate(eval_row, schema)
+            try:
+                # Handle different expression types in WHEN conditions
+                if isinstance(expr, ConditionExpr):
+                    # ConditionExpr can handle subqueries internally
+                    condition_result = expr.evaluate(eval_row, schema)
+                elif isinstance(expr, SelectStatement):
+                    # Direct subquery in WHEN clause
+                    subquery_result = expr.evaluate(eval_row, schema, runner_context="ONE_VALUE")
+                    condition_result = bool(subquery_result)
+                else:
+                    # Regular expressions
+                    condition_result = expr.evaluate(eval_row, schema)
+                
+                if condition_result:
+                    # Evaluate the THEN action
+                    action = self.actions[i]
+                    if isinstance(action, SelectStatement):
+                        # Subquery in THEN clause
+                        return action.evaluate(eval_row, schema, runner_context="ONE_VALUE")
+                    else:
+                        return action.evaluate(eval_row, schema)
+                        
+            except Exception as e:
+                # If evaluation fails, continue to next condition
+                print(f"Warning: Error evaluating CASE condition {i}: {e}")
+                continue
         
+        # No conditions matched, evaluate ELSE clause
         if self.case_else:
-            return self.case_else.evaluate(eval_row, schema)
+            if isinstance(self.case_else, SelectStatement):
+                # Subquery in ELSE clause
+                return self.case_else.evaluate(eval_row, schema, runner_context="ONE_VALUE")
+            else:
+                return self.case_else.evaluate(eval_row, schema)
         
         return None
     
 class TableReference(Expression):
     def __init__(self, table_name, alias=None):
-        self.table_name = table_name
-        self.alias = alias  # 'e' for 'employees as e'
+        self.table_name = table_name  # Can be string or SelectStatement
+        self.alias = alias
     
     def evaluate(self):
+        if isinstance(self.table_name, SelectStatement):
+            # This is a subquery in FROM clause
+            return self.table_name
         return self.table_name
         
         
@@ -1012,11 +1045,22 @@ class QualifiedColumnExpression(ColumnExpression):
         self.column_name = column_name
         self.alias = alias
         
-def evaluate(self, row, schema):
-        # For now, just use column_name (single table)
-        # Later: resolve from specific table in joins
-        return super().evaluate(row, schema)
+    def evaluate(self, row, schema):
+        # For qualified columns like f1.account_holder
+        # In the current single-table context, just use column_name
+        # TODO: Enhance for multi-table joins
+        if isinstance(row, dict) and self.column_name in row:
+            value = row[self.column_name]
+            if isinstance(value, SQLType):
+                return value.value
+            return value
+        elif isinstance(row, dict) and self.column_name == "*":
+            return row
+        else:
+            raise KeyError(f"Column '{self.table_name}.{self.column_name}' not found")
     
+    def get_referenced_columns(self):
+        return {self.column_name}
     
 class Exists(Expression):
     def __init__(self, subquery, name = "EXISTS", alias  = None):
