@@ -533,7 +533,6 @@ def execute_delete_query(ast, database):
             deleted_rows.append(table_rows[i])
             del table_rows[i]
             n += 1
-    print(deleted_rows)
     print(f"{n} rows were deleted")
     return deleted_rows
     

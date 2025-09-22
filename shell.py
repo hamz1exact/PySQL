@@ -1179,6 +1179,7 @@ Examples:
             print(",".join(row_data))
     
     def _cmd_show_columns_only(self, args):
+        from datetime import datetime, date, time
         """Show only the column names and types"""
         if not hasattr(self.config, 'last_result') or not self.config.last_result:
             print("No query result available. Run a SELECT query first.")
@@ -1195,8 +1196,14 @@ Examples:
                     value = row.get(col)
                     if isinstance(value, int):
                         col_type = "INTEGER"
+                    elif isinstance(value,date):
+                        col_type = "DATE"
+                    elif isinstance(value, time):
+                        col_type = "TIME"
+                    elif isinstance(value, datetime):
+                        col_type = "TIMESTAMP"
                     elif isinstance(value, float):
-                        col_type = "REAL"
+                        col_type = "FLOAT"
                     elif isinstance(value, bool):
                         col_type = "BOOLEAN"
                     elif isinstance(value, str):

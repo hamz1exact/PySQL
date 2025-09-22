@@ -11,6 +11,8 @@ older_versions/
 # C extensions
 *.so
 app.spec
+dev_test.py
+testing.py
 clibeta2.py
 clibeta3.py
 clibeta5.pt

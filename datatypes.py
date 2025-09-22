@@ -1,25 +1,30 @@
-from datetime import datetime, time
-# from errors import 
-# class SQLType:
-#     def __init__(self, value=None):
-#         if value is not None:
-#             self.value = self.parse(value)
-#             self.validate(self.value)
-#             self.sqltype = self.Sqltype()
-            
-#         else:
-#             self.value = self.parse(value)
-#             self.sqltype = self.Sqltype()
-# from sql_ast import CurrentDate, NowFunction
-class SQLType:
+from abc import ABC, abstractmethod
+from typing import Dict, List, Any, Optional, Union
+from datetime import datetime, date, time
+
+class SQLType(ABC):
     def __init__(self, value=None):
         if value is not None:
             self.value = self.parse(value)
             self.validate(self.value)
-            self.sqltype = self.Sqltype()
+            self.sqltype = self.sql_type_name()
         else:
             self.value = None
-            # self.sqltype = self.Sqltype()
+            
+    @abstractmethod
+    def parse(self, value: Any) -> Any:
+            """Parse input value to appropriate Python type"""
+            pass
+        
+    @abstractmethod
+    def validate(self, value: Any) -> None:
+        """Validate the parsed value"""
+        pass
+    @abstractmethod
+    def sql_type_name(self) -> str:
+        """Return SQL type name"""
+        pass
+            
     def __eq__(self, other):
         return self.value == (other.value if isinstance(other, SQLType) else other)
 
@@ -38,7 +43,6 @@ class SQLType:
     def __ge__(self, other):
         return self.value >= (other.value if isinstance(other, SQLType) else other)
 
-    # ---------------- Arithmetic (optional) ----------------
     def __add__(self, other):
         return self.__class__(self.value + (other.value if isinstance(other, SQLType) else other))
 
@@ -53,19 +57,17 @@ class SQLType:
 
         
 class INT(SQLType):
-    def parse(self, value):
+    """Integer SQL type"""
+    
+    def parse(self, value: Any) -> int:
         if value == "NULL":
-            return str(value).upper()
-        if value == None:
             return None
         if isinstance(value, int):
             return value
-        
         if isinstance(value, float):
             if value.is_integer():
                 return int(value)
             raise ValueError(f"Cannot convert non-integer float '{value}' to INT")
-        
         if isinstance(value, str):
             if "." in value:
                 f = float(value)
@@ -73,17 +75,14 @@ class INT(SQLType):
                     return int(f)
                 raise ValueError(f"Cannot convert non-integer string '{value}' to INT")
             return int(value)
-        
         raise ValueError(f"Cannot convert {value} of type {type(value)} to INT")
     
-    def validate(self, value):
-        if isinstance(value, str):
-            pass
-        elif not isinstance(value, int) or isinstance(value, bool):
+    def validate(self, value: Any) -> None:
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool)):
             raise ValueError(f"INT expects an integer, got {value} ({type(value)})")
     
-    def Sqltype(self):
-        return "class '<int>'"
+    def sql_type_name(self) -> str:
+        return "INTEGER"
         
 
     
@@ -107,8 +106,8 @@ class FLOAT(SQLType):
     def validate(self, value):
         if not isinstance(value, float) or isinstance(value, bool):
                 raise ValueError(f"FLOAT expects an float, got {value} ({type(value)})")
-    def Sqltype(self):
-        return float
+    def sql_type_name(self):
+        return "FLOAT"
 
 class BOOLEAN(SQLType):
     def parse(self, value):
@@ -142,7 +141,7 @@ class BOOLEAN(SQLType):
     def validate(self, value):
         if not isinstance(value, bool):
             raise ValueError(f"BOOLEAN expects a boolean, got {value} ({type(value)})")
-    def Sqltype(self):
+    def sql_type_name(self):
         return "class '<bool>'"
         
 class CHAR(SQLType):
@@ -154,7 +153,7 @@ class CHAR(SQLType):
     def validate(self, value):
         if not isinstance(value, str) or len(value) != 1:
             raise ValueError(f"CHAR expects a single character, got '{value}' (length {len(value)})")
-    def Sqltype(self):
+    def sql_type_name(self):
         return "<class 'char'>"
 
 class VARCHAR(SQLType):
@@ -165,7 +164,7 @@ class VARCHAR(SQLType):
     def validate(self, value):
         if not isinstance(value, str):
             raise ValueError(f"VARCHAR expects a string, got {value} ({type(value)})")
-    def Sqltype(self):
+    def sql_type_name(self):
         return type(self.value)
         
 class TEXT(SQLType):
@@ -178,7 +177,7 @@ class TEXT(SQLType):
     def validate(self, value):
         if not isinstance(value, str):
             raise ValueError(f"TEXT expects a string, got {value} ({type(value)})")
-    def Sqltype(self):
+    def sql_type_name(self):
         return type(self.value)
 
 from datetime import datetime, date
@@ -233,7 +232,7 @@ class DATE(SQLType):
         
     def evaluate(self):
         return date.today()
-    def Sqltype(self):
+    def sql_type_name(self):
         return "<class 'date'>"
     
             
@@ -272,7 +271,7 @@ class TIMESTAMP(SQLType):
         
     def evaluate(self):
         return datetime.now()
-    def Sqltype(self):
+    def sql_type_name(self):
             return "<class 'timestamp'>" 
     
             
@@ -303,7 +302,7 @@ class TIME(SQLType):
         
     def evaluate(self):
         return datetime.now().time().strftime("%H:%M:%S")
-    def Sqltype(self):
+    def sql_type_name(self):
         return "<class 'time'>"
     
         
@@ -335,7 +334,7 @@ class SERIAL(SQLType):
         if not isinstance(value, int) or isinstance(value, bool):
             raise ValueError(f"SERIAL expects an integer, got {value} ({type(value)})")
         
-    def Sqltype(self):
+    def sql_type_name(self):
         return "<class 'auto_increment'>"
         
 class NULLVALUE(SQLType):
@@ -352,7 +351,7 @@ class NULLVALUE(SQLType):
     def validate(self, value):
         pass
     
-    def Sqltype(self):
+    def sql_type_name(self):
         return type(None)
         
 datatypes = {
