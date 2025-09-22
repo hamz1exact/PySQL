@@ -56,12 +56,30 @@ It’s not a production-ready database, but it provides a **realistic playground
 
 ## Usage
 
-1. **Run the interactive shell:**
+
+1. **Set up a Python environment:**
 
 ```bash
+# Create a virtual environment named 'venv'
+python3 -m venv venv
+
+# Activate the environment
+# On Linux/Mac:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+2. **Run the interactive shell:**:
+```python
 python3 shell.py
 ```
-2. **Execute queries:**
+
+
+3. **Execute queries:**
 
 ```Sql
 CREATE TABLE users (
@@ -79,14 +97,14 @@ WHERE age BETWEEN 18 AND 30
 ORDER BY age DESC;
 ```
 
-3. **Aggregate example:**
+4. **Aggregate example:**
 ```sql
 SELECT department, COUNT(*), AVG(salary)
 FROM employees
 GROUP BY department
 HAVING AVG(salary) > 5000;
 ```
-4. **Much More examples:**
+5. **Much More examples:**
 
 - **You can import any SQL queries you have, while respecting my custom datatypes. For example, in standard SQL you write VARCHAR(length) (e.g., VARCHAR(255)), but in my engine there is no length limit, so you should only use VARCHAR.**
 - **Ready tables folder has more examples.**
