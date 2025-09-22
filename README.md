@@ -95,7 +95,7 @@ HAVING AVG(salary) > 5000;
 
 
 
-<div align="right">
+<div align="center">
 
 | **Category**              | **Feature**                                  | **Status** |
 |---------------------------|----------------------------------------------|------------|
