@@ -55,14 +55,14 @@ def execute_select_query(ast, db_manager):
             res_row[col.alias if col.alias else col_id] = col.evaluate({}, {})
         return [res_row]
     
-    # Handle different types of table references
+
     if isinstance(ast.table.table_name, SelectStatement):
-        # Subquery in FROM clause
+
         table_name = ast.table.alias if ast.table.alias else "subquery"
         table = ast.table.table_name.evaluate()
         table_schema = generate_schema(table)
     elif isinstance(ast.table.table_name, str):
-        # Regular table name or view
+
         table_name = ast.table.table_name
         database = db_manager.active_db
         
@@ -75,7 +75,7 @@ def execute_select_query(ast, db_manager):
             table = db_manager.views[table_name].evaluate()
             table_schema = generate_schema(table)
     else:
-        # Handle other cases (like direct table references)
+        
         table_name = str(ast.table.table_name)
         database = db_manager.active_db
         
@@ -106,18 +106,18 @@ def execute_select_query(ast, db_manager):
 
     for col in ast.columns:
         if isinstance(col, ColumnExpression) and col.column_name == "*":
-            # Expand *
+            
             for key in table_schema.keys():
                 normalized_columns.append(ColumnExpression(key, key))
         elif isinstance(col, ColumnExpression):
-            # Validate normal columns
+            
             if col.column_name not in table_schema:
                 raise ColumnNotFoundError(col.column_name, table_name)
 
             alias = f"{table_name}.{col.column_name}" if table_has_asterisk else col.alias
             normalized_columns.append(ColumnExpression(col.column_name, alias))
         else:
-            # This is an expression (BinaryOp, FunctionCall, etc.)
+            
             normalized_columns.append(col)
 
     ast.columns = normalized_columns
@@ -132,7 +132,7 @@ def execute_select_query(ast, db_manager):
     if table_has_asterisk and ast.function_columns:
         raise ValueError ("Aggregation over all grouped columns is redundant. The result will return the same value as the original rows. Remove unnecessary aggregates or reduce the GROUP BY columns.")
     
-    # Validate special columns (aggregate functions)
+
     function_args = []
     
     for col in ast.function_columns:
@@ -144,7 +144,7 @@ def execute_select_query(ast, db_manager):
         if col != "*" and col not in table_schema:
             raise ColumnNotFoundError(col, table_name)
     
-    # Check GROUP BY constraint: selected columns must appear in GROUP BY or be aggregates
+
     group_by_cols  = []
     
     if ast.group_by:
@@ -152,16 +152,10 @@ def execute_select_query(ast, db_manager):
             group_by_cols.extend(extract_identifiers(col))
         
     if ast.group_by and (ast.columns or ast.function_columns):
-        print(f"DEBUG: Validating GROUP BY constraints...")
         
         for col in all_ids:
-            if col != "*":  # Skip wildcard
-                print(f"DEBUG: Checking column '{col}' - in GROUP BY: {col in group_by_cols}")
-                
-                # The key insight: if a column appears in both SELECT and GROUP BY, it's valid
-                # Only flag error if it's in SELECT but NOT in GROUP BY and NOT an aggregate
+            if col != "*":  
                 if col not in group_by_cols:
-                    # Check if this column is from a regular (non-function) SELECT
                     is_regular_column = False
                     for select_expr in ast.columns:
                         expr_cols = extract_identifiers(select_expr)

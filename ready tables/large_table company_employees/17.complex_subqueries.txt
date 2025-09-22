@@ -1,0 +1,201 @@
+-- Average salary by department
+SELECT department, AVG(avg_sal) as dept_avg
+FROM (
+    SELECT department, AVG(salary) as avg_sal
+    FROM company_employees
+    GROUP BY department
+) AS dept_stats
+GROUP BY department;
+
+
+-- Departments with above-average salaries
+SELECT department, total_employees, avg_salary
+FROM (
+    SELECT 
+        department,
+        COUNT(*) as total_employees,
+        AVG(salary) as avg_salary
+    FROM company_employees
+    GROUP BY department
+) AS dept_summary
+WHERE avg_salary > (SELECT AVG(salary) FROM company_employees);
+
+-- Employees in high-paying departments
+SELECT *
+FROM (
+    SELECT *
+    FROM company_employees
+    WHERE salary > 70000
+) AS high_earners
+WHERE department IN (
+    SELECT department 
+    FROM company_employees 
+    GROUP BY department 
+    HAVING AVG(salary) > 75000
+);
+
+-- Employees earning above company average
+SELECT * FROM company_employees
+WHERE salary > (SELECT AVG(salary) FROM company_employees);
+
+-- Most recent hire
+SELECT * FROM company_employees
+WHERE hire_date = (SELECT MAX(hire_date) FROM company_employees);
+
+-- Employees with above-average experience
+SELECT * FROM company_employees
+WHERE years_experience > (SELECT AVG(years_experience) FROM company_employees);
+
+
+-- Employees earning more than engineering department average
+SELECT * FROM company_employees
+WHERE salary > (
+    SELECT AVG(salary) 
+    FROM company_employees 
+    WHERE department = 'Engineering'
+);
+
+-- Employees hired after the youngest employee's birth date (weird but valid)
+SELECT * FROM company_employees
+WHERE hire_date > (SELECT MAX(birth_date) FROM company_employees);
+
+
+
+-- Employees in specific departments
+SELECT * FROM company_employees
+WHERE department IN (
+    SELECT DISTINCT department 
+    FROM company_employees 
+    WHERE office_location = 'Building A'
+);
+
+-- Employees with manager positions
+SELECT * FROM company_employees
+WHERE position IN (
+    SELECT DISTINCT position 
+    FROM company_employees 
+    WHERE position LIKE '%Manager%'
+);
+
+
+
+
+
+-- Employees not in management chain
+SELECT * FROM company_employees
+WHERE employee_id NOT IN (
+    SELECT manager_id 
+    FROM company_employees 
+    WHERE manager_id IS NOT NULL
+);
+
+-- Departments with no inactive employees
+SELECT DISTINCT department
+FROM company_employees
+WHERE department NOT IN (
+    SELECT department 
+    FROM company_employees 
+    WHERE is_active = FALSE
+);
+
+
+
+-- Employees in departments with high average salary
+SELECT * FROM company_employees
+WHERE department IN (
+    SELECT department
+    FROM company_employees
+    GROUP BY department
+    HAVING AVG(salary) > 80000
+);
+
+-- Employees with bonus above department average
+SELECT * FROM company_employees
+WHERE bonus_percentage > (
+    SELECT AVG(bonus_percentage) 
+    FROM company_employees ce2 
+    WHERE ce2.department = company_employees.department
+);
+
+
+-- Departments that have employees
+SELECT DISTINCT department
+FROM company_employees ce1
+WHERE EXISTS (
+    SELECT 1 
+    FROM company_employees ce2 
+    WHERE ce2.department = ce1.department
+);
+
+-- Employees who have managers in the same office
+SELECT *
+FROM company_employees emp
+WHERE EXISTS (
+    SELECT 1
+    FROM company_employees mgr
+    WHERE mgr.employee_id = emp.manager_id
+    AND mgr.office_location = emp.office_location
+);
+
+
+
+SELECT *
+FROM (
+    SELECT *
+    FROM company_employees
+    WHERE salary > 80000
+) AS high_earners
+WHERE department IN (
+    SELECT department
+    FROM company_employees
+    GROUP BY department
+    HAVING COUNT(*) > 3
+    AND AVG(salary) > 75000
+);
+
+
+
+
+-- This should return empty (no employees hired in future)
+SELECT * FROM company_employees
+WHERE hire_date IN (
+    SELECT hire_date 
+    FROM company_employees 
+    WHERE hire_date > '2025-01-01'
+);
+
+-- Employees with non-existent manager
+SELECT * FROM company_employees
+WHERE manager_id NOT IN (
+    SELECT employee_id 
+    FROM company_employees
+);
+
+
+
+-- Employees with NULL manager (should work)
+SELECT * FROM company_employees
+WHERE manager_id IN (
+    SELECT manager_id 
+    FROM company_employees 
+    WHERE manager_id IS NULL
+);
+
+-- Alternative NULL check
+SELECT * FROM company_employees
+WHERE EXISTS (
+    SELECT 1 
+    FROM company_employees ce2 
+    WHERE ce2.manager_id IS NULL
+    AND ce2.employee_id = company_employees.employee_id
+);
+
+
+
+-- All possible department combinations (cartesian product test)
+SELECT d1.department, d2.department
+FROM (
+    SELECT DISTINCT department FROM company_employees
+) AS d1, (
+    SELECT DISTINCT department FROM company_employees
+) AS d2;
