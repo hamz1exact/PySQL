@@ -34,9 +34,11 @@
 
 - **Interactive Shell**  
   - Multi-line query support  
-  - `ls` → list tables with row/column counts  
-  - `clear` → clear the screen  
-
+  - `\ls` → list tables with row/column counts  
+  - `\dt` → list active databases  
+  - `\clear` → clear the screen  
+  -  `\export csv csv_file.csv` → to export queries as csv  
+  - `\import sqlfile.sql` → to import ready sql insert queries
 ---
 
 ## Why this project?
@@ -63,10 +65,10 @@ python3 shell.py
 
 ```Sql
 CREATE TABLE users (
-    id SERIAL,
+    id SERIAL PRIMARY KEY,
     name VARCHAR DEFAULT = "Guest",
     age INT DEFAULT = 18,
-    joined DATE DEFAULT = "2025-01-01"
+    joined DATE DEFAULT CURRENT_DATE
 );
 
 INSERT INTO users (name, age) VALUES ("Hamza", 19);
@@ -84,14 +86,16 @@ FROM employees
 GROUP BY department
 HAVING AVG(salary) > 5000;
 ```
+4. **Much More examples:**
+
+- **You can import any SQL queries you have, while respecting my custom datatypes. For example, in standard SQL you write VARCHAR(length) (e.g., VARCHAR(255)), but in my engine there is no length limit, so you should only use VARCHAR.**
+- **Ready tables folder has more examples.**
 ---
 
 ## Future Work
-
- 
-  - Support for `JOINs` (INNER, LEFT, RIGHT) 
+  - DROP DATABASES/TABLES/VIEWS
+  - ALTER DATABASES/TABLES/VIEWS
   - Query planner and optimizer
-  - Support for views and subqueries  
   - User-defined functions
   - Indexing structures (B-tree, Hash index)
   - Transaction support (BEGIN, COMMIT, ROLLBACK)
