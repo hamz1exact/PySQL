@@ -173,6 +173,13 @@ HAVING AVG(salary) > 5000;
   - Query planner and optimizer
   - User-defined functions
   - Indexing structures (B-tree, Hash index)
+  - Triggers
+  - User Management
+  - Managing Tables
+  - Joins
+  - Swapping
   - Transaction support (BEGIN, COMMIT, ROLLBACK)
+  - Executin Plan
+  
 
 
