@@ -27,7 +27,6 @@ dist/
 *.egg-info/
 .eggs/
 others/
-shell.py
 myshell.egg-info/
 c.py
 # Virtual environment
