@@ -90,6 +90,63 @@ HAVING AVG(salary) > 5000;
 
 - **You can import any SQL queries you have, while respecting my custom datatypes. For example, in standard SQL you write VARCHAR(length) (e.g., VARCHAR(255)), but in my engine there is no length limit, so you should only use VARCHAR.**
 - **Ready tables folder has more examples.**
+
+## Supported Features in su-sql
+
+
+
+<div align="right">
+
+| **Category**              | **Feature**                                  | **Status** |
+|---------------------------|----------------------------------------------|------------|
+| **Database Management**   | CREATE DATABASE                              | ✅         |
+|                           | CREATE TABLE                                 | ✅         |
+|                           | CREATE VIEW                                  | ✅         |
+|                           | CREATE MATERIALIZED VIEW                     | ✅         |
+|                           | PRIMARY KEYS                                 | ✅         |
+|                           | UNIQUE Constraint                            | ✅         |
+|                           | CHECK Constraint                             | ✅         |
+|                           | ON CONFLICT DO NOTHING                       | ✅         |
+|                           | UPSERT                                       | ✅         |
+|                           | CTE (Common Table Expressions)               | ✅         |
+| **Data Manipulation**     | INSERT INTO                                  | ✅         |
+|                           | UPDATE                                       | ✅         |
+|                           | ADVANCED UPDATE                              | ✅         |
+|                           | DELETE                                       | ✅         |
+|                           | RETURNING                                    | ✅         |
+| **Querying**              | SELECT FROM (no joins yet)                   | ✅         |
+|                           | ORDER BY                                     | ✅         |
+|                           | DISTINCT                                     | ✅         |
+|                           | WHERE                                        | ✅         |
+|                           | AND / OR / NOT                               | ✅         |
+|                           | LIMIT / OFFSET / FETCH                       | ✅         |
+|                           | IN                                           | ✅         |
+|                           | BETWEEN                                      | ✅         |
+|                           | LIKE and ILIKE                               | ✅         |
+|                           | IS NULL                                      | ✅         |
+|                           | GROUP BY                                     | ✅         |
+|                           | HAVING                                       | ✅         |
+|                           | ALIASES in tables and columns                | ✅         |
+|                           | SUBQUERIES in WHERE                          | ✅         |
+|                           | SUBQUERIES in FROM                           | ✅         |
+| **Functions & Expressions** | MIN / MAX / SUM / AVG                     | ✅         |
+|                           | CASE WHEN                                    | ✅         |
+|                           | ADVANCED CASE WHEN                           | ✅         |
+|                           | CASE WHEN + SUM                              | ✅         |
+|                           | CAST                                         | ✅         |
+|                           | COALESCE                                     | ✅         |
+|                           | NULLIF                                       | ✅         |
+|                           | String formatting functions (various)        | ✅         |
+| **Date & Time**           | Timestamps and Dates                         | ✅         |
+|                           | Adding and Subtracting intervals             | ✅         |
+|                           | Extracting fields from timestamps            | ✅         |
+| **Set Operations**        | UNION / UNION ALL                            | ✅         |
+|                           | INTERSECT                                    | ✅         |
+|                           | EXCEPT                                       | ✅         |
+
+</div>
+
+
 ---
 
 ## Future Work
