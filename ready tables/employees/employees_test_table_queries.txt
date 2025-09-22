@@ -1,0 +1,23 @@
+SELECT name, email, salary FROM employees WHERE age > 30 ORDER BY salary DESC;
+
+SELECT * FROM employees WHERE department = 'Engineering' AND salary > 70000;
+
+SELECT name, age, salary, (salary * 12) AS annual_salary FROM employees WHERE is_active = TRUE;
+
+SELECT UPPER(name) AS employee_name, LOWER(email) AS email_address FROM employees WHERE department LIKE '%ing%';
+
+SELECT name, salary, CASE WHEN salary > 80000 THEN 'High' WHEN salary > 60000 THEN 'Medium' ELSE 'Low' END AS salary_grade FROM employees;
+
+SELECT department, COUNT(*) AS employee_count, AVG(salary) AS avg_salary FROM employees GROUP BY department;
+
+SELECT department, COUNT(*) AS total_employees, SUM(salary) AS total_payroll FROM employees GROUP BY department HAVING COUNT(*) > 1;
+
+SELECT name, age, salary FROM employees WHERE age BETWEEN 25 AND 40 ORDER BY age ASC;
+
+SELECT * FROM employees WHERE name IN ('John Smith', 'Sarah Johnson', 'Mike Davis');
+
+SELECT name, email FROM employees WHERE email IS NOT NULL AND is_active = TRUE;
+
+SELECT COUNT(DISTINCT department) AS unique_departments FROM employees;
+
+SELECT name, ROUND(salary / 12, 2) AS monthly_salary FROM employees WHERE salary IS NOT NULL;

@@ -1,0 +1,17 @@
+CREATE TABLE company_employees (
+    employee_id SERIAL PRIMARY KEY,
+    first_name VARCHAR NOT NULL,
+    last_name VARCHAR NOT NULL,
+    email VARCHAR UNIQUE CHECK (email LIKE '%@%'),
+    phone VARCHAR CHECK (LENGTH(phone) >= 10),
+    department VARCHAR DEFAULT 'General',
+    position VARCHAR NOT NULL,
+    salary FLOAT CHECK (salary > 0),
+    hire_date DATE DEFAULT CURRENT_DATE,
+    birth_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    manager_id INT,
+    office_location VARCHAR DEFAULT 'Main Office',
+    years_experience INT CHECK (years_experience >= 0),
+    bonus_percentage FLOAT DEFAULT 0.0 CHECK (bonus_percentage >= 0 AND bonus_percentage <= 100)
+);

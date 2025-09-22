@@ -1,0 +1,4 @@
+SELECT department, office_location, COUNT(*) AS count, AVG(salary) AS avg_sal, SUM(CASE WHEN is_active THEN 1 ELSE 0 END) AS active_count FROM company_employees GROUP BY department, office_location HAVING AVG(salary) > 65000;
+
+-- String manipulation stress test
+SELECT employee_id, UPPER(CONCAT(SUBSTRING(first_name, 1, 1), SUBSTRING(last_name, 1, 1))) AS initials, REPLACE(email, '@company.com', '@newdomain.com') AS new_email FROM company_employees;

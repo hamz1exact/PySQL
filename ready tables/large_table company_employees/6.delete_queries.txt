@@ -1,0 +1,5 @@
+DELETE FROM company_employees WHERE is_active = FALSE;
+
+DELETE FROM company_employees WHERE salary < 50000 AND years_experience < 2;
+
+DELETE FROM company_employees WHERE office_location = "Building C" RETURNING *

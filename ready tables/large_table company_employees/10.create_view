@@ -1,0 +1,9 @@
+CREATE VIEW high_performers AS SELECT employee_id, CONCAT(first_name, ' ', last_name) AS full_name, department, position, salary, bonus_percentage FROM company_employees WHERE salary > 75000 AND bonus_percentage > 10;
+
+CREATE VIEW department_stats AS SELECT department, COUNT(*) AS employee_count, AVG(salary) AS avg_salary, MAX(salary) AS max_salary, MIN(salary) AS min_salary, AVG(years_experience) AS avg_experience FROM company_employees WHERE is_active = TRUE GROUP BY department;
+
+CREATE VIEW recent_hires AS SELECT employee_id, first_name, last_name, email, department, position, hire_date FROM company_employees WHERE hire_date >= '2022-01-01';
+
+CREATE VIEW manager_summary AS SELECT manager_id, COUNT(*) AS team_size, AVG(salary) AS avg_team_salary, SUM(salary) AS total_team_cost FROM company_employees WHERE manager_id IS NOT NULL GROUP BY manager_id;
+
+CREATE VIEW employee_ages AS SELECT employee_id, first_name, last_name, birth_date, EXTRACT(YEAR FROM CURRENT_DATE) - EXTRACT(YEAR FROM birth_date) AS age FROM company_employees WHERE birth_date IS NOT NULL;

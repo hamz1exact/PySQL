@@ -1,0 +1,5 @@
+UPDATE company_employees SET salary = 90000.0, bonus_percentage = 12.0 WHERE employee_id = 1 RETURNING employee_id, first_name, last_name, salary, bonus_percentage;
+
+UPDATE company_employees SET office_location = 'Remote', is_active = TRUE WHERE department = 'Marketing' RETURNING employee_id, first_name, last_name, office_location;
+
+UPDATE company_employees SET years_experience = years_experience + 1, salary = salary * 1.05 WHERE hire_date < '2020-01-01' RETURNING employee_id, CONCAT(first_name, ' ', last_name) AS full_name, salary;

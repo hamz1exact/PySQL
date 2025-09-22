@@ -1,0 +1,5 @@
+SELECT first_name, last_name, 'High Salary' AS category FROM company_employees WHERE salary > 80000 UNION SELECT first_name, last_name, 'High Experience' AS category FROM company_employees WHERE years_experience > 12;
+
+SELECT department FROM company_employees WHERE salary > 70000 UNION ALL SELECT department FROM company_employees WHERE bonus_percentage > 15;
+
+SELECT 'Engineering' AS dept, COUNT(*) AS count FROM company_employees WHERE department = 'Engineering' UNION SELECT 'Non-Engineering' AS dept, COUNT(*) AS count FROM company_employees WHERE department != 'Engineering';

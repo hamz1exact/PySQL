@@ -1,0 +1,2 @@
+CREATE MATERIALIZED VIEW mt_view AS SELECT CONCAT("Mr. "first_name, " ", last_name), phone, salary, office_location, years_experience FROM company_employees;
+

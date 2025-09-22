@@ -1,0 +1,15 @@
+CALL VIEW* high_performers;
+
+CALL VIEW* department_stats;
+
+CALL VIEW* recent_hires;
+
+CALL VIEW* manager_summary;
+
+CALL VIEW* employee_ages;
+
+NOTE: i used VIEW* much like C pointers, but you can CALL a view by the following statements:
+
+CALL VIEW view_name
+
+CALL VIEW (view_name)

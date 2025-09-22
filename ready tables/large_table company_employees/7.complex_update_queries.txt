@@ -1,0 +1,5 @@
+UPDATE company_employees SET salary = CASE WHEN department = 'Engineering' THEN salary * 1.10 WHEN department = 'Sales' THEN salary * 1.08 ELSE salary * 1.05 END WHERE is_active = TRUE;
+
+UPDATE company_employees SET bonus_percentage = CASE WHEN years_experience > 15 THEN 25.0 WHEN years_experience > 10 THEN 20.0 WHEN years_experience > 5 THEN 15.0 ELSE 10.0 END;
+
+UPDATE company_employees SET position = UPPER(position), department = LOWER(department) WHERE employee_id IN (1, 2, 3, 4, 5);

@@ -1,0 +1,9 @@
+CREATE TABLE products (
+    product_id SERIAL PRIMARY KEY,
+    product_name VARCHAR NOT NULL,
+    price FLOAT CHECK (price > 0),
+    category VARCHAR DEFAULT 'Miscellaneous',
+    stock_quantity INT DEFAULT 0 CHECK (stock_quantity >= 0),
+    created_at DATE DEFAULT CURRENT_DATE,
+    is_available BOOLEAN DEFAULT TRUE
+);

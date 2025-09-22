@@ -1,0 +1,15 @@
+SELECT product_name, price, stock_quantity, (price * stock_quantity) AS inventory_value FROM products;
+
+SELECT category, COUNT(*) AS product_count, MAX(price) AS highest_price, MIN(price) AS lowest_price FROM products GROUP BY category;
+
+SELECT product_name, CONCAT(category, ' - ', product_name) AS full_description FROM products WHERE is_available = TRUE;
+
+SELECT * FROM products WHERE price > (SELECT AVG(price) FROM products);
+
+SELECT product_name, CASE WHEN stock_quantity = 0 THEN 'Out of Stock' WHEN stock_quantity < 20 THEN 'Low Stock' ELSE 'In Stock' END AS stock_status FROM products;
+
+SELECT EXTRACT(YEAR FROM created_at) AS creation_year, COUNT(*) AS products_created FROM products GROUP BY EXTRACT(YEAR FROM created_at);
+
+SELECT name, salary, COALESCE(department, 'Unknown') AS dept FROM employees ORDER BY NULLIF(salary, 0) DESC;
+
+SELECT name, age, CAST(salary AS INT) AS salary_int FROM employees WHERE age IS NOT NULL;

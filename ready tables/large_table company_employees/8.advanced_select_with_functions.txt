@@ -1,0 +1,7 @@
+SELECT department, COUNT(*) AS total_employees, AVG(CAST(years_experience AS FLOAT)) AS avg_experience, SUM(salary * bonus_percentage / 100) AS total_bonuses FROM company_employees GROUP BY department ORDER BY total_bonuses DESC;
+
+SELECT COALESCE(manager_id, 0) AS manager_id, COUNT(*) AS direct_reports FROM company_employees GROUP BY manager_id ORDER BY direct_reports DESC;
+
+SELECT first_name, last_name, NULLIF(bonus_percentage, 0.0) AS non_zero_bonus FROM company_employees WHERE bonus_percentage IS NOT NULL;
+
+SELECT office_location, MAX(CASE WHEN department = 'Engineering' THEN salary END) AS max_eng_salary, MAX(CASE WHEN department = 'Sales' THEN salary END) AS max_sales_salary FROM company_employees GROUP BY office_location;

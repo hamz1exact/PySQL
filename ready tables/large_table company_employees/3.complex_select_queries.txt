@@ -1,0 +1,32 @@
+-- Basic queries with various WHERE conditions
+SELECT * FROM company_employees WHERE department = 'Engineering';
+
+SELECT first_name, last_name, salary FROM company_employees WHERE salary > 80000 ORDER BY salary DESC;
+
+SELECT department, COUNT(*) AS employee_count, AVG(salary) AS avg_salary FROM company_employees GROUP BY department;
+
+SELECT department, position, COUNT(*) AS count FROM company_employees GROUP BY department, position HAVING COUNT(*) >= 2;
+
+-- Complex expressions and functions
+SELECT first_name, last_name, salary, (salary * 12) AS annual_salary, ROUND(salary * bonus_percentage / 100, 2) AS annual_bonus FROM company_employees WHERE is_active = TRUE;
+
+SELECT UPPER(first_name) AS first_name_caps, LOWER(last_name) AS last_name_lower, LENGTH(email) AS email_length FROM company_employees WHERE department LIKE '%ing%';
+
+SELECT department, SUM(salary) AS total_payroll, MAX(salary) AS highest_salary, MIN(salary) AS lowest_salary FROM company_employees GROUP BY department ORDER BY total_payroll DESC;
+
+-- Date functions and CASE statements
+SELECT first_name, last_name, EXTRACT(YEAR FROM hire_date) AS hire_year, EXTRACT(YEAR FROM birth_date) AS birth_year FROM company_employees WHERE EXTRACT(YEAR FROM hire_date) >= 2020;
+
+SELECT first_name, last_name, salary, CASE WHEN salary > 90000 THEN 'High' WHEN salary > 70000 THEN 'Medium' WHEN salary > 50000 THEN 'Low' ELSE 'Very Low' END AS salary_grade FROM company_employees;
+
+-- Aggregation with complex conditions
+SELECT office_location, COUNT(*) AS employee_count, AVG(years_experience) AS avg_experience FROM company_employees WHERE is_active = TRUE GROUP BY office_location HAVING AVG(years_experience) > 7;
+
+-- String functions and concatenation
+
+SELECT department, CONCAT(COUNT(*), ' employees') AS description FROM company_employees GROUP BY department;
+
+-- Mathematical operations
+SELECT first_name, last_name, salary, ABS(salary - 75000) AS salary_diff_from_75k FROM company_employees ORDER BY salary_diff_from_75k;
+
+SELECT department, ROUND(AVG(salary), -3) AS avg_salary_rounded FROM company_employees GROUP BY department;

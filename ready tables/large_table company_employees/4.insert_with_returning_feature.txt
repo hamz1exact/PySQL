@@ -1,0 +1,8 @@
+INSERT INTO company_employees (first_name, last_name, email, phone, department, position, salary, birth_date, years_experience, bonus_percentage) VALUES ('Alex', 'Thompson', 'alex.thompson@company.com', '555-0121', 'IT', 'System Administrator', 71000.0, '1987-05-12', 9, 8.0) RETURNING employee_id, first_name, last_name, salary;
+
+INSERT INTO company_employees (first_name, last_name, email, phone, department, position, salary, birth_date, years_experience) VALUES 
+('Rachel', 'Green', 'rachel.green@company.com', '555-0122', 'Design', 'UI Designer', 68000.0, '1991-08-20', 6),
+('Mark', 'Johnson', 'mark.johnson@company.com', '555-0123', 'Design', 'UX Designer', 72000.0, '1989-02-15', 8) 
+RETURNING employee_id, CONCAT(first_name, ' ', last_name) AS full_name, department, salary;
+
+INSERT INTO company_employees (first_name, last_name, email, department, position, salary, years_experience, bonus_percentage) VALUES ('Sarah', 'Connor', 'sarah.connor@company.com', 'Security', 'Security Analyst', 79000.0, 12, 15.0) RETURNING *;

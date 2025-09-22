@@ -1,0 +1,13 @@
+INSERT INTO employees (name, email, age, salary, department) VALUES ('John Smith', 'john.smith@company.com', 28, 75000.0, 'Engineering');
+
+INSERT INTO employees (name, email, age, salary, department) VALUES ('Sarah Johnson', 'sarah.j@company.com', 32, 68000.0, 'Marketing');
+
+INSERT INTO employees (name, email, age, salary, department) VALUES ('Mike Davis', 'mike.davis@company.com', 45, 82000.0, 'Engineering');
+
+INSERT INTO employees (name, email, age, salary, department) VALUES ('Lisa Wilson', 'lisa.w@company.com', 29, 71000.0, 'Sales');
+
+INSERT INTO employees (name, email, age, salary, department) VALUES ('David Brown', 'david.brown@company.com', 38, 79000.0, 'Engineering');
+
+INSERT INTO employees (name, email, age, department) VALUES ('Anna Garcia', 'anna.garcia@company.com', 26, 'HR');
+
+INSERT INTO employees (name, email, age, salary, department, is_active) VALUES ('Tom Wilson', 'tom.wilson@company.com', 55, 95000.0, 'Management', FALSE);

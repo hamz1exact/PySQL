@@ -1,0 +1,22 @@
+SHOW CONSTRAINTS* table_name
+
+or 
+
+SHOW CONSTRAINTS (table_name)
+
+or for columns
+
+SHOW CONSTRAINTS* table_name.column_name
+example:
+SHOW CONSTRAINTS* company_employees.first_name;
+
+output:
+
+finance> SHOW CONSTRAINTS* company_employees.first_name;
++----------------------------------------+
+| first_name                             |
++----------------------------------------+
+| {'company_employees_first_name_!null'} |
++----------------------------------------+
+
+!null means NOT NULL CONSTRAINT.

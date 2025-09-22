@@ -1,0 +1,11 @@
+INSERT INTO products (product_name, price, category, stock_quantity) VALUES ('Laptop Pro', 1299.99, 'Electronics', 50);
+
+INSERT INTO products (product_name, price, category, stock_quantity) VALUES ('Office Chair', 249.50, 'Furniture', 25);
+
+INSERT INTO products (product_name, price, category, stock_quantity) VALUES ('Wireless Mouse', 29.99, 'Electronics', 100);
+
+INSERT INTO products (product_name, price, category, stock_quantity) VALUES ('Desk Lamp', 45.00, 'Furniture', 30);
+
+INSERT INTO products (product_name, price, category, stock_quantity) VALUES ('Coffee Maker', 89.99, 'Appliances', 15);
+
+INSERT INTO products (product_name, price, stock_quantity) VALUES ('Notebook Set', 12.99, 75);
