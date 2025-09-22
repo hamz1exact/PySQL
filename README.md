@@ -171,6 +171,7 @@ HAVING AVG(salary) > 5000;
   - DROP DATABASES/TABLES/VIEWS
   - ALTER DATABASES/TABLES/VIEWS
   - Query planner and optimizer
+  - Advanced Update Using SELECT queries (Commercial DB level)
   - User-defined functions
   - Indexing structures (B-tree, Hash index)
   - Triggers
@@ -178,6 +179,7 @@ HAVING AVG(salary) > 5000;
   - Managing Tables
   - Joins
   - Swapping
+  - Window Functions (WF)
   - Transaction support (BEGIN, COMMIT, ROLLBACK)
   - Executin Plan
   
