@@ -10,8 +10,8 @@ SQL_KEYWORDS = (
     "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
     "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
     "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL",
-    "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH", "DROP"
-)
+    "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH", "DROP","TRUNCATE"
+    )
 
 # Data type mapping - moved from engine.py  
 DATATYPE_MAPPING = {
@@ -36,6 +36,7 @@ class TokenTypes:
     UPDATE = "UPDATE"
     DELETE = "DELETE"
     CREATE = "CREATE"
+    TRUNCATE = "TRUNCATE"
     DROP = "DROP"
     USE = "USE"
     

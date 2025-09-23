@@ -49,6 +49,8 @@ def execute(ast, database):
         return drop_view(ast, database)
     elif isinstance(ast, DropMTView):
         return drop_materialized_view(ast, database)
+    elif isinstance(ast, TruncateTable):
+        return truncate_table(ast, database)
 
 
     
@@ -1228,5 +1230,15 @@ def drop_materialized_view(ast, database):
     else:
         raise ValueError(f"View {ast.view_name} not found")
     
+def truncate_table(ast, db_manager):
+    table_name = ast.table_name
+    temp_view_name = table_name+'._mt_view'
+    if temp_view_name in db_manager.views or table_name in db_manager.views:
+        raise ValueError ('TRUNCATE is not allowed while working with NORMAL OR MATERILIAZED VIEWS, run DROP VIEW instead')
+    elif table_name not in db_manager.active_db:
+        raise TableNotFoundError(table_name)
+    else:
+        db_manager.active_db[table_name].rows = []
+        
         
     

@@ -949,6 +949,12 @@ class Parser:
         view_name = self.eat(TokenTypes.IDENTIFIER)[1]
         return DropMTView(view_name)
     
+    def parse_truncate_table(self):
+        self.eat(TokenTypes.TRUNCATE)
+        self.eat(TokenTypes.TABLE)
+        table_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        return TruncateTable(table_name)
+    
     def parse_use_statement(self):
         self.eat(TokenTypes.USE)
         db_name = self.eat(TokenTypes.IDENTIFIER)[1]

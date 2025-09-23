@@ -1362,4 +1362,9 @@ class DropView:
 class DropMTView:
     def __init__(self, view_name):
         self.view_name = view_name
+
+class TruncateTable:
+    def __init__(self, table_name):
+        self.table_name = table_name
+        
         

@@ -753,6 +753,11 @@ class EnhancedSQLShell:
                 ast = parser.parse_refresh_mv()
                 result = execute(ast, db_manager)
             
+            elif token_type == "TRUNCATE":
+                ast = parser.parse_truncate_table()
+                result = execute(ast, db_manager)
+                self._handle_ddl_result("TRUNCATE TABLE", start_time)
+                db_manager.save_database_file()
             elif token_type == "CREATE":
                 if next_token_type == "DATABASE":
                     ast = parser.parse_create_database()
