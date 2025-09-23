@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 import argparse
 
+
 # Enhanced terminal UI imports
 try:
     from prompt_toolkit import prompt
@@ -493,9 +494,6 @@ class EnhancedSQLShell:
             '\\import': self._cmd_import,
             '\\version': self._cmd_version,
             '\\status': self._cmd_status,
-            '\\r': self._cmd_reload,
-            '\\reload': self._cmd_reload,
-            '\\refresh': self._cmd_reload,
             '\\modules': self._cmd_list_modules,
             '\\debug': self._cmd_debug_mode,
             '\\wide' : self._cmd_wide,
@@ -652,9 +650,6 @@ class EnhancedSQLShell:
                 break
             except Exception as e:
                 print(f"Unexpected error: {e}")
-                if self.config.reload_on_error:
-                    print("Auto-reloading modules due to error...")
-                    self._cmd_reload([])
     
     def _handle_meta_command(self, command: str):
         """Handle meta-commands with enhanced error reporting"""
@@ -816,7 +811,7 @@ class EnhancedSQLShell:
             # Auto-reload on error if enabled
             if self.config.reload_on_error:
                 print("Auto-reloading modules...")
-                self._cmd_reload([])
+
         
         print()  # Empty line for readability
     
@@ -901,7 +896,6 @@ Meta Commands:
   \\clear, \\cls           Clear screen
 
 Hot-Reload Commands:
-  \\r, \\reload           Reload all SQL engine modules
   \\modules               List loaded modules
   \\debug                 Toggle debug mode
 
@@ -1211,36 +1205,6 @@ Examples:
                     break
             
             print(f"{i:3}. {col:30} ({col_type})")
-    
-    def _cmd_reload(self, args):
-        """Hot-reload all SQL engine modules"""
-        print("Reloading SQL engine modules...")
-        
-        try:
-            reloaded, failed = reload_modules()
-            
-            if reloaded:
-                print(f"Reloaded modules: {', '.join(reloaded)}")
-                
-                # Re-import updated objects
-                try:
-                    global db_manager, Lexer, Parser, execute
-                    from engine import db_manager, Lexer, Parser
-                    from executor import execute
-                    print("Updated global references")
-                except Exception as e:
-                    print(f"Could not update references: {e}")
-            
-            if failed:
-                for module, error in failed:
-                    print(f"Failed to reload {module}: {error}")
-            
-            if not reloaded and not failed:
-                print("No modules registered for reloading")
-        
-        except Exception as e:
-            print(f"Reload failed: {e}")
-            print(f"{traceback.format_exc()}")
     
     def _cmd_list_modules(self, args):
         """List loaded modules available for hot-reload"""
@@ -1779,7 +1743,6 @@ Examples:
   myshell --config /path/config.json       # Use custom config file
   
 Hot-reload commands:
-  \\r, \\reload                     # Reload SQL engine modules
   \\modules                        # List loaded modules
   
 Multi-query support:

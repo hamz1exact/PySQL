@@ -1090,15 +1090,38 @@ class ShowConstraints(Expression):
             if not database[self.table_name].private_constraints:
                 raise ValueError('Your table has no constraints, use ALTER <table_name> ADD <constraint>* <column_name>')
             private_constraints = database[self.table_name].private_constraints
+            constraints_ptr = database[self.table_name].constraints_ptr
+            
             if not self.col:
-                return [private_constraints]
+                print()
+                for col, const in private_constraints.items():
+                    more_than_one_const = False
+                    constr = ""
+                    for c in const:
+                        if more_than_one_const:
+                            constr += f" and {constraints_ptr[c]}"
+                        else:
+                            more_than_one_const = True
+                            constr += constraints_ptr[c]
+                    
+                    print(f"{"":5}{col:30}-> {constr}\n")
+                    
             else:
                 row = {}
+                print()
                 for c, v in  private_constraints.items():
+                    
                     if self.col == c:
-                       row[self.col] = v
-                       return [row]
-            return None
+                        more_than_one_const = False
+                        constr = ""
+                        for const in v:
+                            if more_than_one_const:
+                                constr += f" and {constraints_ptr[const]}"
+                        else:
+                            more_than_one_const = True
+                            constr += constraints_ptr[const]
+                        print(f"{c:10}-> {constr}\n") 
+                        return
                     
             
 class UnionExpression(Expression):

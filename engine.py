@@ -6,6 +6,8 @@ from datatypes import *
 from constants import *
 
 
+
+
 db_manager = db_manager
 
 class Lexer:
@@ -841,7 +843,7 @@ class Parser:
                 self.eat(TokenTypes.RESTRICTION)
                 expr = self.parse_expression(context=None)
                 restrictions[col_name] = expr
-                key = f"{table_name}_{col_name}_'check'"
+                key = f"{table_name}_{col_name}_check"
                 if col_name not in private_constraints:
                     private_constraints[col_name] = set()
                 private_constraints[col_name].add(key)
