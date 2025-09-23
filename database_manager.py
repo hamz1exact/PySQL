@@ -83,19 +83,18 @@ class DatabaseManager:
         self.active_db_name = db_file
         self.load_database_file()
         self.update_cache()
-        print(f"Now using database '{db_name}'")
 
     # ---------------- Table I/O ----------------
     def save_database_file(self):
         try:
-            print("DEBUG: Starting database save...")
+            
             
             # Create the database structure
             db_data = {}
             
             # Serialize regular tables
             for tbl_name, table in self.active_db.items():
-                print(f"DEBUG: Serializing table '{tbl_name}'...")
+                
                 db_data[tbl_name] = {
                     "schema": {col: table.schema[col].__name__ for col in table.schema},
                     "defaults": {col: deep_serialize(table.defaults[col]) for col in table.defaults},
@@ -112,20 +111,20 @@ class DatabaseManager:
             
             # Serialize views
             if self.views:
-                print("DEBUG: Serializing views...")
+            
                 db_data["__views__"] = {}
                 for view_name, view_obj in self.views.items():
-                    print(f"DEBUG: Serializing view '{view_name}' of type {type(view_obj)}")
-                    db_data["__views__"][view_name] = deep_serialize(view_obj)
-                    print(f"DEBUG: View '{view_name}' serialized")
             
-            print("DEBUG: All data serialized, saving to file...")
+                    db_data["__views__"][view_name] = deep_serialize(view_obj)
+            
+            
+            
             
             # Save to file
             with open(self.active_db_name, 'wb') as f:
                 msgpack.pack(db_data, f)
             
-            print("DEBUG: Database saved successfully")
+            
             
         except Exception as e:
             print(f"Error saving database: {e}")
@@ -138,25 +137,25 @@ class DatabaseManager:
             with open(self.active_db_name, "rb") as f:
                 db_data = msgpack.unpack(f)
             
-            print("DEBUG: Loading database...")
+            
             
             self.views = {}
             self.active_db = {}
             
             for tbl_name, tbl_data in db_data.items():
                 if tbl_name == "__views__":
-                    print("DEBUG: Loading views...")
+                
                     for view_name, serialized_ast in tbl_data.items():
                         try:
-                            print(f"DEBUG: Loading view '{view_name}'...")
+                            
                             deserialized_view = deep_deserialize(serialized_ast)
                             self.views[view_name] = deserialized_view
-                            print(f"DEBUG: Loaded view '{view_name}' as {type(deserialized_view)}")
+                
                         except Exception as e:
                             print(f"Warning: Could not deserialize view '{view_name}': {e}")
                     continue
                 
-                print(f"DEBUG: Loading table '{tbl_name}'...")
+                
                 # Handle regular tables (your existing logic, but with deep_deserialize)
                 schema = {col: datatypes[tbl_data["schema"][col]] for col in tbl_data["schema"]}
                 
@@ -230,7 +229,7 @@ class DatabaseManager:
 
                 self.active_db[tbl_name] = table
             
-            print("DEBUG: Database loaded successfully")
+            
                     
         except Exception as e:
             print(f'Database loading failed ({e}), creating new database')

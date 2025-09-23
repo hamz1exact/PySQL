@@ -500,7 +500,6 @@ class Membership(Expression):
     def evaluate(self, row, schema):
         value = self.col.evaluate(row, schema)
         out = []
-        
         if self.argset:
             result = value in self.argset
         else:
@@ -515,10 +514,9 @@ class Membership(Expression):
                                 seen.add(v)
                                 out.append(v)
                 else:
-                    
                     out.append(arg.evaluate(row, schema))
-        
-            result = value in out                    
+            result = value in out
+            
         return not result if self.is_not else result
 
 class NegationCondition(Expression):
@@ -1348,3 +1346,20 @@ class RefreshMaterializedView:
     def __init__(self, mt_view_name):
         self.mt_view_name = mt_view_name
     
+    
+class DropDatabase:
+    def __init__(self, database_name):
+        self.database_name = database_name
+        
+class DropTable:
+    def __init__(self, table_name):
+        self.table_name = table_name
+        
+class DropView:
+    def __init__(self, view_name):
+        self.view_name = view_name
+
+class DropMTView:
+    def __init__(self, view_name):
+        self.view_name = view_name
+        

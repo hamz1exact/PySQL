@@ -421,7 +421,7 @@ class Parser:
             limit = self.eat(TokenTypes.LIMIT)[1]
             if self.current_token() and self.current_token()[0] == TokenTypes.OFFSET:
                 offset = self.eat(TokenTypes.OFFSET)[1]
-        
+
         return SelectStatement(columns, function_columns, table_ref, where, 
                              distinct=unique, order_by=order_in, group_by=group_in, 
                              having=having_in, limit=limit, offset=offset)
@@ -547,7 +547,6 @@ class Parser:
                 self.eat(TokenTypes.COMMA)
             else:
                 break
-
         return order
     
         
@@ -761,9 +760,10 @@ class Parser:
     def parse_create_table(self):
         self.eat(TokenTypes.CREATE)
         self.eat(TokenTypes.TABLE)
-        if self.current_token()[0] == TokenTypes.AS:
-            return self.parse_cta()
         table_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        if self.current_token()[0] == TokenTypes.AS:
+            return self.parse_cta(table_name)
+        
         table_name = table_name.strip()
         self.eat(TokenTypes.OPEN_PAREN)  # (
         schema = {}
@@ -890,10 +890,9 @@ class Parser:
                 
         return CallView(view_name)
     
-    def parse_cta(self):
+    def parse_cta(self, table_name):
         with_data = True
         self.eat(TokenTypes.AS)
-        table_name = self.eat(TokenTypes.IDENTIFIER)[1]
         expr = self.parse_single_select()
         if self.current_token() and self.current_token()[0] == TokenTypes.WITH:
             self.eat(TokenTypes.WITH)
@@ -925,6 +924,31 @@ class Parser:
         return db_manager.list_views()
         
 
+    def parse_drop_database(self):
+        self.eat(TokenTypes.DROP)
+        self.eat(TokenTypes.DATABASE)
+        db_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        return DropDatabase(database_name=db_name)
+    
+    def parse_drop_table(self):
+        self.eat(TokenTypes.DROP)
+        self.eat(TokenTypes.TABLE)
+        table_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        return DropTable(table_name=table_name)
+    
+    def parse_drop_view(self):
+        self.eat(TokenTypes.DROP)
+        self.eat(TokenTypes.VIEW)
+        view_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        return DropView(view_name)
+    
+    def parse_drop_mtv(self):
+        self.eat(TokenTypes.DROP)
+        self.eat(TokenTypes.MATERIALIZED)
+        self.eat(TokenTypes.VIEW)
+        view_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        return DropMTView(view_name)
+    
     def parse_use_statement(self):
         self.eat(TokenTypes.USE)
         db_name = self.eat(TokenTypes.IDENTIFIER)[1]

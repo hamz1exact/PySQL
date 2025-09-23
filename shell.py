@@ -757,7 +757,6 @@ class EnhancedSQLShell:
                 if next_token_type == "DATABASE":
                     ast = parser.parse_create_database()
                     result = execute(ast, db_manager)
-                    self._handle_ddl_result("CREATE DATABASE", start_time)
                 elif next_token_type == "TABLE":
                     ast = parser.parse_create_table()
                     execute(ast, db_manager)
@@ -767,6 +766,7 @@ class EnhancedSQLShell:
                     ast = parser.create_view()
                     result = execute(ast, db_manager)
                     db_manager.save_database_file()
+                    db_manager.update_cache()
                 else:
                     
                     print("Unsupported CREATE statement")
@@ -774,13 +774,23 @@ class EnhancedSQLShell:
             elif token_type == "DROP":
                 if next_token_type == "DATABASE":
                     ast = parser.parse_drop_database()
-                    result = execute(ast, database)
+                    result = execute(ast, db_manager)
                     self._handle_ddl_result("DROP DATABASE", start_time)
+                    db_manager.update_cache()
+                    db_manager.save_database_file()
                 elif next_token_type == "TABLE":
                     ast = parser.parse_drop_table()
-                    result = execute(ast, database)
+                    result = execute(ast, db_manager)
                     db_manager.save_database_file()
                     self._handle_ddl_result("DROP TABLE", start_time)
+                elif next_token_type == "VIEW":
+                    ast = parser.parse_drop_view()
+                    result = execute(ast, db_manager)
+                    self._handle_ddl_result("DROP VIEW", start_time)
+                elif next_token_type == "MATERIALIZED":
+                    ast = parser.parse_drop_mtv()
+                    result = execute(ast, db_manager)
+                    self._handle_ddl_result("DROP MATERIALIZED VIEW", start_time)
                 else:
                     print("Unsupported DROP statement")
                     
