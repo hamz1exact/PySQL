@@ -121,6 +121,10 @@ HAVING AVG(salary) > 5000;
 |                           | CREATE TABLE                                 | ✅         |
 |                           | CREATE VIEW                                  | ✅         |
 |                           | CREATE MATERIALIZED VIEW                     | ✅         |
+|                           | DROP TABLE                                   | ✅
+|                           | DROP DATABASE                                | ✅
+|                           | DROP VIEW                                    | ✅
+|                           | DROP MATERIALIZED VIEW                       | ✅
 |                           | PRIMARY KEYS                                 | ✅         |
 |                           | UNIQUE Constraint                            | ✅         |
 |                           | CHECK Constraint                             | ✅         |
@@ -147,7 +151,7 @@ HAVING AVG(salary) > 5000;
 |                           | ALIASES in tables and columns                | ✅         |
 |                           | SUBQUERIES in WHERE                          | ✅         |
 |                           | SUBQUERIES in FROM                           | ✅         |
-| **Functions & Expressions** | MIN / MAX / SUM / AVG                     | ✅         |
+| **Functions & Expressions** | MIN / MAX / SUM / AVG                       | ✅         |
 |                           | CASE WHEN                                    | ✅         |
 |                           | ADVANCED CASE WHEN                           | ✅         |
 |                           | CASE WHEN + SUM                              | ✅         |
@@ -168,7 +172,6 @@ HAVING AVG(salary) > 5000;
 ---
 
 ## Future Work
-  - DROP DATABASES/TABLES/VIEWS
   - ALTER DATABASES/TABLES/VIEWS
   - Query planner and optimizer
   - Advanced Update Using SELECT queries (Commercial DB level)
@@ -182,6 +185,7 @@ HAVING AVG(salary) > 5000;
   - Window Functions (WF)
   - Transaction support (BEGIN, COMMIT, ROLLBACK)
   - Executin Plan
+  - Documentation
   
 
 
