@@ -10,7 +10,7 @@ SQL_KEYWORDS = (
     "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
     "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
     "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL",
-    "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH", "DROP","TRUNCATE"
+    "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH", "DROP","TRUNCATE", "WITH"
     )
 
 # Data type mapping - moved from engine.py  
@@ -37,6 +37,7 @@ class TokenTypes:
     DELETE = "DELETE"
     CREATE = "CREATE"
     TRUNCATE = "TRUNCATE"
+    WITH = "WITH"
     DROP = "DROP"
     USE = "USE"
     
@@ -72,6 +73,7 @@ class TokenTypes:
     SET = "SET"
     DATEDIFF = "DATEDIFF"
     RETURNING = "RETURNING"
+    IS = "IS"
     CASE_WHEN = "CASE_WHEN"
     CAST = "CAST"
     DEFAULT = "DEFAULT"
@@ -130,37 +132,37 @@ class TokenTypes:
 # Constraint types
 CONSTRAINT_TYPES = {"NULL", "PRIMARY", "UNIQUE", "KEY"}
 
-# Set operatos
 
-SET_OPERATORS = ("UNION", "UNION ALL", "INTERSECT", "EXCEPT")
+# Set operatos
+SET_OPERATORS = {"UNION", "UNION ALL", "INTERSECT", "EXCEPT"}
 
 # Math operations
 MATH_OPERATIONS = {"*", "/", "+", "-"}
 
 # Comparison operators  
-COMPARISON_OPERATORS = ("=", "!", "<", ">")
+COMPARISON_OPERATORS = {"=", "!", "<", ">"}
 
 # Logical operators
-LOGICAL_OPERATORS = ("AND", "OR")
+LOGICAL_OPERATORS = {"AND", "OR"}
 
-ABSENCE_OF_VALUE = ("NONE", "NULL","EMPYY")
+ABSENCE_OF_VALUE = {"NONE", "NULL","EMPYY"}
 
-SPECIAL_CHARACTERS = ("@", "_", "+", "-", ".")
+SPECIAL_CHARACTERS = {"@", "_", "+", "-", "."}
 
-NULLCHECKS = ("IS")
+NULLCHECKS = {"IS"}
 
-MEMBERSHIP = ("IN")
+MEMBERSHIP = {"IN"}
 
 
-EXISTS = ("EXISTS")
+EXISTS = {"EXISTS"}
 
 BETWEEN = ("BETWEEN")
 
-ON_INSERT_UPDATE_ACCEPTED_DATA_TYPES = ("NUMBER", "STRING", "BOOLEAN")
+ON_INSERT_UPDATE_ACCEPTED_DATA_TYPES = {"NUMBER", "STRING", "BOOLEAN"}
 
-CAST = ("CAST")
+CAST = {"CAST"}
 
-CONCAT = ("CONCAT")
+CONCAT = {"CONCAT"}
 
 CASE_WHEN = {
     
@@ -198,7 +200,7 @@ NULLIF = {"NULLIF"}
 
 REPLACE = {"REPLACE"}
 
-LIKE = ("LIKE")
+LIKE = {"LIKE"}
 
 ORDER_BY_KEYS ={"ORDER"}
 
@@ -212,7 +214,7 @@ OFFSET_KEYS = {"OFFSET"}
 
 LIMIT_KEYS = {"LIMIT"}
 
-COALESCE = ("COALESCE")
+COALESCE = {"COALESCE"}
 
 MATH_FUNCTIONS = {
     
@@ -231,6 +233,6 @@ STRING_FUNCTIONS = {
     "REVERSE"
 }
 
-RESTRICTIONS = ("CHECK")
+RESTRICTIONS = {"CHECK"}
 
-CONFLICT_KEYWORDS = ("ON", "CONFLICT", "DO")
+CONFLICT_KEYWORDS = {"ON", "CONFLICT", "DO"}

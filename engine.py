@@ -93,7 +93,7 @@ class Lexer:
                     
                 elif upper_word in Lexer.constraints:
                     if upper_word == TokenTypes.NULL:
-                        if self.tokens[-1][0] == TokenTypes.NOT and self.tokens[len(self.tokens)-2][1] != "IS":
+                        if self.tokens[-1][0] == TokenTypes.NOT and self.tokens[len(self.tokens)-2][1] != TokenTypes.IS:
                             self.tokens.pop()
                             self.tokens.append((TokenTypes.CONSTRAINT, TokenTypes.NOT_NULL))
                         else:
@@ -140,6 +140,7 @@ class Lexer:
                     self.tokens.append((TokenTypes.NULLIF, TokenTypes.NULLIF))
                     
                 elif upper_word in Lexer.exists:
+                    
                     self.tokens.append((TokenTypes.EXISTS,TokenTypes.EXISTS))
                     
                 elif upper_word in Lexer.extract:
@@ -181,7 +182,7 @@ class Lexer:
                     self.tokens.append(("ORDER_BY_DRC", upper_word))
                     
                 elif upper_word == TokenTypes.NOT:
-                    if self.tokens and self.tokens[-1][1] == "IS":
+                    if self.tokens and self.tokens[-1][1] == TokenTypes.IS:
                         self.tokens.append((TokenTypes.NULLCHECK, TokenTypes.NOT))
                     else:
                         self.tokens.append((TokenTypes.NOT, TokenTypes.NOT))
@@ -280,6 +281,7 @@ class Lexer:
 
             # --- Unknown character ---
             raise SyntaxError(f"Unexpected character '{char}' at position {self.pos}")
+        
         return self.tokens
 
     # ----------------- Helper Methods -----------------
@@ -536,7 +538,7 @@ class Parser:
                 # Complex expression
                 expression = self.parse_expression(None)
             
-            if self.current_token() and self.current_token()[0] not in Lexer.order_by_drc:
+            if self.current_token() and self.current_token()[1] not in Lexer.order_by_drc:
                 order_direction = TokenTypes.ASCENDING_ORDER
             else:
                 order_direction = self.eat("ORDER_BY_DRC")[1]
@@ -916,6 +918,26 @@ class Parser:
         self.eat(TokenTypes.VIEW)
         mv_name = self.eat(self.current_token()[0])[1]
         return RefreshMaterializedView(mt_view_name=mv_name)
+    
+    def parse_cte(self):
+        cte_expressions = []
+        cte_queries = None
+        self.eat(TokenTypes.WITH)
+        while self.current_token()[0] == TokenTypes.IDENTIFIER:
+            cte_name = self.eat(TokenTypes.IDENTIFIER)[1]
+            self.eat(TokenTypes.AS)
+            self.eat(TokenTypes.OPEN_PAREN)
+            cte_query = self.parse_single_select()
+            self.eat(TokenTypes.CLOSE_PAREN)
+            cte_expressions.append(WithCTExpression(cte_name=cte_name, query=cte_query))
+            if self.current_token()[0] == TokenTypes.COMMA:
+                self.eat(TokenTypes.COMMA)
+            else:
+                break
+        cte_queries = self.parse_single_select()
+        return WithCTE(cte_expressions, cte_queries)
+            
+        
         
         
         

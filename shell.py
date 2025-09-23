@@ -735,6 +735,12 @@ class EnhancedSQLShell:
                 db_manager.save_database_file()
                 self._handle_modify_result("DELETE", start_time)
             
+            elif token_type == "WITH":
+                ast = parser.parse_cte()
+                result = ast.execute(db_manager)
+                self._handle_select_result(result, start_time)
+                
+            
             elif token_type == "SHOW":
                 from sql_ast import ShowConstraints
                 ast = parser.parse_request_statement()

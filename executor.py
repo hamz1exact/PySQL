@@ -529,7 +529,7 @@ def execute_delete_query(ast, database):
     if ast.table not in database:
         raise ValueError(f"Table '{ast.table}' does not exist")
     if ast.where == None:
-        raise ValueError('Deleting all rows using DELETE statement is NOT allowed, use TRUNCATE <table_name> instead')
+        raise ValueError('Deleting all rows using DELETE statement is NOT allowed, use TRUNCATE TABLE <table_name> instead')
     table_obg = database[ast.table]
     table_rows = table_obg.rows
     table_schema = table_obg.schema
@@ -559,7 +559,6 @@ def execute_create_table_statement(ast, database):
         if ast.table_name in database.active_db:
             raise ValueError('Table Already Exists')
         database.active_db[ast.table_name] = table
-        database.save_database_file()
         
 def execute_use_statement(ast, database):
         database.use_database(ast.database_name)
@@ -1241,4 +1240,31 @@ def truncate_table(ast, db_manager):
         db_manager.active_db[table_name].rows = []
         
         
-    
+def create_temp_cte_table(ast, db_manager):
+    cte_rows = ast.query.evaluate()
+    cte_schema = generate_schema(cte_rows)
+    new_table = Table(
+        name=ast.table_name, 
+        schema=cte_schema, 
+        defaults={}, 
+        auto={}, 
+        constraints={}, 
+        restrictions={}, 
+        private_constraints={}, 
+        constraints_ptr={}
+    )
+    for row in cte_rows:
+        converted_rows = {}
+        for col, val in row.items():
+            if val is None:
+                converted_rows[col] = None
+            else:
+                try:
+                    sql_type_class = cte_schema[col]
+                    converted_rows[col] = sql_type_class(val)
+                except Exception as e:
+                    print(f"Error converting value {val} ({type(val)}) to {sql_type_class.__name__} for column '{col}': {e}")
+                    converted_rows[col] = VARCHAR(str(val))
+        new_table.rows.append(converted_rows)
+    db_manager.active_db[ast.cte_name] = new_table
+                    
