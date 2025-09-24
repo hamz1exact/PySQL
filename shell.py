@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-MySQL Shell - A professional command-line interface for your SQL engine
-Enhanced version with hot-reloading and better terminal UI
-"""
-
 import sys
 import os
 import time

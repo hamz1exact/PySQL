@@ -127,6 +127,7 @@ HAVING AVG(salary) > 5000;
 |                           | DROP MATERIALIZED VIEW                       | ✅
 |                           | PRIMARY KEYS                                 | ✅         |
 |                           | UNIQUE Constraint                            | ✅         |
+|                           | ALTER TABLES / COLUMNS / CONSTRAINTS         | ✅
 |                           | CHECK Constraint                             | ✅         |
 |                           | ON CONFLICT DO NOTHING                       | ✅         |
 |                           | UPSERT                                       | ✅         |
@@ -151,7 +152,7 @@ HAVING AVG(salary) > 5000;
 |                           | ALIASES in tables and columns                | ✅         |
 |                           | SUBQUERIES in WHERE                          | ✅         |
 |                           | SUBQUERIES in FROM                           | ✅         |
-| **Functions & Expressions** | MIN / MAX / SUM / AVG                       | ✅         |
+| **Functions & Expressions** | MIN / MAX / SUM / AVG                      | ✅         |
 |                           | CASE WHEN                                    | ✅         |
 |                           | ADVANCED CASE WHEN                           | ✅         |
 |                           | CASE WHEN + SUM                              | ✅         |
@@ -161,7 +162,7 @@ HAVING AVG(salary) > 5000;
 |                           | String formatting functions (various)        | ✅         |
 | **Date & Time**           | Timestamps and Dates                         | ✅         |
 |                           | Adding and Subtracting intervals             | ✅         |
-|                           | Extracting fields from timestamps            | ✅         |
+|                           | Extracting fields from timestamps             | ✅         |
 | **Set Operations**        | UNION / UNION ALL                            | ✅         |
 |                           | INTERSECT                                    | ✅         |
 |                           | EXCEPT                                       | ✅         |
@@ -170,22 +171,3 @@ HAVING AVG(salary) > 5000;
 
 
 ---
-
-## Future Work
-  - ALTER DATABASES/TABLES/VIEWS
-  - Query planner and optimizer
-  - Advanced Update Using SELECT queries (Commercial DB level)
-  - User-defined functions
-  - Indexing structures (B-tree, Hash index)
-  - Triggers
-  - User Management
-  - Managing Tables
-  - Joins
-  - Swapping
-  - Window Functions (WF)
-  - Transaction support (BEGIN, COMMIT, ROLLBACK)
-  - Executin Plan
-  - Documentation
-  
-
-
