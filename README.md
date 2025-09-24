@@ -1,117 +1,140 @@
 # PySQL
 
-**PySQL** is a lightweight, in-memory SQL-like database engine implemented in Python. It supports core SQL features including schema creation, CRUD operations, aggregate functions, and advanced `WHERE` filtering. Designed primarily for **learning and experimentation**, it provides insight into how databases parse, plan, and execute queries.
+**PySQL** is a lightweight, in-memory SQL database engine implemented in Python. It supports basic SQL operations and provides a simple, interactive shell for querying and managing data. The project is designed for learning, experimentation, and practicing database internals, parsing, and query execution.
+
+---
+
+## Table of Contents
+- [Features](#features)
+- [Why This Project?](#why-this-project)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Supported Features](#supported-features)
+- [Interactive Shell Commands](#interactive-shell-commands)
+- [Examples](#examples)
+- [Project Structure](#project-structure)
 
 ---
 
 ## Features
 
-- **Schema Management**  
-  - `CREATE DATABASE`, `CREATE TABLE` with custom datatypes  
-  - Support for defaults and auto-increment (`SERIAL`)  
-  - Strong typing system: `INT`, `FLOAT`, `BOOLEAN`, `CHAR`, `VARCHAR`, `DATE`, `TIME`, `TIMESTAMP`  
+### Core Database Operations
+- **Schema Management**: CREATE/DROP DATABASE, TABLE, VIEW, MATERIALIZED VIEW
+- **Data Manipulation**: INSERT, UPDATE, DELETE with RETURNING support
+- **Query Operations**: SELECT with comprehensive WHERE clauses, subqueries, aggregations
+- **Constraints**: PRIMARY KEY, UNIQUE, CHECK, NOT NULL with conflict resolution
+- **Advanced Features**: CTEs, set operations (UNION/INTERSECT/EXCEPT), materialized views
 
-- **Query Execution**  
-  - `SELECT`, `INSERT`, `UPDATE`, `DELETE`  
-  - `WHERE` clauses with:
-    - Comparison operators: `=`, `!=`, `<`, `<=`, `>`, `>=`
-    - Logical operators: `AND`, `OR`, `NOT`
-    - Parentheses for grouping expressions
-    - `IN`, `IS NULL`, `IS NOT NULL`, `BETWEEN`, `LIKE`, `ILIKE`
-  - Aggregate functions: `COUNT`, `MAX`, `MIN`, `AVG`, `SUM`
-  - `GROUP BY`, `HAVING`, `ORDER BY`  
+### Data Types & Functions
+- **Type System**: INT, FLOAT, BOOLEAN, VARCHAR, CHAR, TEXT, DATE, TIME, TIMESTAMP, SERIAL
+- **Aggregate Functions**: COUNT, MAX, MIN, AVG, SUM with GROUP BY/HAVING
+- **String Functions**: UPPER, LOWER, LENGTH, SUBSTRING, CONCAT, REPLACE
+- **Math Functions**: ROUND, CEIL, FLOOR, ABS
+- **Date Functions**: EXTRACT, DATEDIFF, CURRENT_DATE, NOW
+- **Conditional Logic**: CASE WHEN, COALESCE, NULLIF, CAST
 
-- **Execution Engine**  
-  - Custom lexer, parser, and AST (Abstract Syntax Tree)  
-  - Condition evaluation with type-aware comparisons (`DATE`, `TIME`, `BOOLEAN`, etc.)  
-  - Auto-increment columns (`SERIAL`) with sequence tracking  
-  - Pretty-printed query results  
-
-- **Persistence**  
-  - Databases saved to disk (`.su` files) using [MessagePack](https://msgpack.org/)  
-  - `.su_cache` file for tracking most recent database  
-  - Auto-reconnect to last used database  
-
-- **Interactive Shell**  
-  - Multi-line query support  
-  - `\ls` → list tables with row/column counts  
-  - `\dt` → list active databases  
-  - `\clear` → clear the screen  
-  -  `\export csv csv_file.csv` → to export queries as csv  
-  - `\import sqlfile.sql` → to import ready sql insert queries
----
-
-## Why this project?
-
-**PySQL** was built to explore database internals and give hands-on experience with:  
-
-- How SQL is parsed into an AST  
-- How query executors evaluate conditions, aggregations, and grouping  
-- How databases manage schemas, defaults, and type validation  
-- How persistence and caching can be added to an in-memory engine  
-
-It’s not a production-ready database, but it provides a **realistic playground** for building and understanding database systems.
+### Query Features
+- **Filtering**: WHERE with AND/OR/NOT, IN, BETWEEN, LIKE/ILIKE, IS NULL
+- **Ordering & Limiting**: ORDER BY, DISTINCT, LIMIT/OFFSET
+- **Subqueries**: Support in WHERE and FROM clauses
+- **Advanced Clauses**: GROUP BY, HAVING with complex expressions
+- **Table Operations**: ALTER TABLE for columns and constraints
 
 ---
 
-## Usage
+## Why This Project?
 
+PySQL was built to explore database internals and provide hands-on experience with:
 
-1. **Set up a Python environment:**
+- SQL parsing and Abstract Syntax Tree (AST) construction
+- Query execution engines and condition evaluation
+- Schema management and type validation systems
+- Data persistence and caching mechanisms
+- Database constraint enforcement and conflict resolution
 
+It serves as a realistic playground for understanding how production databases work internally, without the complexity of a full RDBMS.
+
+---
+
+## Installation
+
+### Prerequisites
+- Python 3.8 or higher
+- pip package manager
+
+### Setup
+
+1. **Clone the repository:**
 ```bash
-# Create a virtual environment named 'venv'
+git clone https://github.com/hamz1exact/PySQL.git
+cd pysql
+```
+
+2. **Create and activate a virtual environment:**
+```bash
+# Create virtual environment
 python3 -m venv venv
 
-# Activate the environment
-# On Linux/Mac:
+# Activate on Linux/Mac
 source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
 
-# Install dependencies
+# Activate on Windows
+venv\Scripts\activate
+```
+
+3. **Install dependencies:**
+```bash
 pip install -r requirements.txt
 ```
 
-2. **Run the interactive shell:**:
-```python
+---
+
+## Quick Start
+
+### Launch the Interactive Shell
+```bash
 python3 shell.py
 ```
 
+### Basic Usage Example
+```sql
+-- Create a database and table
+CREATE DATABASE my_app;
+USE my_app;
 
-3. **Execute queries:**
-
-```Sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    name VARCHAR DEFAULT = "Guest",
-    age INT DEFAULT = 18,
-    joined DATE DEFAULT CURRENT_DATE
+    username VARCHAR UNIQUE,
+    email VARCHAR CHECK (LENGTH(email) > 5),
+    age INT CHECK (age >= 0),
+    created_date DATE DEFAULT CURRENT_DATE,
+    is_active BOOLEAN DEFAULT true
 );
 
-INSERT INTO users (name, age) VALUES ("Hamza", 19);
+-- Insert some data
+INSERT INTO users (username, email, age) 
+VALUES 
+    ('alice123', 'alice@example.com', 28),
+    ('bob_dev', 'bob@example.com', 32),
+    ('charlie', 'charlie@example.com', 25);
 
-SELECT name, age 
+-- Query with aggregation
+SELECT 
+    CASE 
+        WHEN age < 30 THEN 'Young'
+        ELSE 'Experienced'
+    END as age_group,
+    COUNT(*) as user_count,
+    AVG(age) as avg_age
 FROM users 
-WHERE age BETWEEN 18 AND 30 
-ORDER BY age DESC;
+WHERE is_active = true
+GROUP BY age_group
+ORDER BY avg_age DESC;
 ```
 
-4. **Aggregate example:**
-```sql
-SELECT department, COUNT(*), AVG(salary)
-FROM employees
-GROUP BY department
-HAVING AVG(salary) > 5000;
-```
-5. **Much More examples:**
+---
 
-- **You can import any SQL queries you have, while respecting my custom datatypes. For example, in standard SQL you write VARCHAR(length) (e.g., VARCHAR(255)), but in my engine there is no length limit, so you should only use VARCHAR.**
-- **Ready tables folder has more examples.**
-
-## Supported Features in su-sql
-
-
+## Supported Features
 
 <div align="center">
 
@@ -121,53 +144,140 @@ HAVING AVG(salary) > 5000;
 |                           | CREATE TABLE                                 | ✅         |
 |                           | CREATE VIEW                                  | ✅         |
 |                           | CREATE MATERIALIZED VIEW                     | ✅         |
-|                           | DROP TABLE                                   | ✅
-|                           | DROP DATABASE                                | ✅
-|                           | DROP VIEW                                    | ✅
-|                           | DROP MATERIALIZED VIEW                       | ✅
+|                           | DROP TABLE/DATABASE/VIEW                     | ✅         |
 |                           | PRIMARY KEYS                                 | ✅         |
 |                           | UNIQUE Constraint                            | ✅         |
-|                           | ALTER TABLES / COLUMNS / CONSTRAINTS         | ✅
 |                           | CHECK Constraint                             | ✅         |
-|                           | ON CONFLICT DO NOTHING                       | ✅         |
-|                           | UPSERT                                       | ✅         |
+|                           | ALTER TABLES/COLUMNS/CONSTRAINTS             | ✅         |
+|                           | ON CONFLICT DO NOTHING/UPDATE                | ✅         |
 |                           | CTE (Common Table Expressions)               | ✅         |
 | **Data Manipulation**     | INSERT INTO                                  | ✅         |
-|                           | UPDATE                                       | ✅         |
-|                           | ADVANCED UPDATE                              | ✅         |
+|                           | UPDATE (Advanced)                            | ✅         |
 |                           | DELETE                                       | ✅         |
 |                           | RETURNING                                    | ✅         |
-| **Querying**              | SELECT FROM (no joins yet)                   | ✅         |
-|                           | ORDER BY                                     | ✅         |
-|                           | DISTINCT                                     | ✅         |
-|                           | WHERE                                        | ✅         |
-|                           | AND / OR / NOT                               | ✅         |
-|                           | LIMIT / OFFSET / FETCH                       | ✅         |
-|                           | IN                                           | ✅         |
-|                           | BETWEEN                                      | ✅         |
-|                           | LIKE and ILIKE                               | ✅         |
-|                           | IS NULL                                      | ✅         |
-|                           | GROUP BY                                     | ✅         |
-|                           | HAVING                                       | ✅         |
-|                           | ALIASES in tables and columns                | ✅         |
-|                           | SUBQUERIES in WHERE                          | ✅         |
-|                           | SUBQUERIES in FROM                           | ✅         |
-| **Functions & Expressions** | MIN / MAX / SUM / AVG                      | ✅         |
-|                           | CASE WHEN                                    | ✅         |
-|                           | ADVANCED CASE WHEN                           | ✅         |
-|                           | CASE WHEN + SUM                              | ✅         |
-|                           | CAST                                         | ✅         |
-|                           | COALESCE                                     | ✅         |
-|                           | NULLIF                                       | ✅         |
-|                           | String formatting functions (various)        | ✅         |
-| **Date & Time**           | Timestamps and Dates                         | ✅         |
-|                           | Adding and Subtracting intervals             | ✅         |
-|                           | Extracting fields from timestamps             | ✅         |
+| **Querying**              | SELECT FROM                                  | ✅         |
+|                           | WHERE (Complex conditions)                   | ✅         |
+|                           | ORDER BY / DISTINCT                          | ✅         |
+|                           | LIMIT / OFFSET                               | ✅         |
+|                           | GROUP BY / HAVING                            | ✅         |
+|                           | SUBQUERIES (WHERE/FROM)                      | ✅         |
+|                           | IN / BETWEEN / LIKE / IS NULL                | ✅         |
+| **Functions**             | Aggregates (COUNT/SUM/AVG/MIN/MAX)          | ✅         |
+|                           | String Functions                             | ✅         |
+|                           | Math Functions                               | ✅         |
+|                           | Date/Time Functions                          | ✅         |
+|                           | CASE WHEN / CAST / COALESCE                  | ✅         |
 | **Set Operations**        | UNION / UNION ALL                            | ✅         |
-|                           | INTERSECT                                    | ✅         |
-|                           | EXCEPT                                       | ✅         |
+|                           | INTERSECT / EXCEPT                           | ✅         |
 
 </div>
 
+---
+
+## Interactive Shell Commands
+
+Beyond SQL queries, the shell supports special commands:
+
+- `\l` - List all tables with row and column counts
+- `\dt` - List all databases
+- `\clear` - Clear the screen
+- `\export csv filename.csv` - Export query results to CSV
+- `\import filename.sql` - Import and execute SQL from file
+- `\quit` or `\exit` - Exit the shell
 
 ---
+
+## Examples
+****
+### Advanced Query with Subqueries
+```sql
+-- Find users who registered above average age in their country
+SELECT username, email, age, country
+FROM users u1
+WHERE u1.age > (
+    SELECT AVG(u2.age)
+    FROM users u2 
+    WHERE u2.country = u1.country
+)
+ORDER BY country, age DESC;
+```
+
+### Using CTEs and Window-like Functions
+```sql
+WITH high_value_orders AS (
+    SELECT customer_id, order_total, order_date
+    FROM orders 
+    WHERE order_total > 1000
+),
+customer_stats AS (
+    SELECT 
+        customer_id,
+        COUNT(*) as order_count,
+        AVG(order_total) as avg_order
+    FROM high_value_orders
+    GROUP BY customer_id
+)
+```
+
+### Materialized Views and Refresh
+```sql
+-- Create materialized view for expensive query
+CREATE MATERIALIZED VIEW sales_summary AS
+SELECT 
+    DATE(sale_date) as sale_day,
+    COUNT(*) as total_sales,
+    SUM(amount) as revenue,
+    AVG(amount) as avg_sale
+FROM sales 
+WHERE sale_date >= '2024-01-01'
+GROUP BY DATE(sale_date);
+
+-- Query the materialized view (fast)
+SELECT * FROM sales_summary WHERE revenue > 10000;
+
+-- Refresh when underlying data changes
+REFRESH MATERIALIZED VIEW sales_summary;
+```
+
+---
+
+## Project Structure
+
+```
+pysql/
+├── shell.py              # Interactive shell interface
+├── engine.py             # SQL parser and lexer
+├── sql_ast.py           # Abstract Syntax Tree definitions
+├── executor.py          # Query execution engine
+├── database_manager.py  # Database storage and management
+├── datatypes.py         # SQL data type implementations
+├── utilities.py         # Helper functions and utilities
+├── errors.py           # Custom exception classes
+├── requirements.txt     # Python dependencies
+└── README.md           # This file
+```
+
+---
+
+## Technical Details
+
+### Architecture
+- **Lexer**: Tokenizes SQL strings into meaningful symbols
+- **Parser**: Builds Abstract Syntax Trees from tokens
+- **Executor**: Traverses AST and executes operations on data
+- **Storage**: Uses MessagePack for efficient serialization to disk
+
+### Persistence
+- Databases stored as `.su` files in user home directory
+- Automatic caching of last used database
+- Type-safe serialization/deserialization of all SQL types
+
+### Performance Considerations
+- In-memory operation for fast queries
+- Optimized aggregate function implementations
+
+---
+
+## Acknowledgments
+
+Built for educational purposes to demonstrate database internals and SQL parsing techniques. Inspired by production databases like PostgreSQL and SQLite, but designed for learning rather than production use.
