@@ -10,19 +10,24 @@ app.py
 older_versions/
 # C extensions
 *.so
+minimal_test.py
 app.spec
 dev_test.py
 testing.py
 dev_test2.py
 clibeta2.py
+sql_client.py
+sql_server.py
 clibeta3.py
 clibeta5.pt
 clibeta5.py
 clibeta2.py
 dist/
+server_test.py
 build/
 runner.py
 release_note.md
+net_shell.py
 queries.txt
 # Distribution / packaging
 build/
