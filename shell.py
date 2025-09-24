@@ -909,10 +909,7 @@ Meta Commands:
   \\d, \\dt                List tables in current database
   \\c <db>, \\connect <db>  Connect to database
   \\clear, \\cls           Clear screen
-
-Hot-Reload Commands:
-  \\modules               List loaded modules
-  \\debug                 Toggle debug mode
+  
 
 Display Mode Commands:
   \\normal, \\force       Set normal table display (persistent)
@@ -957,13 +954,6 @@ Tips:
   • Ctrl+C cancels current query
   • Use arrow keys for history navigation
   • Tab completion for SQL keywords, tables, and columns
-
-Examples:
-  SELECT * FROM users WHERE age > 25;
-  INSERT INTO users VALUES (1, 'John'); INSERT INTO users VALUES (2, 'Jane');
-  \\set display_mode force_normal
-  \\export csv /tmp/results.csv
-  \\r  # Hot-reload after code changes
 """
         print(help_text)
     
