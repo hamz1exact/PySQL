@@ -11,7 +11,8 @@ SQL_KEYWORDS = (
     "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
     "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL",
     "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH", "DROP",
-    "TRUNCATE", "WITH", "ALTER", "COLUMN", "RENAME", "TO", "ADD","CONSTRAINT", "ON"
+    "TRUNCATE", "WITH", "ALTER", "COLUMN", "RENAME", "TO", "ADD",
+    "CONSTRAINT", "ON", "NAMES"
     )
 
 # Data type mapping - moved from engine.py  
@@ -60,6 +61,7 @@ class TokenTypes:
     ALL = "ALL"
     FROM = "FROM"
     DISTINCT = "DISTINCT"
+    NAMES = "NAMES"
     TABLE = "TABLE"
     GROUP_BY = "GROUP_BY_KEY"
     OFFSET = "OFFSET"

@@ -553,6 +553,7 @@ class Parser:
     
         
     def parse_request_statement(self):
+        names = False
         self.eat(TokenTypes.SHOW)
         if self.current_token() and self.current_token()[0] == TokenTypes.VIEWS:
             self.parse_list_viws()
@@ -562,6 +563,10 @@ class Parser:
             if self.current_token()[1] != TokenTypes.CONSTRAINTS:
                 raise ValueError("SHOW Must be followed by CONSTRAINTS")
             self.eat(TokenTypes.IDENTIFIER)
+            if self.current_token()[0] == TokenTypes.NAMES:
+                self.eat(TokenTypes.NAMES)
+                names = True
+                table_name = self.eat(self.current_token()[0])[1]
             if self.current_token()[0] == TokenTypes.OPEN_PAREN:
                 self.eat(TokenTypes.OPEN_PAREN)
                 table_name = self.eat(self.current_token()[0])[1]
@@ -575,7 +580,7 @@ class Parser:
                 if self.current_token() and self.current_token()[0] == TokenTypes.DOT:
                     self.eat(TokenTypes.DOT)
                     col = self.eat(TokenTypes.IDENTIFIER)[1]
-            return ShowConstraints(table_name, col=col)
+            return ShowConstraints(table_name, col=col, names=names)
         
 
 
@@ -993,6 +998,17 @@ class Parser:
         db_name = self.eat(TokenTypes.IDENTIFIER)[1]
         self.eat(TokenTypes.SEMICOLON)
         return UseStatement(db_name)
+
+
+    def parse_drop_constraint(self):
+        self.eat("CONSTRAINT")
+        const_name = self.eat(self.current_token()[0])[1]
+        return DropConstraintFromAlterTable(const_name=const_name)
+    def parse_drop_column(self):
+        
+        self.eat(TokenTypes.COLUMN)
+        column_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        return DropColumnFromAlterTable(column_name)
     
     def parse_add_column(self):
         default_value = None
@@ -1012,6 +1028,8 @@ class Parser:
         return AddColumnFromAlterTable(column_name=column_name, datatype=data_type, default=default_value,
                                         constraint=constraint_type, constraint_rule=constraint_rule)
             
+    
+    
     
     def parse_add_constraint(self):
         constraint_rule = None
@@ -1290,6 +1308,14 @@ class Parser:
             self.eat(TokenTypes.DATE_AND_TIME)
             return CurrentDate()
         
+        
+        elif token[0] == TokenTypes.DROP:
+            
+            self.eat(TokenTypes.DROP)
+            if self.current_token()[0] == TokenTypes.COLUMN:
+                return self.parse_drop_column()
+            elif self.current_token()[0] == "CONSTRAINT":
+                return self.parse_drop_constraint()
         
         elif token[0] == TokenTypes.ADD:
             

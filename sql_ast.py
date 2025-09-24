@@ -1076,11 +1076,12 @@ class Exists(Expression):
         
 
 class ShowConstraints(Expression):
-    def __init__(self, table_name, col = None ,name = "REQUEST_CONSTRAINTS", alias = None):
+    def __init__(self, table_name, col = None, name = "REQUEST_CONSTRAINTS", alias = None, names = False):
         self.table_name = table_name
         self.name = name
         self.alias = alias
         self.col = col
+        self.names = names
         
     def evaluate(self):
         database = get_db_manager().active_db
@@ -1091,8 +1092,16 @@ class ShowConstraints(Expression):
                 raise ValueError('Your table has no constraints, use ALTER <table_name> ADD <constraint>* <column_name>')
             private_constraints = database[self.table_name].private_constraints
             constraints_ptr = database[self.table_name].constraints_ptr
+            print(database[self.table_name].constraints)
+            print(private_constraints)
+            print(constraints_ptr)
+            print(database[self.table_name].restrictions)
+            if not self.col and self.names:
+                print()
+                for col, const in private_constraints.items():
+                    print(f"{"":5}{col:30}-> {const}\n")
             
-            if not self.col:
+            elif not self.col:
                 print()
                 for col, const in private_constraints.items():
                     more_than_one_const = False
@@ -1107,7 +1116,6 @@ class ShowConstraints(Expression):
                     print(f"{"":5}{col:30}-> {constr}\n")
                     
             else:
-                row = {}
                 print()
                 for c, v in  private_constraints.items():
                     
@@ -1534,9 +1542,10 @@ class AddConstraintFromAlterTable:
         if self.column_name not in db_manager.active_db[table_name].schema:
             raise ColumnNotFoundError(self.column_name, table_name=table_name)
         for col, const in db_manager.active_db[table_name].private_constraints.items():
-            for key in const:
-                if db_manager.active_db[table_name].constraints_ptr[key] == self.constraint_type:
-                    raise ValueError(f"Column {self.column_name} already has a {self.constraint_type} Constraint")
+            if col == self.column_name:
+                for key in const:
+                    if db_manager.active_db[table_name].constraints_ptr[key] == self.constraint_type:
+                        raise ValueError(f"Column {self.column_name} already has a {self.constraint_type} Constraint")
         if self.constraint_type and self.constraint_rule:
             if self.column_name in db_manager.active_db[table_name].restrictions:
                 raise ValueError(f'{self.column_name} already has a CHECK constraint')
@@ -1554,11 +1563,9 @@ class AddConstraintFromAlterTable:
             db_manager.active_db[table_name].restrictions[self.column_name] = self.constraint_rule
             
         elif self.constraint_type:
-
             if self.constraint_type in (TokenTypes.PRIMARY_KEY, TokenTypes.NOT_NULL):
                 for row in db_manager.active_db[table_name].rows:
-                    
-                    if row[self.column_name].value is None:
+                    if row[self.column_name] is None or row[self.column_name].value is None:
                         raise ValueError(
                             f"{self.constraint_type} constraint violated on table '{table_name}', "
                             f"column '{self.column_name}' cannot contain NULL values. "
@@ -1594,23 +1601,68 @@ class AddConstraintFromAlterTable:
             db_manager.active_db[table_name].constraints_ptr[self.constraint_name] = self.constraint_type
             db_manager.active_db[table_name].constraints[self.column_name] = self.constraint_type
                                 
-                
-            
-            
+
+class DropColumnFromAlterTable:
+    def __init__(self, column_name):
+        self.column_name = column_name
         
+    def execute(self, table_name, db_manager):
+        if self.column_name not in db_manager.active_db[table_name].schema:
+            raise ColumnNotFoundError(column_name=self.column_name,table_name=table_name)
+        rows = db_manager.active_db[table_name].rows
+
+        if self.column_name in db_manager.active_db[table_name].private_constraints:
+            for col, key_set in db_manager.active_db[table_name].private_constraints.items():
+                if col == self.column_name:
+                    for key in key_set:
+                        if key in db_manager.active_db[table_name].constraints_ptr:
+                            del db_manager.active_db[table_name].constraints_ptr[key]
+            del db_manager.active_db[table_name].private_constraints[self.column_name]
+        if self.column_name in db_manager.active_db[table_name].restrictions:
+            del  db_manager.active_db[table_name].restrictions[self.column_name]
+
+        if self.column_name in db_manager.active_db[table_name].constraints:
+            del db_manager.active_db[table_name].constraints[self.column_name]
+        del db_manager.active_db[table_name].schema[self.column_name]
+        for row in rows:
+            try:
+                del row[self.column_name]
+            except Exception as e:
+                raise ValueError(e)
         
-        
-        
-        
-        
-        
-        
-                
-                
-            
-        
-      
-        
+class DropConstraintFromAlterTable:
+    def __init__(self, const_name):
+        self.const_name = const_name
     
+    def execute(self, table_name, db_manager):
+        column_pointer = None
+        for col, constr in db_manager.active_db[table_name].private_constraints.items():
+            
+            if self.const_name in constr:
+                column_pointer = col
+                for key in constr:
+                    if key == self.const_name:
+                        print('TRUE')
+                        value = db_manager.active_db[table_name].constraints_ptr[key]
+                        if value == TokenTypes.CHECK:
+                            del db_manager.active_db[table_name].restrictions[col]
+                        else:
+                            del db_manager.active_db[table_name].constraints[col]
+                        del db_manager.active_db[table_name].constraints_ptr[key]
+        if column_pointer:                
+            if len(db_manager.active_db[table_name].private_constraints[column_pointer])>1:
+                db_manager.active_db[table_name].private_constraints[column_pointer].remove(self.const_name)
+            else:
+                del db_manager.active_db[table_name].private_constraints[column_pointer]
+            print(f'column <{column_pointer}> has been affected')        
+            
+        if column_pointer is None:
+            raise ValueError(f"There is no constraint with this name <{self.const_name}>")
+        
+            
+
+                
+            
+            
         
         
