@@ -1,7 +1,6 @@
 # PySQL
 
-**PySQL** is a lightweight, in-memory SQL database engine implemented in Python. It supports basic SQL operations and provides a simple, interactive shell for querying and managing data. The project is designed for learning, experimentation, and practicing database internals, parsing, and query execution.
-
+**PySQL** is a comprehensive SQL database engine in Python with advanced features like CTEs, materialized views, subqueries, and constraint management. Built for learning database internals and query execution.
 ---
 
 ## Table of Contents
