@@ -3,6 +3,7 @@ from datatypes import *
 import math
 import re
 from database_manager import Table
+from constants import *
 
 def get_execute_function():
     from executor import execute
@@ -1457,4 +1458,159 @@ class WithCTExpression:
     def __init__(self, cte_name, query):
         self.cte_name = cte_name
         self.query = query
+        
+
+class AlterTable:
+    def __init__(self, table_name, expressions):
+        self.table_name = table_name
+        self.expressions = expressions
+    
+    def execute(self, db_manager):
+        if self.table_name not in db_manager.active_db:
+            raise TableNotFoundError(self.table_name)
+        
+        for expr in self.expressions:
+            expr.execute(self.table_name, db_manager)
+            
+
+class AddColumnFromAlterTable:
+    def __init__(self, column_name, datatype, default = None, constraint = None, constraint_rule = None):
+        self.column_name = column_name
+        self.datatype = datatype
+        self.default = default 
+        self.constraint = constraint
+        self.constraint_rule = constraint_rule
+        
+    def execute(self, table_name, db_manager):
+        
+        if self.column_name in db_manager.active_db[table_name].schema:
+            raise ValueError("Column Already Exists")
+        if self.datatype not in DATATYPE_MAPPING:
+            raise ValueError (f"Unknown Data Type {self.datatype}")
+
+        if self.constraint and self.constraint_rule:
+            key = f"{table_name}_{self.column_name}_check"
+            db_manager.active_db[table_name].private_constraints[self.column_name] = set()
+            db_manager.active_db[table_name].private_constraints[self.column_name].add(key)
+            db_manager.active_db[table_name].restrictions[self.column_name] = self.constraint_rule
+            db_manager.active_db[table_name].constraints_ptr[key] = TokenTypes.CHECK
+        elif self.constraint:
+            if self.constraint == TokenTypes.NOT_NULL and self.default:
+                
+                raise ValueError("if a Column has DEFAULT VALUE it cannot inheritance  NOT NULL constraints")
+            db_manager.active_db[table_name].constraints[self.column_name] = self.constraint
+            constr_id = None
+            if self.constraint == TokenTypes.PRIMARY_KEY:
+                constr_id = 'pkey'
+            elif self.constraint == TokenTypes.NOT_NULL:
+                constr_id = '!null'
+            elif self.constraint == TokenTypes.UNIQUE:
+                constr_id = 'ukey'
+            key = f"{table_name}_{self.column_name}_{constr_id}"
+            db_manager.active_db[table_name].private_constraints[self.column_name] = set()
+            db_manager.active_db[table_name].private_constraints[self.column_name].add(key)
+            db_manager.active_db[table_name].constraints_ptr[key] = self.constraint
+            
+        db_manager.active_db[table_name].schema[self.column_name] = DATATYPE_MAPPING[self.datatype]
+        if self.default:
+            if self.datatype == TokenTypes.SERIAL:
+                raise ValueError('SERIAL Columns Has No Default Value')
+            db_manager.active_db[table_name].defaults[self.column_name] = db_manager.active_db[table_name].schema[self.column_name](self.default)
+           
+        for row in db_manager.active_db[table_name].rows:
+            row[self.column_name] = None
+            
+            
+
+class AddConstraintFromAlterTable:
+    def __init__(self, column_name, constraint_name, constraint_type, constraint_rule):
+        self.column_name = column_name
+        self.constraint_name = constraint_name
+        self.constraint_type = constraint_type
+        self.constraint_rule = constraint_rule
+        
+    def execute(self, table_name, db_manager):
+        
+        if self.column_name not in db_manager.active_db[table_name].schema:
+            raise ColumnNotFoundError(self.column_name, table_name=table_name)
+        for col, const in db_manager.active_db[table_name].private_constraints.items():
+            for key in const:
+                if db_manager.active_db[table_name].constraints_ptr[key] == self.constraint_type:
+                    raise ValueError(f"Column {self.column_name} already has a {self.constraint_type} Constraint")
+        if self.constraint_type and self.constraint_rule:
+            if self.column_name in db_manager.active_db[table_name].restrictions:
+                raise ValueError(f'{self.column_name} already has a CHECK constraint')
+            
+            for row in db_manager.active_db[table_name].rows:
+                if not self.constraint_rule.evaluate(row, db_manager.active_db[table_name].schema):
+                    raise ValueError(
+                        f"CHECK constraint '{self.constraint_name}' violated on table '{table_name}'. "
+                        f"Exactly at {self.column_name} = {row[self.column_name].value}"
+                    )
+            if self.column_name not in db_manager.active_db[table_name].private_constraints:
+                db_manager.active_db[table_name].private_constraints[self.column_name] = set()
+            db_manager.active_db[table_name].private_constraints[self.column_name].add(self.constraint_name)
+            db_manager.active_db[table_name].constraints_ptr[self.constraint_name] = TokenTypes.CHECK
+            db_manager.active_db[table_name].restrictions[self.column_name] = self.constraint_rule
+            
+        elif self.constraint_type:
+
+            if self.constraint_type in (TokenTypes.PRIMARY_KEY, TokenTypes.NOT_NULL):
+                for row in db_manager.active_db[table_name].rows:
+                    
+                    if row[self.column_name].value is None:
+                        raise ValueError(
+                            f"{self.constraint_type} constraint violated on table '{table_name}', "
+                            f"column '{self.column_name}' cannot contain NULL values. "
+                            f"Exactly at: {row[self.column_name].value}"
+                        )
+            if self.constraint_type in (TokenTypes.UNIQUE, TokenTypes.PRIMARY_KEY):
+                seen = set()
+                for row in db_manager.active_db[table_name].rows:
+                    value = row[self.column_name].value
+                    if value in seen:
+                        raise ValueError(
+                            f"Constraint violation on table '{table_name}', column '{self.column_name}': "
+                            f"duplicate value '{value}' found for {self.constraint_type.lower()} constraint."
+                        )
+                    seen.add(value)
+                    
+            
+
+            if self.column_name not in db_manager.active_db[table_name].private_constraints:
+                # Initialize as a set
+                db_manager.active_db[table_name].private_constraints[self.column_name] = set()
+            else:
+                # If it exists but is a list, convert it to a set
+                if isinstance(db_manager.active_db[table_name].private_constraints[self.column_name], list):
+                    db_manager.active_db[table_name].private_constraints[self.column_name] = set(
+                        db_manager.active_db[table_name].private_constraints[self.column_name]
+                    )
+
+            # Now it's guaranteed to be a set
+            db_manager.active_db[table_name].private_constraints[self.column_name].add(self.constraint_name)
+
+            # Update other mappings
+            db_manager.active_db[table_name].constraints_ptr[self.constraint_name] = self.constraint_type
+            db_manager.active_db[table_name].constraints[self.column_name] = self.constraint_type
+                                
+                
+            
+            
+        
+        
+        
+        
+        
+        
+        
+        
+                
+                
+            
+        
+      
+        
+    
+        
         

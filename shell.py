@@ -739,7 +739,6 @@ class EnhancedSQLShell:
                 ast = parser.parse_cte()
                 result = ast.execute(db_manager)
                 self._handle_select_result(result, start_time)
-                
             
             elif token_type == "SHOW":
                 from sql_ast import ShowConstraints
@@ -758,6 +757,8 @@ class EnhancedSQLShell:
             elif token_type == "REFRESH":
                 ast = parser.parse_refresh_mv()
                 result = execute(ast, db_manager)
+                
+            
             
             elif token_type == "TRUNCATE":
                 ast = parser.parse_truncate_table()
@@ -806,11 +807,10 @@ class EnhancedSQLShell:
                     print("Unsupported DROP statement")
                     
             elif token_type == "ALTER":
-                ast = parser.parse_alter_statement()
-                result = execute(ast, database)
-                db_manager.save_database_file()
+                ast = parser.parse_alter_table()
+                result = ast.execute(db_manager)
                 self._handle_ddl_result("ALTER TABLE", start_time)
-                
+                db_manager.save_database_file()
             elif token_type == "USE":
                 ast = parser.parse_use_statement()
                 result = execute(ast, db_manager)

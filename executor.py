@@ -483,10 +483,10 @@ def execute_insert_query(ast, database):
                         raise ValueError(f"Column <{col_object}> cannot be null; it uses a NOT NULL constraint.")
                 else:
                     new_row[col_object] = None
-                
-        if col_object in table_restrictions:
-            if not table_restrictions[col_object].evaluate(new_row, table_schema):
-                raise ValueError(f"new row for relation '{table_name}' violates check constraint of column <{col_object}>")
+        
+            if col_object in table_restrictions:
+                if not table_restrictions[col_object].evaluate(new_row, table_schema):
+                    raise ValueError(f"new row for relation '{table_name}' violates check constraint of column <{col_object}>")
         
         violation = find_constraint_violation(table_obj, new_row)
         should_insert = handle_conflict_resolution(ast, violation, table_obj, new_row)

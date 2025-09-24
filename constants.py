@@ -10,7 +10,8 @@ SQL_KEYWORDS = (
     "UPDATE", "SET", "DELETE", "CREATE", "DATABASE", "TABLE",
     "USE", "DEFAULT", "ALIAS", "AS", "DISTINCT", "SHOW", "UNION",
     "ALL", "INTERSECT", "EXCEPT", "RETURNING", "VIEW", "AS", "CALL",
-    "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH", "DROP","TRUNCATE", "WITH"
+    "DATA", "WITH", "NO", "VIEWS", "MATERIALIZED", "REFRESH", "DROP",
+    "TRUNCATE", "WITH", "ALTER", "COLUMN", "RENAME", "TO", "ADD","CONSTRAINT", "ON"
     )
 
 # Data type mapping - moved from engine.py  
@@ -36,6 +37,7 @@ class TokenTypes:
     UPDATE = "UPDATE"
     DELETE = "DELETE"
     CREATE = "CREATE"
+    ALTER = "ALTER"
     TRUNCATE = "TRUNCATE"
     WITH = "WITH"
     DROP = "DROP"
@@ -49,6 +51,9 @@ class TokenTypes:
 #   token type names
     DATABASE = "DATABASE"
     WHERE = "WHERE"
+    COLUMN = "COLUMN"
+    RENAME = "RENAME"
+    TO = "TO"
     UNION = "UNION"
     INTO = "INTO"
     UNION_ALL = "UNION ALL"
@@ -63,8 +68,11 @@ class TokenTypes:
     CONFLICT = "CONF"
     HAVING = "HAVING"
     FROM = "FROM"
+    ON = "ON"
     LIMIT = "LIMIT"
     BY = "BY"
+    ADD = "ADD"
+    DATATYPE = "DATATYPE"
     MATH_FUNC = "MATH_FUNC"
     VALUES = "VALUES"
     FUNC = "FUNC"
@@ -236,3 +244,6 @@ STRING_FUNCTIONS = {
 RESTRICTIONS = {"CHECK"}
 
 CONFLICT_KEYWORDS = {"ON", "CONFLICT", "DO"}
+
+
+DATE_OBJECTS = {"CURRENT_DATE", "CURRENT_TIME", "NOW"}

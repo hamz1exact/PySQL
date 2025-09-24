@@ -759,6 +759,16 @@ class Parser:
 
 
 
+    def parse_alter_table(self):
+        self.eat(TokenTypes.ALTER)
+        self.eat(TokenTypes.TABLE)
+        expressions = []
+        table_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        expr = self.parse_expression()
+        expressions.append(expr)
+        self.eat(TokenTypes.SEMICOLON)
+        return AlterTable(table_name=table_name, expressions=expressions)
+    
     def parse_create_table(self):
         self.eat(TokenTypes.CREATE)
         self.eat(TokenTypes.TABLE)
@@ -814,9 +824,9 @@ class Parser:
                         elif token_value == TokenTypes.NOW:
                             self.eat(TokenTypes.DATE_AND_TIME)
                             defaults[col_name] = schema[col_name](TokenTypes.NOW)
-                        elif token_value == "TokenTypes.CURRENT_TIME":
+                        elif token_value == TokenTypes.CURRENT_TIME:
                             self.eat(TokenTypes.DATE_AND_TIME)
-                            defaults[col_name] = schema[col_name]("TokenTypes.CURRENT_TIME")
+                            defaults[col_name] = schema[col_name](TokenTypes.CURRENT_TIME)
                     else:
                         default_value = self.eat(token_type)[1]
                         defaults[col_name] = schema[col_name](default_value)
@@ -850,6 +860,7 @@ class Parser:
                     private_constraints[col_name] = set()
                 private_constraints[col_name].add(key)
                 constraints_ptr[key] = TokenTypes.CHECK
+                
                 
             # Skip comma if present
             if self.current_token() and self.current_token()[0] == TokenTypes.COMMA:
@@ -982,7 +993,51 @@ class Parser:
         db_name = self.eat(TokenTypes.IDENTIFIER)[1]
         self.eat(TokenTypes.SEMICOLON)
         return UseStatement(db_name)
+    
+    def parse_add_column(self):
+        default_value = None
+        constraint_type = None
+        constraint_rule = None
+        self.eat(TokenTypes.COLUMN)
+        column_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        data_type = self.eat(TokenTypes.DATATYPE)[1]
+        if self.current_token()[0] == TokenTypes.DEFAULT:
+            self.eat(TokenTypes.DEFAULT)
+            default_value = self.eat(self.current_token()[0])[1]
+        if self.current_token()[0] == TokenTypes.CONSTRAINT:
+            constraint_type = self.eat(TokenTypes.CONSTRAINT)[1]
+        if self.current_token()[0]== TokenTypes.RESTRICTION:
+                constraint_type = self.eat(TokenTypes.RESTRICTION)[1]
+                constraint_rule = self.parse_expression()
+        return AddColumnFromAlterTable(column_name=column_name, datatype=data_type, default=default_value,
+                                        constraint=constraint_type, constraint_rule=constraint_rule)
+            
+    
+    def parse_add_constraint(self):
+        constraint_rule = None
+        self.eat("CONSTRAINT")
+        column_name = None
+        constraint_name = self.eat(self.current_token()[0])[1]
+        if self.current_token()[0] == TokenTypes.CONSTRAINT:
+                constraint_type = self.eat(TokenTypes.CONSTRAINT)[1]
+                if self.current_token()[0] == TokenTypes.OPEN_PAREN:
+                    self.eat(TokenTypes.OPEN_PAREN)
+                    column_name = self.eat(TokenTypes.IDENTIFIER)[1]
+                    self.eat(TokenTypes.CLOSE_PAREN)
+                else:
+                    column_name = self.eat(TokenTypes.IDENTIFIER)[1]
+        else:
+            constraint_type = self.eat(TokenTypes.RESTRICTION)
+            constraint_rule = self.parse_expression()
+            self.eat(TokenTypes.ON)
+            column_name = self.eat(TokenTypes.IDENTIFIER)[1]
 
+        return AddConstraintFromAlterTable(column_name=column_name, constraint_type=constraint_type,
+                                           constraint_name=constraint_name, constraint_rule=constraint_rule)
+            
+          
+            
+        
     def parse_expression(self, context = None):
         """Parse mathematical expressions with operator precedence"""
         
@@ -1235,6 +1290,14 @@ class Parser:
             self.eat(TokenTypes.DATE_AND_TIME)
             return CurrentDate()
         
+        
+        elif token[0] == TokenTypes.ADD:
+            
+            self.eat(TokenTypes.ADD)
+            if self.current_token()[0] == TokenTypes.COLUMN:
+                return self.parse_add_column()
+            elif self.current_token()[0] == "CONSTRAINT":
+                return self.parse_add_constraint()
         
         elif token[0] == TokenTypes.CASE_WHEN:
             self.eat(TokenTypes.CASE_WHEN)
