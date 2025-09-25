@@ -470,10 +470,11 @@ class EnhancedSQLShell:
             '\\h': self._cmd_help,
             '\\help': self._cmd_help,
             '\\?': self._cmd_help,
-            '\\l': self._cmd_list_databases,
-            '\\list': self._cmd_list_databases,
-            '\\d': self._cmd_describe_tables,
-            '\\dt': self._cmd_describe_tables,
+            '\\l': self._cmd_describe_tables,
+            '\\list': self._cmd_describe_tables,
+            '\\ls': self._cmd_describe_tables,
+            '\\d': self._cmd_list_databases,
+            '\\dt': self._cmd_list_databases,
             '\\c': self._cmd_connect,
             '\\connect': self._cmd_connect,
             '\\use': self._cmd_connect,
@@ -905,8 +906,8 @@ class EnhancedSQLShell:
 Meta Commands:
   \\h, \\help              Show this help
   \\q, \\quit, \\exit      Quit the shell
-  \\l, \\list              List all databases
-  \\d, \\dt                List tables in current database
+  \\l, \\list              List tables in current database
+  \\d, \\dt                List all databases
   \\c <db>, \\connect <db>  Connect to database
   \\clear, \\cls           Clear screen
   
@@ -1635,7 +1636,7 @@ Tips:
         
         version_info = f"""
 
-MySQL Shell CLI
+PySQL
   Version: 2.1.0
   
 Runtime Environment
