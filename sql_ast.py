@@ -672,7 +672,7 @@ class StringFunction(Expression):
     def evaluate(self, row, schema):
         value = self.expression.evaluate(row, schema)
         if type(value) != str:
-            raise ValueError("string functions work only with strings")
+            raise ValueError(f"string functions work only with strings, given value has type of {type(value).__name__}")
         
         if self.name == "UPPER":
             return value.upper()
@@ -1092,10 +1092,6 @@ class ShowConstraints(Expression):
                 raise ValueError('Your table has no constraints, use ALTER <table_name> ADD <constraint>* <column_name>')
             private_constraints = database[self.table_name].private_constraints
             constraints_ptr = database[self.table_name].constraints_ptr
-            print(database[self.table_name].constraints)
-            print(private_constraints)
-            print(constraints_ptr)
-            print(database[self.table_name].restrictions)
             if not self.col and self.names:
                 print()
                 for col, const in private_constraints.items():
@@ -1541,11 +1537,16 @@ class AddConstraintFromAlterTable:
         
         if self.column_name not in db_manager.active_db[table_name].schema:
             raise ColumnNotFoundError(self.column_name, table_name=table_name)
+        
+        # CHECK IF ALREADY HAS CONSTRAINT
+        
         for col, const in db_manager.active_db[table_name].private_constraints.items():
             if col == self.column_name:
                 for key in const:
                     if db_manager.active_db[table_name].constraints_ptr[key] == self.constraint_type:
                         raise ValueError(f"Column {self.column_name} already has a {self.constraint_type} Constraint")
+                    
+        # Check Constraint (CHECK : RULE)                    
         if self.constraint_type and self.constraint_rule:
             if self.column_name in db_manager.active_db[table_name].restrictions:
                 raise ValueError(f'{self.column_name} already has a CHECK constraint')

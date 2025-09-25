@@ -782,7 +782,7 @@ class Parser:
             return self.parse_cta(table_name)
         
         table_name = table_name.strip()
-        self.eat(TokenTypes.OPEN_PAREN)  # (
+        self.eat(TokenTypes.OPEN_PAREN)  # (    
         schema = {}
         auto = {}
         defaults = {} 
@@ -809,67 +809,70 @@ class Parser:
             else:
                 is_serial = False
                      
-
-            # Handle DEFAULT values
-            if self.current_token() and self.current_token()[0] == TokenTypes.DEFAULT:
-                if is_serial:
-                    raise ValueError(f"Invalid DEFAULT for column '{col_name}', SERIAL columns cannot have explicit default values.")
-                
-                self.eat(TokenTypes.DEFAULT)
-                is_default = True
-                if self.current_token()[0] in ("=", "=="):
-                    self.eat(TokenTypes.LOW_PRIORITY_OPERATOR)[1]
-                    
-                token_type, token_value = self.current_token()
-                if token_type:
-                    if token_type == TokenTypes.DATE_AND_TIME:
-                        if token_value == TokenTypes.CURRENT_DATE:
-                            self.eat(TokenTypes.DATE_AND_TIME)
-                            defaults[col_name] = schema[col_name](TokenTypes.CURRENT_DATE)
-                        elif token_value == TokenTypes.NOW:
-                            self.eat(TokenTypes.DATE_AND_TIME)
-                            defaults[col_name] = schema[col_name](TokenTypes.NOW)
-                        elif token_value == TokenTypes.CURRENT_TIME:
-                            self.eat(TokenTypes.DATE_AND_TIME)
-                            defaults[col_name] = schema[col_name](TokenTypes.CURRENT_TIME)
-                    else:
-                        default_value = self.eat(token_type)[1]
-                        defaults[col_name] = schema[col_name](default_value)
-            else:
-                is_default = False
-            if self.current_token() and self.current_token()[0] == TokenTypes.CONSTRAINT:
-                contr = self.eat(TokenTypes.CONSTRAINT)[1]
-                if contr == TokenTypes.NOT_NULL and is_default:
-                    raise ValueError("if a Column has DEFAULT VALUE it cannot inheritance  NOT NULL constraints")
-                constraints[col_name] = contr
-                constr_id = None
-                if contr == TokenTypes.PRIMARY_KEY:
-                    constr_id = 'pkey'
-                elif contr == TokenTypes.NOT_NULL:
-                    constr_id = '!null'
-                elif contr == TokenTypes.UNIQUE:
-                    constr_id = 'ukey'
-                key = f"{table_name}_{col_name}_{constr_id}"
-                if col_name not in private_constraints:
-                    private_constraints[col_name] = set()
-                private_constraints[col_name].add(key)
-                constraints_ptr[key] = contr
-                
             
-            if self.current_token() and self.current_token()[0] == TokenTypes.RESTRICTION:
-                self.eat(TokenTypes.RESTRICTION)
-                expr = self.parse_expression(context=None)
-                restrictions[col_name] = expr
-                key = f"{table_name}_{col_name}_check"
-                if col_name not in private_constraints:
-                    private_constraints[col_name] = set()
-                private_constraints[col_name].add(key)
-                constraints_ptr[key] = TokenTypes.CHECK
+            while True:
+                if self.current_token() and self.current_token()[0] == TokenTypes.DEFAULT:
+                    if is_serial:
+                        raise ValueError(f"Invalid DEFAULT for column '{col_name}', SERIAL columns cannot have explicit default values.")
+                    
+                    self.eat(TokenTypes.DEFAULT)
+                    is_default = True
+                    if self.current_token()[1] in ("=", "=="):
+                        self.eat(TokenTypes.LOW_PRIORITY_OPERATOR)[1]
+                        
+                    token_type, token_value = self.current_token()
+                    if token_type:
+                        if token_type == TokenTypes.DATE_AND_TIME:
+                            if token_value == TokenTypes.CURRENT_DATE:
+                                self.eat(TokenTypes.DATE_AND_TIME)
+                                defaults[col_name] = schema[col_name](TokenTypes.CURRENT_DATE)
+                            elif token_value == TokenTypes.NOW:
+                                self.eat(TokenTypes.DATE_AND_TIME)
+                                defaults[col_name] = schema[col_name](TokenTypes.NOW)
+                            elif token_value == TokenTypes.CURRENT_TIME:
+                                self.eat(TokenTypes.DATE_AND_TIME)
+                                defaults[col_name] = schema[col_name](TokenTypes.CURRENT_TIME)
+                        else:
+                            default_value = self.eat(token_type)[1]
+                            defaults[col_name] = schema[col_name](default_value)
+                else:
+                    is_default = False
+                if self.current_token() and self.current_token()[0] == TokenTypes.CONSTRAINT:
+                    contr = self.eat(TokenTypes.CONSTRAINT)[1]
+                    if contr == TokenTypes.NOT_NULL and is_default:
+                        raise ValueError("if a Column has DEFAULT VALUE it cannot inheritance  NOT NULL constraints")
+                    constraints[col_name] = contr
+                    constr_id = None
+                    if contr == TokenTypes.PRIMARY_KEY:
+                        constr_id = 'pkey'
+                    elif contr == TokenTypes.NOT_NULL:
+                        constr_id = '!null'
+                    elif contr == TokenTypes.UNIQUE:
+                        constr_id = 'ukey'
+                    key = f"{table_name}_{col_name}_{constr_id}"
+                    if col_name not in private_constraints:
+                        private_constraints[col_name] = set()
+                    private_constraints[col_name].add(key)
+                    constraints_ptr[key] = contr
+                    
                 
-                
-            # Skip comma if present
-            if self.current_token() and self.current_token()[0] == TokenTypes.COMMA:
-                self.eat(TokenTypes.COMMA)
+                elif self.current_token() and self.current_token()[0] == TokenTypes.RESTRICTION:
+                    self.eat(TokenTypes.RESTRICTION)
+                    expr = self.parse_expression(context=None)
+                    restrictions[col_name] = expr
+                    key = f"{table_name}_{col_name}_check"
+                    if col_name not in private_constraints:
+                        private_constraints[col_name] = set()
+                    private_constraints[col_name].add(key)
+                    constraints_ptr[key] = TokenTypes.CHECK
+                    
+                    
+                # Skip comma if present
+                elif self.current_token() and self.current_token()[0] == TokenTypes.COMMA:
+                    self.eat(TokenTypes.COMMA)
+                    break
+                else:
+                    break
 
         self.eat(TokenTypes.CLOSE_PAREN)  # )
         self.eat(TokenTypes.SEMICOLON)
@@ -1019,6 +1022,9 @@ class Parser:
         data_type = self.eat(TokenTypes.DATATYPE)[1]
         if self.current_token()[0] == TokenTypes.DEFAULT:
             self.eat(TokenTypes.DEFAULT)
+            
+            if self.current_token()[1] in ('=', '=='):
+                self.eat(TokenTypes.LOW_PRIORITY_OPERATOR)
             default_value = self.eat(self.current_token()[0])[1]
         if self.current_token()[0] == TokenTypes.CONSTRAINT:
             constraint_type = self.eat(TokenTypes.CONSTRAINT)[1]
