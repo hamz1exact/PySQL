@@ -1095,7 +1095,7 @@ class ShowConstraints(Expression):
             if not self.col and self.names:
                 print()
                 for col, const in private_constraints.items():
-                    print(f"{"":5}{col:30}-> {const}\n")
+                    print(f"""{"":5}{col:30}-> {const}\n""")
             
             elif not self.col:
                 print()
@@ -1109,7 +1109,7 @@ class ShowConstraints(Expression):
                             more_than_one_const = True
                             constr += constraints_ptr[c]
                     
-                    print(f"{"":5}{col:30}-> {constr}\n")
+                    print(f"""{"":5}{col:30}-> {constr}\n""")
                     
             else:
                 print()
