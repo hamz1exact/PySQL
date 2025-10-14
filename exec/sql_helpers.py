@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from engine.sql_ast import *  # Import from engine
 from errors import *
 from sql_types.sql_types import *
-from storage.database_manager import Table
+from storage.database import Table
 from src.constants import *
 
 

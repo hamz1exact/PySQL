@@ -1,6 +1,6 @@
 # Updated utilities.py - Remove duplicate execute function and keep only helper functions
 
-from storage.database_manager import DatabaseManager, Table
+from storage.database import DatabaseManager, Table
 from errors import *
 from engine.sql_ast import *
 from sql_types.sql_types import *
