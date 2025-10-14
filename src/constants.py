@@ -2,7 +2,11 @@
 Constants for SQL Engine - keeps all string literals in one place
 """
 
-from datatypes import *
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from sql_types.sql_types import *
 
 # SQL Keywords - moved from engine.py
 SQL_KEYWORDS = (

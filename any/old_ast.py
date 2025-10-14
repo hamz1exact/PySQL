@@ -1,12 +1,12 @@
 from errors import *
-from datatypes import *
+from types.datatypes import *
 import math
 import re
-from database_manager import Table
-from constants import *
+from storage.database_manager import Table
+from src.constants import *
 
 def get_execute_function():
-    from executor import execute
+    from exec.exec import execute
     return execute
 
 def get_db_manager():

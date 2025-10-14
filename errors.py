@@ -1,5 +1,5 @@
 # errors.py
-from datatypes import *
+from sql_types.sql_types import *
 
 
 class SQLError(Exception):

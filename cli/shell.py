@@ -13,6 +13,17 @@ from typing import List, Dict, Any, Optional, Union
 import argparse
 
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+from engine.lexer import db_manager, Lexer
+from engine.parser import Parser
+from exec.exec import execute
+
+
+
 # Enhanced terminal UI imports
 try:
     from prompt_toolkit import prompt
@@ -24,6 +35,7 @@ try:
     from prompt_toolkit.styles import Style
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.keys import Keys
+    
     PROMPT_TOOLKIT_AVAILABLE = True
 except ImportError:
     PROMPT_TOOLKIT_AVAILABLE = False
@@ -49,55 +61,6 @@ def reload_modules():
             failed.append((name, str(e)))
     
     return reloaded, failed
-
-# Try to import your existing modules
-try:
-    import database_manager
-    import engine
-    import executor
-    import datatypes
-    
-    # Register modules for hot-reloading
-    register_module('database_manager', database_manager)
-    register_module('engine', engine)
-    register_module('executor', executor)
-    register_module('datatypes', datatypes)
-    
-    from engine import db_manager, Lexer, Parser
-    from executor import execute
-    
-except ImportError as e:
-    print(f"Warning: Could not import SQL engine modules: {e}")
-    print("Make sure your engine.py, executor.py, and database_manager.py are in the Python path")
-    
-    # Create mock objects for testing
-    class MockDBManager:
-        def __init__(self):
-            self.active_db = {}
-            self.active_db_name = None
-            self.databases = []
-        
-        def save_database_file(self):
-            pass
-    
-    class MockLexer:
-        def __init__(self, query):
-            self.tokens = [("SELECT", "SELECT")]
-    
-    class MockParser:
-        def __init__(self, tokens):
-            self.tokens = tokens
-        
-        def parse_select_statement(self):
-            return {"type": "SELECT", "mock": True}
-    
-    def mock_execute(ast, database):
-        return [{"message": "Mock execution - engine modules not available"}]
-    
-    db_manager = MockDBManager()
-    Lexer = MockLexer
-    Parser = MockParser
-    execute = mock_execute
 
 
 class Config:
@@ -694,7 +657,8 @@ class EnhancedSQLShell:
                         
             # Parse and execute based on query type
             if token_type == "SELECT":
-                from sql_ast import UnionExpression, IntersectExpression, ExceptExpression
+                
+                from engine.sql_ast import UnionExpression, IntersectExpression, ExceptExpression
                 ast = parser.parse_select_statement()
                 if isinstance(ast, (UnionExpression, IntersectExpression, ExceptExpression)):
                     result = ast.evaluate()
@@ -703,7 +667,7 @@ class EnhancedSQLShell:
                 self._handle_select_result(result, start_time)
                 
             elif token_type == "INSERT":
-                from sql_ast import SelectStatement, UpdateStatement
+                from engine.sql_ast import SelectStatement, UpdateStatement
                 ast = parser.parse_insert_statement()
                 result = execute(ast, database)
                 if ast.returned_cols:
@@ -736,7 +700,7 @@ class EnhancedSQLShell:
                 self._handle_select_result(result, start_time)
             
             elif token_type == "SHOW":
-                from sql_ast import ShowConstraints
+                from engine.sql_ast import ShowConstraints
                 ast = parser.parse_request_statement()
                 if isinstance(ast, ShowConstraints):
                     result = ast.evaluate()

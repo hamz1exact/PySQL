@@ -1,17 +1,12 @@
 # Updated utilities.py - Remove duplicate execute function and keep only helper functions
 
-from database_manager import DatabaseManager, Table
-from datatypes import *
+from storage.database_manager import DatabaseManager, Table
 from errors import *
-from sql_ast import *
+from engine.sql_ast import *
+from sql_types.sql_types import *
 
-# Keep only the database manager instance
+
 db_manager = DatabaseManager()
-
-# Remove the duplicate execute function - it should only be in executor.py
-# Remove execute_select_query, execute_insert_query, etc. - they're in executor.py
-
-# Keep only the helper functions that are actually used:
 
 def extract_identifiers(expr):
     """Recursively extract all column identifiers from an expression object."""

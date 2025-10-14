@@ -1,7 +1,11 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 import os
 import platform
 import msgpack
-from datatypes import datatypes, SERIAL # assuming Lexer.datatypes contains your SQLType classes
+# from .datatypes import datatypes, SERIAL # assuming Lexer.datatypes contains your SQLType classes
+from sql_types.sql_types import datatypes, SERIAL
 import random
 class Table:
     def __init__(self, name, schema, defaults=None, auto=None, constraints = None, restrictions = None, private_constraints = None, constraints_ptr = None):

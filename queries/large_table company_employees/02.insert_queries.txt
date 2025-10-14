@@ -1,0 +1,27 @@
+INSERT INTO company_employees (first_name, last_name, email, phone, department, position, salary, hire_date, birth_date, is_active, manager_id, office_location, years_experience, bonus_percentage) VALUES 
+('John', 'Smith', 'john.smith@company.com', '555-010-1001', 'Engineering', 'Senior Developer', 85000.0, '2020-01-15', '1985-03-20', TRUE, 5, 'Building A', 8, 10.0),
+('Sarah', 'Johnson', 'sarah.johnson@company.com', '555-010-2002', 'Marketing', 'Marketing Manager', 75000.0, '2019-06-10', '1987-11-15', TRUE, 3, 'Building B', 12, 15.0),
+('Mike', 'Davis', 'mike.davis@company.com', '555-010-3003', 'Engineering', 'Lead Developer', 95000.0, '2018-03-22', '1982-08-05', TRUE, 5, 'Building A', 15, 20.0),
+('Lisa', 'Wilson', 'lisa.wilson@company.com', '555-010-4004', 'HR', 'HR Specialist', 60000.0, '2021-09-01', '1990-12-10', TRUE, 2, 'Main Office', 5, 8.0),
+('David', 'Brown', 'david.brown@company.com', '555-010-5005', 'Engineering', 'DevOps Engineer', 88000.0, '2020-11-30', '1988-04-18', TRUE, 5, 'Building A', 9, 12.0);
+
+INSERT INTO company_employees (first_name, last_name, email, phone, department, position, salary, hire_date, birth_date, is_active, manager_id, office_location, years_experience, bonus_percentage) VALUES 
+('Anna', 'Garcia', 'anna.garcia@company.com', '555-010-6006', 'Sales', 'Sales Representative', 55000.0, '2022-01-10', '1992-07-25', TRUE, 4, 'Building C', 3, 20.0),
+('Tom', 'Miller', 'tom.miller@company.com', '555-010-7007', 'Finance', 'Financial Analyst', 65000.0, '2019-12-15', '1986-09-12', TRUE, 6, 'Main Office', 7, 5.0),
+('Emma', 'Taylor', 'emma.taylor@company.com', '555-010-8008', 'Engineering', 'Junior Developer', 70000.0, '2023-02-01', '1995-01-30', TRUE, 1, 'Building A', 2, 5.0),
+('James', 'Anderson', 'james.anderson@company.com', '555-010-9009', 'Marketing', 'Content Specialist', 58000.0, '2021-05-20', '1989-10-08', TRUE, 3, 'Building B', 6, 10.0),
+('Maria', 'Rodriguez', 'maria.rodriguez@company.com', '555-011-0010', 'HR', 'Recruiter', 62000.0, '2020-08-12', '1991-03-14', TRUE, 2, 'Main Office', 4, 7.0);
+
+INSERT INTO company_employees (first_name, last_name, email, phone, department, position, salary, hire_date, birth_date, is_active, manager_id, office_location, years_experience, bonus_percentage) VALUES 
+('Robert', 'Lee', 'robert.lee@company.com', '555-011-1011', 'Sales', 'Sales Manager', 82000.0, '2017-04-08', '1983-06-22', TRUE, 4, 'Building C', 14, 25.0),
+('Jennifer', 'White', 'jennifer.white@company.com', '555-011-2012', 'Finance', 'Senior Accountant', 72000.0, '2018-10-30', '1984-12-03', TRUE, 6, 'Main Office', 11, 8.0),
+('Daniel', 'Harris', 'daniel.harris@company.com', '555-011-3013', 'Engineering', 'System Architect', 105000.0, '2016-07-18', '1980-05-17', TRUE, 5, 'Building A', 18, 30.0),
+('Jessica', 'Clark', 'jessica.clark@company.com', '555-011-4014', 'Marketing', 'Digital Marketing Lead', 78000.0, '2019-11-25', '1986-02-28', TRUE, 3, 'Building B', 10, 12.0),
+('Christopher', 'Lewis', 'christopher.lewis@company.com', '555-011-5015', 'Sales', 'Account Executive', 67000.0, '2022-03-15', '1993-08-11', TRUE, 11, 'Building C', 4, 18.0);
+
+INSERT INTO company_employees (first_name, last_name, email, phone, department, position, salary, hire_date, birth_date, is_active, manager_id, office_location, years_experience, bonus_percentage) VALUES 
+('Michelle', 'Walker', 'michelle.walker@company.com', '555-011-6016', 'HR', 'HR Manager', 85000.0, '2016-12-05', '1981-11-09', TRUE, 2, 'Main Office', 16, 20.0),
+('Kevin', 'Hall', 'kevin.hall@company.com', '555-011-7017', 'Finance', 'Finance Manager', 95000.0, '2015-09-22', '1979-04-15', TRUE, 6, 'Main Office', 20, 25.0),
+('Amanda', 'Allen', 'amanda.allen@company.com', '555-011-8018', 'Engineering', 'QA Engineer', 68000.0, '2021-01-18', '1988-07-06', TRUE, 13, 'Building A', 8, 6.0),
+('Ryan', 'Young', 'ryan.young@company.com', '555-011-9019', 'Marketing', 'SEO Specialist', 61000.0, '2020-06-08', '1990-09-19', TRUE, 14, 'Building B', 5, 9.0),
+('Nicole', 'King', 'nicole.king@company.com', '555-012-0020', 'Sales', 'Business Development', 74000.0, '2018-08-14', '1985-12-27', FALSE, 11, 'Building C', 13, 22.0);
