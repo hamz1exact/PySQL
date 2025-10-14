@@ -1,6 +1,7 @@
 # PySQL
 
 **PySQL** is a comprehensive SQL database engine in Python with advanced features like CTEs, materialized views, subqueries, and constraint management. Built for learning database internals and query execution.
+
 ---
 
 ## Table of Contents
@@ -66,7 +67,7 @@ It serves as a realistic playground for understanding how production databases w
 1. **Clone the repository:**
 ```bash
 git clone https://github.com/hamz1exact/PySQL.git
-cd pysql
+cd PySQL
 ```
 
 2. **Create and activate a virtual environment:**
@@ -91,8 +92,15 @@ pip install -r requirements.txt
 ## Quick Start
 
 ### Launch the Interactive Shell
+
+**Easy way (recommended):**
 ```bash
-python3 shell.py
+python3 main.py
+```
+
+**Alternative:**
+```bash
+python3 cli/shell.py
 ```
 
 ### Basic Usage Example
@@ -177,17 +185,42 @@ ORDER BY avg_age DESC;
 
 Beyond SQL queries, the shell supports special commands:
 
+### Database Operations
 - `\l` - List all tables with row and column counts
 - `\dt` - List all databases
+- `\c <database>` - Connect to a database
+- `\use <database>` - Same as \c
+
+### Display Options
+- `\normal` - Set normal table display mode
+- `\auto` - Set auto table display mode
+- `\wide vertical` - Show last result in vertical format
+- `\cols` - Show specific columns from last result
+- `\csv` - Show last result in CSV format
+- `\schema` - Show column names and types
+
+### Configuration
+- `\timing` - Toggle query timing on/off
+- `\echo` - Toggle query echo on/off
+- `\set <option> <value>` - Set configuration option
+- `\show [option]` - Show configuration
+
+### Data Operations
+- `\export <format> <file>` - Export last SELECT result (csv, json, sql, xlsx)
+- `\import <file>` - Import and execute SQL from file
+
+### Utility
 - `\clear` - Clear the screen
-- `\export csv filename.csv` - Export query results to CSV
-- `\import filename.sql` - Import and execute SQL from file
+- `\history` - Show command history
+- `\status` - Show session status
+- `\version` - Show version information
+- `\help` - Show all commands
 - `\quit` or `\exit` - Exit the shell
 
 ---
 
 ## Examples
-****
+
 ### Advanced Query with Subqueries
 ```sql
 -- Find users who registered above average age in their country
@@ -201,7 +234,7 @@ WHERE u1.age > (
 ORDER BY country, age DESC;
 ```
 
-### Using CTEs and Window-like Functions
+### Using CTEs (Common Table Expressions)
 ```sql
 WITH high_value_orders AS (
     SELECT customer_id, order_total, order_date
@@ -216,6 +249,8 @@ customer_stats AS (
     FROM high_value_orders
     GROUP BY customer_id
 )
+SELECT * FROM customer_stats
+WHERE order_count > 5;
 ```
 
 ### Materialized Views and Refresh
@@ -238,45 +273,111 @@ SELECT * FROM sales_summary WHERE revenue > 10000;
 REFRESH MATERIALIZED VIEW sales_summary;
 ```
 
+### Set Operations
+```sql
+-- UNION: Combine results from two queries
+SELECT name, email FROM customers
+UNION
+SELECT name, email FROM suppliers;
+
+-- INTERSECT: Find common records
+SELECT product_id FROM orders_2023
+INTERSECT
+SELECT product_id FROM orders_2024;
+
+-- EXCEPT: Find records in first query but not in second
+SELECT customer_id FROM all_customers
+EXCEPT
+SELECT customer_id FROM inactive_customers;
+```
+
 ---
 
 ## Project Structure
 
 ```
 pysql/
-├── shell.py              # Interactive shell interface
-├── engine.py             # SQL parser and lexer
-├── sql_ast.py           # Abstract Syntax Tree definitions
-├── executor.py          # Query execution engine
-├── database_manager.py  # Database storage and management
-├── datatypes.py         # SQL data type implementations
-├── utilities.py         # Helper functions and utilities
-├── errors.py           # Custom exception classes
-├── requirements.txt     # Python dependencies
-└── README.md           # This file
+├── cli/                    # Interactive shell interface
+│   └── shell.py           # Enhanced shell with autocomplete
+├── engine/                 # SQL parsing engine
+│   ├── lexer.py           # Tokenization
+│   ├── parser.py          # SQL parser
+│   └── sql_ast.py         # Abstract Syntax Tree definitions
+├── exec/                   # Query execution
+│   ├── exec.py            # Main execution coordinator
+│   └── helpers.py         # Execution helper functions
+├── src/                    # Core SQL operations
+│   ├── select.py          # SELECT query implementation
+│   ├── insert.py          # INSERT query implementation
+│   ├── update.py          # UPDATE query implementation
+│   ├── delete.py          # DELETE query implementation
+│   ├── create.py          # CREATE operations
+│   ├── drop.py            # DROP operations
+│   └── constants.py       # SQL constants and keywords
+├── sql_types/              # SQL data types
+│   └── sql_types.py       # Type system implementation
+├── storage/                # Data persistence
+│   └── database_manager.py # Database file operations
+├── queries/                # Example SQL queries
+├── main.py                 # Main entry point
+├── errors.py               # Custom exception classes
+├── utilities.py            # Helper functions
+├── requirements.txt        # Python dependencies
+└── README.md              # This file
 ```
 
 ---
 
+
 ## Technical Details
 
 ### Architecture
-- **Lexer**: Tokenizes SQL strings into meaningful symbols
-- **Parser**: Builds Abstract Syntax Trees from tokens
-- **Executor**: Traverses AST and executes operations on data
-- **Storage**: Uses MessagePack for efficient serialization to disk
+- **Lexer**: Tokenizes SQL strings into meaningful symbols using regex patterns
+- **Parser**: Builds Abstract Syntax Trees from tokens using recursive descent parsing
+- **Executor**: Traverses AST and executes operations on in-memory data structures
+- **Storage**: Uses MessagePack for efficient binary serialization to disk
 
 ### Persistence
-- Databases stored as `.su` files in user home directory
+- Databases stored as `.su` files in user home directory (`~/.pysql/`)
 - Automatic caching of last used database
 - Type-safe serialization/deserialization of all SQL types
+- Supports concurrent reads (single writer)
 
 ### Performance Considerations
 - In-memory operation for fast queries
 - Optimized aggregate function implementations
+- Efficient condition evaluation using Python's native operators
+- Materialized views for expensive query caching
+
+### Supported SQL Syntax
+```sql
+-- Data Definition Language (DDL)
+CREATE DATABASE name;
+CREATE TABLE name (columns...);
+ALTER TABLE name ADD COLUMN/CONSTRAINT;
+DROP TABLE/DATABASE/VIEW name;
+
+-- Data Manipulation Language (DML)
+INSERT INTO table VALUES (...) RETURNING *;
+UPDATE table SET col=val WHERE condition RETURNING *;
+DELETE FROM table WHERE condition RETURNING *;
+
+-- Data Query Language (DQL)
+SELECT columns FROM table
+WHERE condition
+GROUP BY columns
+HAVING condition
+ORDER BY columns
+LIMIT n OFFSET m;
+
+-- Advanced Features
+WITH cte AS (SELECT ...) SELECT ... FROM cte;
+CREATE MATERIALIZED VIEW name AS SELECT ...;
+REFRESH MATERIALIZED VIEW name;
+```
 
 ---
 
 ## Acknowledgments
 
-Built for educational purposes to demonstrate database internals and SQL parsing techniques. Inspired by production databases like PostgreSQL and SQLite, but designed for learning rather than production use.
+Built for educational purposes to demonstrate database internals and SQL parsing techniques. Inspired by production databases like PostgreSQL and SQLite.
