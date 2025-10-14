@@ -317,7 +317,12 @@ pysql/
 ├── sql_types/              # SQL data types
 │   └── sql_types.py       # Type system implementation
 ├── storage/                # Data persistence
-│   └── database_manager.py # Database file operations
+│   └── classes.py  
+    └── database.py 
+    └── table.py 
+    └── serialize.py 
+    └── deserialize.py 
+    └── reference.py 
 ├── queries/                # Example SQL queries
 ├── main.py                 # Main entry point
 ├── errors.py               # Custom exception classes
